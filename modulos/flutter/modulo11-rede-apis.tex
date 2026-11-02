@@ -1,0 +1,618 @@
+\documentclass[aspectratio=169,10pt]{beamer}
+\makeatletter\def\input@path{{../../estilo/}{../estilo/}{estilo/}}\makeatother
+\usepackage{devmobile}
+\modulo[Flutter]{11}{Rede e APIs}{HTTP, REST, JSON, pacotes \cod{http} e Dio, interceptadores, erros, tempo real com WebSocket e testes}
+
+\begin{document}
+\capa
+
+\begin{frame}{Objetivos do módulo}
+  \begin{conceito}[Ao final deste módulo você será capaz de]
+    \begin{itemize}
+      \item Explicar requisição, resposta, métodos e códigos de status do HTTP.
+      \item Consumir uma API REST com o pacote \cod{http} e com \textbf{Dio}.
+      \item Converter JSON em objetos Dart à mão e com \cod{json\_serializable}.
+      \item Usar interceptadores para autenticação, log e renovação de token.
+      \item Tratar falhas de rede com \cod{Result}, tempo limite e retentativas.
+      \item Receber dados em tempo real com WebSocket e testar o código de rede.
+    \end{itemize}
+  \end{conceito}
+\end{frame}
+
+\sumario
+
+\input{../fundamentos/f11-redes}
+
+% =============================================================================
+\section{Fundamentos de HTTP}
+
+\begin{frame}{Requisição e resposta}
+  \begin{columns}[c]
+    \begin{column}{0.52\textwidth}
+      \centering
+      \begin{tikzpicture}
+        \node[caixa,minimum width=1.8cm,minimum height=1.6cm] (app) {App\\ \tiny cliente};
+        \node[caixaescura,minimum width=1.8cm,minimum height=1.6cm,right=3.2cm of app] (srv) {API\\ \tiny servidor};
+        \draw[setaambar] ([yshift=4mm]app.east) -- node[rotulo,above,align=center]{\tiny GET /v1/bancadas\\ \tiny Authorization: Bearer \ldots} ([yshift=4mm]srv.west);
+        \draw[seta] ([yshift=-4mm]srv.west) -- node[rotulo,below,align=center]{\tiny 200 OK\\ \tiny \texttt{[\{"id":1,"nome":"B1"\}]}} ([yshift=-4mm]app.east);
+      \end{tikzpicture}
+      \vspace{6pt}
+      \begin{conceito}[Partes de uma requisição]
+        \textbf{Método} + \textbf{URL} + \textbf{cabeçalhos} + \textbf{corpo} (opcional). A resposta traz \textbf{código de status}, cabeçalhos e corpo, em geral JSON.
+      \end{conceito}
+    \end{column}
+    \begin{column}{0.46\textwidth}
+      \scriptsize
+      \begin{tabularx}{\linewidth}{@{}l L@{}}
+        \toprule
+        \cabecalho{Método} & \cabecalho{Uso em REST} \\
+        \midrule
+        \cod{GET} & ler um recurso ou uma lista \\
+        \cod{POST} & criar um recurso \\
+        \cod{PUT} & substituir um recurso inteiro \\
+        \cod{PATCH} & alterar parte de um recurso \\
+        \cod{DELETE} & remover um recurso \\
+        \bottomrule
+      \end{tabularx}
+      \vspace{4pt}
+      \begin{tabularx}{\linewidth}{@{}l L@{}}
+        \toprule
+        \cabecalho{Status} & \cabecalho{Significado} \\
+        \midrule
+        \cod{2xx} & sucesso (200 OK, 201 Created, 204) \\
+        \cod{4xx} & erro do cliente (400, 401, 403, 404, 409, 422) \\
+        \cod{5xx} & erro do servidor (500, 502, 503) \\
+        \bottomrule
+      \end{tabularx}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Estilos de API}
+  \footnotesize
+  \begin{tabularx}{\textwidth}{@{}l L L@{}}
+    \toprule
+    \cabecalho{Estilo} & \cabecalho{Como funciona} & \cabecalho{Quando usar} \\
+    \midrule
+    \textbf{REST} & recursos em URLs, métodos HTTP, JSON & padrão da maioria dos backends; foco deste módulo \\
+    \textbf{GraphQL} & uma URL; o cliente descreve os campos que quer & telas que combinam muitos dados; evita várias chamadas \\
+    \textbf{gRPC} & contratos Protocol Buffers sobre HTTP/2 & comunicação entre serviços; alto desempenho \\
+    \textbf{WebSocket} & conexão aberta nos dois sentidos & tempo real: leituras ao vivo, chat \\
+    \textbf{MQTT} & publicação e assinatura por tópicos & IoT com rede instável (Módulo 13) \\
+    \bottomrule
+  \end{tabularx}
+  \vspace{4pt}
+  \begin{columns}[T]
+    \begin{column}{0.47\textwidth}
+      \begin{dica}[Explore antes de codificar]
+        Teste a API no \textbf{Bruno}, \textbf{Postman} ou \cod{curl}. Se ela publica um documento \textbf{OpenAPI}, leia os contratos ali.
+      \end{dica}
+    \end{column}
+    \begin{column}{0.47\textwidth}
+      \begin{atencao}
+        Use sempre \textbf{HTTPS}. O Android bloqueia HTTP sem TLS por padrão e o iOS exige TLS pelo ATS.
+      \end{atencao}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% =============================================================================
+\section{O pacote http}
+
+\begin{frame}[fragile]{Preparando o projeto}
+  \begin{columns}[T]
+    \begin{column}{0.5\textwidth}
+\begin{terminal}
+$ flutter pub add http
+\end{terminal}
+\begin{codigo}[title=android/app/src/main/AndroidManifest.xml]{XML}
+<manifest ...>
+  <uses-permission
+      android:name="android.permission.INTERNET" />
+  <application ...>
+\end{codigo}
+\begin{codigo}[title=macos/Runner/*.entitlements]{XML}
+<key>com.apple.security.network.client</key>
+<true/>
+\end{codigo}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \begin{erro}[Funciona no debug, falha na loja]
+        O modo debug do Android já inclui a permissão \cod{INTERNET}; a versão \emph{release} não. Sem a linha no manifesto, o app publicado não acessa a rede.
+      \end{erro}
+      \begin{conceito}[Plataformas]
+        iOS e web não pedem permissão para rede. No macOS, o app roda em \emph{sandbox} e precisa do \emph{entitlement} de cliente de rede.
+      \end{conceito}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}[fragile]{Um serviço de API com \cod{http}}
+  \begin{columns}[T]
+    \begin{column}{0.6\textwidth}
+\begin{codigo}[title=data/services/api\_service.dart]{Dart}
+class ApiService {
+  ApiService({http.Client? client})
+      : _c = client ?? http.Client();
+  final http.Client _c;
+  static const _base = 'https://api.labmonitor.dev/v1';
+
+  Future<List<BancadaDto>> getBancadas() async {
+    final r = await _c.get(Uri.parse('$_base/bancadas'))
+        .timeout(const Duration(seconds: 10));
+    if (r.statusCode != 200) throw ApiException(r.statusCode);
+    final lista = jsonDecode(r.body) as List<dynamic>;
+    return lista.map((j) => BancadaDto.fromJson(j)).toList();
+  }
+  Future<void> reservar(int id, DateTime ate) async {
+    final r = await _c.post(
+      Uri.parse('$_base/bancadas/$id/reservas'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({'ate': ate.toIso8601String()}));
+    if (r.statusCode != 201) throw ApiException(r.statusCode);
+  }
+}
+\end{codigo}
+    \end{column}
+    \begin{column}{0.38\textwidth}
+      \begin{conceito}[Boas práticas]
+        \begin{itemize}
+          \item Um \cod{http.Client} reutilizado mantém as conexões abertas.
+          \item Receber o cliente no construtor permite testar com \cod{MockClient}.
+          \item Sempre defina um tempo limite.
+          \item Confira o status antes de ler o corpo.
+        \end{itemize}
+      \end{conceito}
+      \begin{dica}
+        \cod{ApiException} é uma classe sua; não use \cod{HttpException} de \cod{dart:io}, que não existe na web.
+      \end{dica}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% =============================================================================
+\section{JSON}
+
+\begin{frame}[fragile]{JSON à mão com \emph{patterns}}
+  \begin{columns}[T]
+    \begin{column}{0.56\textwidth}
+\begin{codigo}[title=domain/dto/bancada\_dto.dart]{Dart}
+class BancadaDto {
+  BancadaDto(this.id, this.nome, this.reservadaAte);
+  final int id;
+  final String nome;
+  final DateTime? reservadaAte;
+
+  factory BancadaDto.fromJson(Object? json) {
+    if (json case {
+      'id': int id,
+      'nome': String nome,
+      'reservada_ate': String? ate,
+    }) {
+      return BancadaDto(id, nome,
+          ate == null ? null : DateTime.parse(ate));
+    }
+    throw FormatException('Bancada inválida: $json');
+  }
+
+  Map<String, Object?> toJson() => {'id': id, 'nome': nome,
+      'reservada_ate': reservadaAte?.toIso8601String()};
+}
+\end{codigo}
+    \end{column}
+    \begin{column}{0.42\textwidth}
+      \begin{conceito}[\emph{Pattern} de mapa]
+        O \cod{if case} confere a estrutura e os tipos e extrai os campos em uma só expressão (Dart 3, Módulo 02). JSON inesperado vira um erro claro, não um \cod{null} silencioso.
+      \end{conceito}
+      \begin{atencao}
+        \cod{jsonDecode} devolve \cod{dynamic}. Acessar \cod{json['nome']} sem conferir o tipo adia o erro para longe da sua causa.
+      \end{atencao}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}[fragile]{JSON com geração de código}
+  \begin{columns}[T]
+    \begin{column}{0.58\textwidth}
+\begin{codigo}[title=Com json\_serializable]{Dart}
+import 'package:json_annotation/json_annotation.dart';
+part 'bancada_dto.g.dart';
+@JsonSerializable(fieldRename: FieldRename.snake)
+class BancadaDto {
+  BancadaDto({required this.id, required this.nome,
+      this.reservadaAte});
+  final int id;
+  final String nome;
+  final DateTime? reservadaAte;    // "reservada_ate"
+  factory BancadaDto.fromJson(Map<String, dynamic> json) =>
+      _$BancadaDtoFromJson(json);
+  Map<String, dynamic> toJson() => _$BancadaDtoToJson(this);
+}
+\end{codigo}
+\begin{terminal}
+$ flutter pub add json_annotation
+$ flutter pub add -d json_serializable build_runner
+$ dart run build_runner watch
+\end{terminal}
+    \end{column}
+    \begin{column}{0.4\textwidth}
+      \begin{conceito}[Quando gerar]
+        Com poucos modelos, o código à mão basta. Com dezenas de modelos e campos aninhados, a geração evita erros de digitação.
+      \end{conceito}
+      \begin{dica}[\cod{freezed}]
+        Gera também \cod{copyWith}, igualdade, \cod{toString} e uniões seladas; muito usado com Riverpod e Bloc.
+      \end{dica}
+      \begin{dica}[JSON grande]
+        Decodifique fora da \emph{thread} da UI com \cod{Isolate.run} (Módulo 06).
+      \end{dica}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% =============================================================================
+\section{Dio}
+
+\begin{frame}[fragile]{Configurando o Dio}
+  \begin{columns}[T]
+    \begin{column}{0.58\textwidth}
+\begin{codigo}[title=data/services/cliente\_http.dart]{Dart}
+Dio criarDio(TokenStorage tokens) {
+  final dio = Dio(BaseOptions(
+    baseUrl: 'https://api.labmonitor.dev/v1/',
+    connectTimeout: const Duration(seconds: 5),
+    receiveTimeout: const Duration(seconds: 10),
+  ));
+  dio.interceptors.addAll([
+    InterceptorsWrapper(onRequest: (opcoes, handler) async {
+      final t = await tokens.lerAcesso();
+      if (t != null) opcoes.headers['Authorization'] = 'Bearer $t';
+      handler.next(opcoes);
+    }),
+    if (kDebugMode) LogInterceptor(responseBody: true),
+  ]);
+  return dio;
+}
+// uso: o JSON já vem decodificado
+final r = await dio.get<List<dynamic>>('bancadas',
+    queryParameters: {'lab': 3, 'livres': true});
+final bancadas =
+    r.data!.map((j) => BancadaDto.fromJson(j)).toList();
+\end{codigo}
+    \end{column}
+    \begin{column}{0.4\textwidth}
+      \begin{conceito}[Dio]
+        Cliente HTTP com URL base, tempos limite, \textbf{interceptadores}, cancelamento, \emph{upload} com progresso e decodificação automática de JSON.
+      \end{conceito}
+      \begin{conceito}[Interceptador]
+        Código que roda em toda requisição, resposta ou erro: incluir token, registrar log, medir tempo, renovar sessão.
+      \end{conceito}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}[fragile]{Erros e renovação de token}
+  \begin{columns}[T]
+    \begin{column}{0.52\textwidth}
+\begin{codigo}[title=Traduzindo DioException]{Dart}
+String mensagemDe(DioException e) => switch (e.type) {
+  DioExceptionType.connectionTimeout ||
+  DioExceptionType.receiveTimeout =>
+      'O servidor demorou a responder.',
+  DioExceptionType.connectionError =>
+      'Sem conexão com a internet.',
+  DioExceptionType.badResponse => switch (
+      e.response?.statusCode) {
+    401 => 'Sessão expirada.',
+    404 => 'Recurso não encontrado.',
+    _ => 'Erro no servidor.',
+  },
+  _ => 'Falha inesperada.',
+};
+\end{codigo}
+    \end{column}
+    \begin{column}{0.46\textwidth}
+\begin{codigo}[title=Renovando o token após 401]{Dart}
+QueuedInterceptorsWrapper(
+  onError: (e, handler) async {
+    if (e.response?.statusCode != 401) {
+      return handler.next(e);
+    }
+    final ok = await auth.renovarToken();
+    if (!ok) return handler.next(e);
+    final repetida = await dio.fetch(
+        e.requestOptions);
+    handler.resolve(repetida);
+  },
+)
+\end{codigo}
+      \begin{dica}
+        A versão \emph{Queued} processa um erro por vez: várias requisições com 401 disparam uma única renovação.
+      \end{dica}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}[fragile]{Upload, download e cancelamento}
+  \begin{columns}[T]
+    \begin{column}{0.56\textwidth}
+\begin{codigo}[title=Foto do equipamento com progresso]{Dart}
+final cancelar = CancelToken();
+
+Future<void> enviarFoto(int id, String caminho) =>
+    dio.post('equipamentos/$id/foto',
+      data: FormData.fromMap({
+        'arquivo': await MultipartFile.fromFile(caminho,
+            filename: 'foto.jpg'),
+      }),
+      cancelToken: cancelar,
+      onSendProgress: (enviado, total) =>
+          progresso.value = enviado / total,
+    );
+
+Future<void> baixarRelatorio(String destino) =>
+    dio.download('relatorios/mensal.pdf', destino,
+        cancelToken: cancelar);
+
+// ao sair da tela
+@override
+void dispose() { cancelar.cancel(); super.dispose(); }
+\end{codigo}
+    \end{column}
+    \begin{column}{0.42\textwidth}
+      \begin{conceito}[\cod{multipart/form-data}]
+        Formato usado para enviar arquivos junto com campos de formulário.
+      \end{conceito}
+      \begin{dica}
+        Cancele requisições quando o usuário sai da tela: economiza dados e evita atualizar um estado que já não existe.
+      \end{dica}
+      \begin{atencao}
+        \cod{MultipartFile.fromFile} usa \cod{dart:io}; na web, use \cod{MultipartFile.fromBytes}.
+      \end{atencao}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% =============================================================================
+\section{Robustez e tempo real}
+
+\begin{frame}[fragile]{Falhas de rede são normais}
+  \begin{columns}[T]
+    \begin{column}{0.54\textwidth}
+\begin{codigo}[title=utils/retentativa.dart]{Dart}
+Future<T> comRetentativa<T>(Future<T> Function() acao,
+    {int maximo = 3}) async {
+  for (var i = 0; ; i++) {
+    try {
+      return await acao();
+    } on DioException catch (e) {
+      final transitoria =
+          e.type != DioExceptionType.badResponse ||
+          (e.response?.statusCode ?? 0) >= 500;
+      if (!transitoria || i + 1 >= maximo) rethrow;
+      // 0,5 s, 1 s, 2 s ...
+      await Future.delayed(
+          Duration(milliseconds: 500 * (1 << i)));
+    }
+  }
+}
+\end{codigo}
+    \end{column}
+    \begin{column}{0.44\textwidth}
+      \begin{conceito}[Estratégia]
+        \begin{itemize}
+          \item Repita só erros \textbf{transitórios} (tempo limite, 5xx), nunca 400 ou 401.
+          \item Espere cada vez mais (\emph{backoff} exponencial).
+          \item O repositório converte a exceção em \cod{Result} (Módulo 08).
+          \item Mostre dados do banco local enquanto a rede falha (Módulo 10).
+        \end{itemize}
+      \end{conceito}
+      \begin{dica}
+        \cod{connectivity\_plus} informa o tipo de rede (Wi-Fi, móvel), não se há internet de fato.
+      \end{dica}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}[fragile]{Tempo real com WebSocket}
+  \begin{columns}[T]
+    \begin{column}{0.56\textwidth}
+\begin{codigo}[title=Leituras ao vivo da bancada]{Dart}
+import 'package:web_socket_channel/web_socket_channel.dart';
+
+class LeiturasAoVivo {
+  WebSocketChannel? _canal;
+
+  Future<Stream<Leitura>> conectar(int bancada) async {
+    final canal = WebSocketChannel.connect(
+        Uri.parse('wss://api.labmonitor.dev/ws'));
+    await canal.ready;                  // conexão aberta
+    canal.sink.add(jsonEncode({'assinar': bancada}));
+    _canal = canal;
+    return canal.stream
+        .map((m) => Leitura.fromJson(jsonDecode(m)));
+  }
+
+  Future<void> fechar() async => _canal?.sink.close();
+}
+\end{codigo}
+    \end{column}
+    \begin{column}{0.42\textwidth}
+      \begin{conceito}[WebSocket]
+        Conexão que fica aberta: o servidor envia dados assim que eles existem, sem o app perguntar de tempos em tempos (\emph{polling}).
+      \end{conceito}
+      \begin{dica}
+        O resultado é um \cod{Stream}: use \cod{StreamBuilder} ou converta no view model (Módulo 06).
+      \end{dica}
+      \begin{atencao}
+        Conexões caem. Reconecte com \emph{backoff} e feche o canal quando a tela sai.
+      \end{atencao}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}[fragile]{Testando código de rede}
+  \begin{columns}[T]
+    \begin{column}{0.58\textwidth}
+\begin{codigo}[title=test/api\_service\_test.dart]{Dart}
+import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
+
+void main() {
+  test('getBancadas converte o JSON', () async {
+    final cliente = MockClient((req) async {
+      expect(req.url.path, '/v1/bancadas');
+      return http.Response(
+          '[{"id":1,"nome":"B1","reservada_ate":null}]', 200);
+    });
+    final api = ApiService(client: cliente);
+    final lista = await api.getBancadas();
+    expect(lista.single.nome, 'B1');
+  });
+
+  test('status 500 lança ApiException', () async {
+    final api = ApiService(client: MockClient(
+        (_) async => http.Response('', 500)));
+    expect(api.getBancadas(), throwsA(isA<ApiException>()));
+  });
+}
+\end{codigo}
+    \end{column}
+    \begin{column}{0.4\textwidth}
+      \begin{conceito}[Sem rede nos testes]
+        \cod{MockClient} responde o que você quiser, de forma instantânea e determinística. Teste sucesso, erro, JSON malformado e tempo limite.
+      \end{conceito}
+      \begin{dica}
+        Com Dio, substitua o \cod{httpClientAdapter} ou use o pacote \cod{http\_mock\_adapter}.
+      \end{dica}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Segurança e escolha da biblioteca}
+  \begin{columns}[T]
+    \begin{column}{0.48\textwidth}
+      \begin{atencao}[Segurança na rede]
+        \begin{itemize}
+          \item Só HTTPS; nada de desativar a validação de certificado.
+          \item \textbf{Nunca} coloque segredos no app: o binário pode ser extraído. Chaves privadas ficam no backend.
+          \item Tokens em armazenamento seguro (Módulo 10).
+          \item Em apps sensíveis, considere \emph{certificate pinning}.
+        \end{itemize}
+      \end{atencao}
+    \end{column}
+    \begin{column}{0.5\textwidth}
+      \scriptsize
+      \begin{tabularx}{\linewidth}{@{}l L@{}}
+        \toprule
+        \cabecalho{Pacote} & \cabecalho{Indicado para} \\
+        \midrule
+        \cod{http} & simples, oficial do time Dart; poucas chamadas \\
+        \textbf{Dio} & interceptadores, \emph{upload}, cancelamento; apps reais \\
+        \cod{retrofit} & interface anotada gerando cliente Dio (como o Retrofit do Kotlin) \\
+        \cod{web\_socket\_channel} & tempo real \\
+        \bottomrule
+      \end{tabularx}
+      \begin{dica}
+        O \textbf{DevTools} tem uma aba \emph{Network} que mostra cada requisição do app em execução.
+      \end{dica}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% =============================================================================
+\section{Fechamento}
+
+\begin{frame}{Resumo}
+  \begin{resumo}
+    \begin{itemize}
+      \item HTTP: método, URL, cabeçalhos e corpo; a resposta traz status e dados.
+      \item \cod{http} é simples; Dio acrescenta interceptadores, cancelamento e progresso.
+      \item Valide o JSON com \emph{patterns} ou gere o código com \cod{json\_serializable}.
+      \item Trate erros por tipo, repita só falhas transitórias e devolva \cod{Result}.
+      \item WebSocket para tempo real; \cod{MockClient} para testes sem rede.
+    \end{itemize}
+  \end{resumo}
+\end{frame}
+
+\begin{frame}{Glossário (1/2)}
+  \begin{glossario}
+    Protocolo & regras de formato e de ordem das mensagens entre computadores \\
+    TCP/IP & pilha de protocolos da internet: aplicação, transporte, internet e enlace \\
+    DNS & sistema que traduz nomes de domínio em endereços IP \\
+    NAT & tradução de endereços que esconde o celular atrás de um IP público \\
+    TCP & transporte com conexão, entrega garantida e ordem \\
+    UDP & transporte sem conexão nem garantias, de baixa latência \\
+    TLS & protocolo que cifra e autentica a conexão (o ``S'' do HTTPS) \\
+    Latência (RTT) & tempo de ida e volta de uma mensagem \\
+    HTTP/2 e HTTP/3 & vários pedidos na mesma conexão; o HTTP/3 roda sobre QUIC (UDP) \\
+  \end{glossario}
+\end{frame}
+
+\begin{frame}{Glossário (2/2)}
+  \begin{glossario}
+    REST & estilo de API com recursos em URLs e métodos HTTP \\
+    \emph{ETag} & identificador de versão que permite a resposta 304 sem corpo \\
+    Serialização & conversão de objetos em bytes (JSON, Protocol Buffers) \\
+    Idempotência & repetir a operação produz o mesmo resultado \\
+    \cod{http} e Dio & pacotes de cliente HTTP do Dart; o Dio tem interceptadores e cancelamento \\
+    \cod{json\_serializable} & gera o código de conversão entre JSON e classes Dart \\
+    Interceptador & código que examina ou altera toda requisição e resposta \\
+    WebSocket & canal aberto nos dois sentidos para tempo real \\
+  \end{glossario}
+\end{frame}
+
+\begin{frame}{Questões de revisão}
+  \begin{questoes}
+    \item Descreva, camada por camada, o que acontece quando o app chama \cod{GET https://api.labmonitor.dev/v1/bancadas}.
+    \item Por que o servidor não consegue abrir uma conexão até o celular? Que soluções existem?
+    \item Por que, em apps, a latência costuma pesar mais que a largura de banda?
+    \item Que três garantias o TLS oferece e como o app sabe que fala com o servidor certo?
+    \item O que o HTTP/3 traz de especialmente útil para um celular em movimento?
+    \item Explique como \emph{ETag} e a resposta 304 economizam dados.
+    \item Que cuidados permitem mudar a API sem quebrar versões antigas do app?
+    \item Uma requisição \cod{POST /reservas} deu tempo limite esgotado. É seguro repetir? Como tornar seguro?
+  \end{questoes}
+\end{frame}
+
+\begin{frame}{Exercícios}
+  \begin{exercicio}[Exercício 1 --- API pública]
+    Consuma uma API pública (por exemplo, a de CEP ou de clima) com \cod{http} e mostre carregando, erro e dados.
+  \end{exercicio}
+  \begin{exercicio}[Exercício 2 --- Dio]
+    Migre o serviço para Dio com interceptador de token e mensagens de erro traduzidas.
+  \end{exercicio}
+  \begin{exercicio}[Exercício 3 --- Testes]
+    Escreva testes com \cod{MockClient} para 200, 404, 500 e JSON malformado.
+  \end{exercicio}
+  \begin{projeto}[LabMonitor --- Etapa 11]
+    Sincronize bancadas e leituras com a API em Dio, salve no Drift (Módulo 10) e mostre as leituras ao vivo via WebSocket.
+  \end{projeto}
+\end{frame}
+
+\begin{frame}{Para aprofundar}
+  \small
+  \begin{itemize}
+    \item Rede no Flutter: \url{https://docs.flutter.dev/data-and-backend/networking}
+    \item JSON e serialização: \url{https://docs.flutter.dev/data-and-backend/serialization/json}
+    \item Pacote http: \url{https://pub.dev/packages/http} \quad Dio: \url{https://pub.dev/packages/dio}
+    \item json\_serializable: \url{https://pub.dev/packages/json_serializable}
+    \item WebSocket: \url{https://docs.flutter.dev/cookbook/networking/web-sockets}
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{Respostas das questões de revisão}
+  \begin{respostas}
+    \item O DNS traduz o nome em IP; o TCP abre a conexão na porta 443; o TLS combina as chaves e confere o certificado; o HTTP envia a requisição cifrada; tudo viaja em pacotes IP por Wi-Fi ou rede móvel.
+    \item O celular fica atrás de NAT, com endereço privado, e não aceita conexões novas. Soluções: notificações \emph{push} (FCM, APNs) ou conexões abertas pelo próprio app (WebSocket, MQTT).
+    \item As requisições são pequenas: o tempo de ida e volta (aperto de mão, DNS, TLS) domina o tempo de transferência.
+    \item Confidencialidade, integridade e autenticidade. O certificado do servidor é assinado por uma autoridade em que o sistema confia e precisa valer para aquele domínio.
+    \item Roda sobre QUIC: sem bloqueio na fila do TCP e com conexão que sobrevive à troca de rede, como do Wi-Fi para o 4G.
+    \item O app envia a versão que tem (\cod{If-None-Match}); se nada mudou, o servidor responde 304 sem corpo e o app reutiliza a cópia local.
+    \item Só acrescentar campos, ignorar campos desconhecidos (o padrão do \cod{json\_serializable}), ter valores padrão e criar \cod{/v2} para mudanças incompatíveis.
+    \item Não, pois \cod{POST} não é idempotente e pode criar duas reservas. Envie uma chave de idempotência, para o servidor reconhecer a repetição.
+  \end{respostas}
+\end{frame}
+
+\encerramento{Módulo 12 --- Firebase com FlutterFire: autenticação, Firestore, Storage, mensagens e Crashlytics.}
+
+\end{document}

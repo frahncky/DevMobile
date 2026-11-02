@@ -1,0 +1,208 @@
+% =============================================================================
+%  Fundamentos compartilhados --- Módulo 12: identidade, tempo real e mensagens
+%  Incluído pelas trilhas Kotlin e Flutter com \input{../fundamentos/f12-identidade-nuvem}
+%  (autenticação no servidor, hash de senhas e JWT estão no Módulo 17;
+%   serverless e custos, no Módulo 16; modelagem em documentos, no Módulo 09)
+% =============================================================================
+\section{Fundamentos: identidade, tempo real e mensagens}
+
+\begin{frame}{Identidade federada: OAuth 2.0 e OpenID Connect}
+  \begin{columns}[c]
+    \begin{column}{0.5\textwidth}
+      \centering
+      \begin{tikzpicture}[every node/.style={font=\tiny}]
+        \node[caixa,font=\tiny,minimum width=1.5cm] (app) at (0,0) {app};
+        \node[caixaambar,font=\tiny,minimum width=2cm] (nav) at (3,0) {navegador do sistema};
+        \node[caixaescura,font=\tiny,minimum width=2.4cm] (as) at (3,-1.4) {servidor de autorização\\ (Google, Microsoft)};
+        \node[caixapetroleo,font=\tiny,minimum width=1.9cm] (api) at (0,-2.8) {API (recurso)};
+        \draw[seta] (app) -- node[rotulo,above]{1. abre} (nav);
+        \draw[seta] (nav) -- node[rotulo,right]{2. login e consentimento} (as);
+        \draw[setaambar] (as.west) -- node[rotulo,below,sloped]{3. código $\rightarrow$ \emph{tokens}} (app.south east);
+        \draw[seta] (app) -- node[rotulo,left]{4. \emph{token} de acesso} (api);
+      \end{tikzpicture}
+      \begin{historia}
+        OAuth 2.0 virou padrão em 2012 (RFC 6749); o OpenID Connect veio em 2014. Para apps nativos, a RFC 8252 (2017) recomenda o navegador do sistema e PKCE.
+      \end{historia}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \begin{definicao}[OAuth 2.0 e OpenID Connect]
+        \textbf{OAuth 2.0} delega \textbf{autorização}: o app recebe um \emph{token} para agir em nome do usuário sem ver a senha. O \textbf{OpenID Connect} acrescenta \textbf{identidade}: um \emph{ID token} diz quem é o usuário.
+      \end{definicao}
+      \begin{pordentro}[PKCE]
+        O app cria um segredo aleatório por login e envia só o seu \emph{hash}; na troca do código pelos \emph{tokens}, mostra o segredo. Quem interceptar o código não consegue usá-lo.
+      \end{pordentro}
+      \begin{atencao}
+        Nunca peça a senha do Google numa tela do app nem use \emph{WebView} para o login.
+      \end{atencao}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{\emph{Tokens} no app: identidade, acesso e renovação}
+  \scriptsize
+  \begin{tabularx}{\textwidth}{@{}l L l L@{}}
+    \toprule
+    \cabecalho{\emph{Token}} & \cabecalho{Para que serve} & \cabecalho{Validade típica} & \cabecalho{Cuidados} \\
+    \midrule
+    ID \emph{token} & informa quem é o usuário (nome, e-mail, \cod{sub}) & 1 hora no Firebase & não serve para chamar APIs de terceiros \\
+    De acesso & autoriza chamadas a uma API & minutos a 1 hora & enviar só por HTTPS, no cabeçalho \cod{Authorization} \\
+    De renovação & obtém novos \emph{tokens} sem novo login & semanas a meses & guardar em armazenamento seguro; revogar no \emph{logout} \\
+    \bottomrule
+  \end{tabularx}
+  \normalsize
+  \vspace{4pt}
+  \begin{columns}[T]
+    \begin{column}{0.49\textwidth}
+      \begin{conceito}[Vida curta, renovação automática]
+        \emph{Tokens} de acesso curtos limitam o estrago se vazarem. Os SDKs do Firebase renovam o ID \emph{token} sozinhos antes de expirar.
+      \end{conceito}
+    \end{column}
+    \begin{column}{0.49\textwidth}
+      \begin{pordentro}[Papéis dentro do \emph{token}]
+        O servidor pode gravar papéis no \emph{token} (\emph{custom claims}, como \cod{professor: true}). As regras de segurança e as funções leem esses papéis sem consultar o banco.
+      \end{pordentro}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Senhas, múltiplos fatores e \emph{passkeys}}
+  \begin{columns}[T]
+    \begin{column}{0.5\textwidth}
+      \begin{definicao}[Fatores de autenticação]
+        Algo que você \textbf{sabe} (senha), algo que você \textbf{tem} (celular, chave física) e algo que você \textbf{é} (digital, rosto). Combinar dois fatores diferentes é a autenticação multifator (MFA).
+      \end{definicao}
+      \begin{atencao}[O ponto fraco da senha]
+        Senhas são reutilizadas, vazam e podem ser digitadas num site falso (\emph{phishing}). Códigos por SMS ajudam, mas também podem ser interceptados.
+      \end{atencao}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \begin{definicao}[\emph{Passkey}]
+        Credencial baseada em par de chaves, criada para um único site ou app. A chave privada fica no aparelho ou no gerenciador de senhas; o servidor guarda só a pública.
+      \end{definicao}
+      \begin{pordentro}[Por que resiste a \emph{phishing}]
+        O login é a assinatura de um desafio do servidor, liberada pela biometria ou pelo PIN do aparelho. A chave só funciona no domínio para o qual foi criada, e não há segredo para vazar do servidor.
+      \end{pordentro}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Bancos em tempo real: escuta, cache local e compensação de latência}
+  \begin{columns}[c]
+    \begin{column}{0.48\textwidth}
+      \centering
+      \begin{tikzpicture}[every node/.style={font=\tiny}]
+        \node[caixa,font=\tiny,minimum width=1.9cm] (ui) at (0,0) {tela};
+        \node[caixaambar,font=\tiny,minimum width=1.9cm] (cache) at (0,-1.3) {cache local do SDK};
+        \node[caixaescura,font=\tiny,minimum width=1.9cm] (srv) at (3.6,-1.3) {banco na nuvem};
+        \node[caixa,font=\tiny,minimum width=1.9cm] (outro) at (3.6,0) {outro aparelho};
+        \draw[setaambar] ([xshift=-4mm]ui.south) -- node[rotulo,left]{1. grava} ([xshift=-4mm]cache.north);
+        \draw[seta] ([xshift=4mm]cache.north) -- node[rotulo,right,text width=1.3cm]{2. avisa na hora (pendente)} ([xshift=4mm]ui.south);
+        \draw[seta] ([yshift=1mm]cache.east) -- node[rotulo,above]{3. envia} ([yshift=1mm]srv.west);
+        \draw[seta] ([yshift=-1mm]srv.west) -- node[rotulo,below]{4. confirma} ([yshift=-1mm]cache.east);
+        \draw[seta] (srv) -- node[rotulo,right]{5. notifica} (outro);
+      \end{tikzpicture}
+    \end{column}
+    \begin{column}{0.5\textwidth}
+      \begin{definicao}[Escuta (\emph{listener})]
+        Em vez de perguntar repetidas vezes, o app assina uma consulta e recebe o resultado inicial e depois cada mudança, por uma conexão mantida aberta.
+      \end{definicao}
+      \begin{definicao}[Compensação de latência]
+        A gravação aparece na tela antes de o servidor confirmar, marcada como pendente. Se o servidor recusar, o SDK desfaz a mudança.
+      \end{definicao}
+      \begin{atencao}[Escutas custam]
+        Cada documento recebido conta como leitura. Limite as consultas (filtros, \cod{limit}) e encerre as escutas quando a tela sair.
+      \end{atencao}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}[fragile]{Regras de segurança: a autorização mora no servidor}
+  \begin{columns}[T]
+    \begin{column}{0.52\textwidth}
+      \begin{conceito}[O app fala direto com o banco]
+        Em um BaaS não há servidor seu no meio: qualquer pessoa pode usar as chaves públicas do app em outro programa. Verificações feitas no app são só experiência de uso; a proteção real são as \textbf{regras}, avaliadas no servidor a cada requisição.
+      \end{conceito}
+\begin{codigo}[title=firestore.rules (trecho)]{JSON}
+match /reservas/{id} {
+  allow read: if request.auth.uid == resource.data.uid;
+  allow create: if request.auth.uid
+                   == request.resource.data.uid;
+}
+\end{codigo}
+    \end{column}
+    \begin{column}{0.46\textwidth}
+      \begin{definicao}[Menor privilégio]
+        Comece negando tudo e libere só o necessário, para quem precisa. Valide também o formato: campos obrigatórios, tipos e tamanhos.
+      \end{definicao}
+      \begin{atencao}[Regras não são filtros]
+        A regra não esconde documentos de uma consulta: se a consulta \textbf{puder} trazer algo proibido, ela inteira falha. A consulta precisa ter os mesmos filtros da regra.
+      \end{atencao}
+      \begin{dica}
+        Teste as regras no emulador, com casos permitidos e negados, como qualquer outro código.
+      \end{dica}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Notificações \emph{push} por dentro}
+  \centering
+  \begin{tikzpicture}[every node/.style={font=\tiny}]
+    \node[caixa,font=\tiny,minimum width=1.8cm,minimum height=9mm] (app) at (0.9,0) {app no aparelho};
+    \node[caixaescura,font=\tiny,minimum width=2cm,minimum height=9mm] (srv) at (4.1,0) {seu servidor\\ ou função};
+    \node[caixaambarforte,font=\tiny\bfseries,minimum width=1.4cm,minimum height=9mm] (fcm) at (7.1,0) {FCM};
+    \node[caixapetroleo,font=\tiny,minimum width=1.6cm,minimum height=9mm] (apns) at (9.9,0) {APNs\\ (iPhone)};
+    \node[caixa,font=\tiny,minimum width=2.2cm,minimum height=9mm] (dev) at (13.1,0) {aparelho: conexão\\ única do sistema};
+    \draw[seta] (app) -- node[rotulo,above]{1. \emph{token}} (srv);
+    \draw[seta] (srv) -- node[rotulo,above]{2. HTTP v1} (fcm);
+    \draw[seta] (fcm) -- node[rotulo,above]{3. iOS} (apns);
+    \draw[seta] (apns) -- node[rotulo,above]{4. entrega} (dev);
+    \draw[setaambar,rounded corners] (fcm.south) -- ++(0,-4mm) -| node[rotulo,pos=0.25,below]{3. Android: direto, pelo Google Play services} (dev.south);
+\end{tikzpicture}
+  \raggedright
+  \begin{columns}[T]
+    \begin{column}{0.32\textwidth}
+      \begin{definicao}[\emph{Token} de registro]
+        Endereço do app naquele aparelho. Muda em reinstalações e após limpar dados: mantenha-o atualizado no servidor.
+      \end{definicao}
+    \end{column}
+    \begin{column}{0.32\textwidth}
+      \begin{conceito}[Dois tipos de mensagem]
+        \textbf{Notificação}: o sistema exibe sozinho. \textbf{Dados}: o código do app decide o que fazer.
+      \end{conceito}
+    \end{column}
+    \begin{column}{0.32\textwidth}
+      \begin{atencao}[Entrega não garantida]
+        O usuário pode negar a permissão (Android 13+ e iOS), e o sistema adia mensagens para poupar bateria.
+      \end{atencao}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Funções acionadas por eventos}
+  \begin{columns}[c]
+    \begin{column}{0.46\textwidth}
+      \centering
+      \begin{tikzpicture}[node distance=4mm,every node/.style={font=\tiny}]
+        \node[caixa,font=\tiny,minimum width=3.6cm] (e) {evento: nova leitura gravada};
+        \node[caixaescura,font=\tiny,minimum width=3.6cm,below=of e] (f) {função: valor acima do limite?};
+        \node[caixaambar,font=\tiny,minimum width=1.7cm,below left=4mm and -17mm of f] (p) {envia \emph{push}};
+        \node[caixaambar,font=\tiny,minimum width=1.7cm,below right=4mm and -17mm of f] (a) {atualiza resumo};
+        \draw[seta] (e) -- (f); \draw[seta] (f) -- (p); \draw[seta] (f) -- (a);
+      \end{tikzpicture}
+      \begin{dica}
+        Outros gatilhos: requisição HTTP, conta criada, arquivo enviado e horário agendado.
+      \end{dica}
+    \end{column}
+    \begin{column}{0.52\textwidth}
+      \begin{definicao}[Arquitetura orientada a eventos]
+        Componentes reagem a fatos (``uma leitura foi gravada'') em vez de chamarem uns aos outros. Quem grava não precisa saber quem reage.
+      \end{definicao}
+      \begin{atencao}[Pelo menos uma vez]
+        O provedor garante executar a função ao menos uma vez por evento, e às vezes executa duas. Escreva funções \textbf{idempotentes}: processar o mesmo evento de novo não pode duplicar o \emph{push} nem o resumo.
+      \end{atencao}
+      \begin{pordentro}[Onde guardar segredos]
+        Chaves de serviços pagos ficam no servidor e nunca no app. O App Check (Play Integrity, App Attest) ajuda a recusar chamadas que não vêm do app legítimo.
+      \end{pordentro}
+    \end{column}
+  \end{columns}
+\end{frame}

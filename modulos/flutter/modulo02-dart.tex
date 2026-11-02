@@ -1,0 +1,619 @@
+\documentclass[aspectratio=169,10pt]{beamer}
+\makeatletter\def\input@path{{../../estilo/}{../estilo/}{estilo/}}\makeatother
+\usepackage{devmobile}
+\modulo[Flutter]{02}{Dart Essencial}{Variáveis e tipos, null safety, controle de fluxo, funções, coleções, classes, mixins, records, padrões e sealed classes}
+
+\begin{document}
+\capa
+
+\begin{frame}{Objetivos do módulo}
+  \begin{conceito}[Ao final deste módulo você será capaz de]
+    \begin{itemize}
+      \item Declarar variáveis com \cod{var}, \cod{final}, \cod{const} e \cod{late} e usar os tipos básicos.
+      \item Escrever código seguro com \emph{null safety} (\cod{?}, \cod{??}, \cod{?.}, \cod{!}).
+      \item Usar \cod{if}, \cod{switch} como expressão, laços e funções com parâmetros nomeados.
+      \item Manipular \cod{List}, \cod{Set} e \cod{Map} com operações funcionais.
+      \item Criar classes, construtores, interfaces, \emph{mixins} e extensões.
+      \item Modelar dados com \emph{records}, \emph{patterns}, \cod{enum} e \cod{sealed class}.
+    \end{itemize}
+  \end{conceito}
+  \begin{dica}[Onde praticar]
+    \url{https://dartpad.dev} roda Dart (e Flutter) no navegador, sem instalar nada.
+  \end{dica}
+\end{frame}
+
+\sumario
+
+\input{../fundamentos/f02-linguagens}
+
+% =============================================================================
+\section{Primeiros passos}
+
+\begin{frame}[fragile]{Variáveis e tipos}
+  \begin{columns}[T]
+    \begin{column}{0.54\textwidth}
+\begin{codigo}[title=variaveis.dart]{Dart}
+void main() {
+  var bancada = 3;               // tipo inferido: int
+  double temperatura = 24.5;
+  final nome = 'Osciloscópio';   // atribui uma vez
+  const limite = 30.0;           // constante de compilação
+  bool ligado = true;
+  late String relatorio;         // inicializada depois
+
+  temperatura += 0.3;
+  relatorio = 'Bancada $bancada: $temperatura °C';
+  print(relatorio);
+  print('Nome tem ${nome.length} letras');
+
+  final texto = '''
+Equipamento: $nome
+Estado: ${ligado ? 'ON' : 'OFF'}''';
+}
+\end{codigo}
+    \end{column}
+    \begin{column}{0.44\textwidth}
+      \scriptsize
+      \begin{tabularx}{\linewidth}{@{}l L@{}}
+        \toprule
+        \cabecalho{Palavra} & \cabecalho{Significado} \\
+        \midrule
+        \cod{var} & mutável, tipo inferido \\
+        \cod{final} & atribuída uma única vez, em execução \\
+        \cod{const} & valor fixo em compilação \\
+        \cod{late} & inicializada depois, antes do uso \\
+        \bottomrule
+      \end{tabularx}
+      \begin{conceito}[Tipos básicos]
+        \cod{int}, \cod{double}, \cod{num}, \cod{String}, \cod{bool}, além de \cod{List}, \cod{Set}, \cod{Map} e \cod{Object}. Tudo em Dart é objeto.
+      \end{conceito}
+      \begin{dica}
+        Prefira \cod{final}; use \cod{var} só para o que muda.
+      \end{dica}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}[fragile]{Null safety}
+  \begin{columns}[T]
+    \begin{column}{0.54\textwidth}
+\begin{codigo}[title=null\_safety.dart]{Dart}
+String nome = 'LDR';
+// nome = null;            // ERRO de compilação
+
+String? apelido;           // pode ser nulo
+// apelido.length;         // ERRO: pode ser nulo
+
+int? tam = apelido?.length;          // chamada segura
+int tam2 = apelido?.length ?? 0;     // valor padrão
+apelido ??= 'sem apelido';           // atribui se nulo
+
+if (apelido != null) {
+  print(apelido.length);   // promovido a String
+}
+
+final tam3 = apelido!.length;  // "garanto que não é
+                               // nulo": evite!
+\end{codigo}
+    \end{column}
+    \begin{column}{0.44\textwidth}
+      \begin{conceito}[A ideia]
+        \cod{String} nunca é nulo; \cod{String?} pode ser. O compilador obriga a tratar o caso nulo antes de usar o valor.
+      \end{conceito}
+      \scriptsize
+      \begin{tabular}{@{}l l@{}}
+        \toprule
+        \cabecalho{Operador} & \cabecalho{Uso} \\
+        \midrule
+        \cod{?.} & acessa se não for nulo \\
+        \cod{??} & valor padrão \\
+        \cod{??=} & atribui se for nulo \\
+        \cod{!} & afirma não nulo (lança erro se for) \\
+        \bottomrule
+      \end{tabular}
+      \begin{erro}
+        Espalhar \cod{!} pelo código traz de volta os erros de nulo que o Dart tenta evitar.
+      \end{erro}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}[fragile]{Controle de fluxo}
+  \begin{columns}[T]
+    \begin{column}{0.5\textwidth}
+\begin{codigo}[title=Condições]{Dart}
+final status = temp > 80 ? 'ALERTA' : 'OK';
+
+// switch como expressão (Dart 3)
+String classificar(double t) => switch (t) {
+  < 0 => 'abaixo da faixa',
+  >= 0 && <= 35 => 'normal',
+  _ => 'acima da faixa',
+};
+
+String descrever(Object x) => switch (x) {
+  int n => 'inteiro $n',
+  String s => 'texto de ${s.length} letras',
+  _ => 'desconhecido',
+};
+\end{codigo}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+\begin{codigo}[title=Laços]{Dart}
+for (var i = 0; i < 5; i++) print(i);
+
+final sensores = ['DHT22', 'BMP280', 'LDR'];
+for (final s in sensores) print(s);
+sensores.forEach(print);
+
+var tentativas = 0;
+while (tentativas < 3) {
+  tentativas++;
+}
+\end{codigo}
+      \begin{dica}
+        O \cod{switch} de expressão do Dart 3 aceita \emph{patterns} (faixas, tipos, \emph{records}) e o compilador avisa quando faltam casos.
+      \end{dica}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% =============================================================================
+\section{Funções}
+
+\begin{frame}[fragile]{Funções e parâmetros}
+  \begin{columns}[T]
+    \begin{column}{0.52\textwidth}
+\begin{codigo}[title=funcoes.dart]{Dart}
+double media(List<double> valores) {
+  return valores.reduce((a, b) => a + b) / valores.length;
+}
+
+// corpo de expressão única (arrow)
+double cParaF(double c) => c * 9 / 5 + 32;
+
+// parâmetros nomeados (com required e padrão)
+void conectar({
+  required String host,
+  int porta = 1883,
+  bool tls = false,
+}) { /* ... */ }
+
+// parâmetros posicionais opcionais
+String saudacao(String nome, [String? titulo]) =>
+    'Olá, ${titulo ?? ''} $nome';
+
+conectar(host: 'broker.local', tls: true);
+\end{codigo}
+    \end{column}
+    \begin{column}{0.46\textwidth}
+      \begin{conceito}[Parâmetros nomeados]
+        Ficam entre \cod{\{ \}}, são opcionais por padrão e podem ser \cod{required}. É assim que todos os widgets do Flutter recebem seus parâmetros: \cod{Text('Oi', style: \ldots)}.
+      \end{conceito}
+      \begin{dica}
+        A seta \cod{=>} substitui \cod{\{ return \ldots; \}} quando o corpo é uma única expressão.
+      \end{dica}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}[fragile]{Funções como valores e extensões}
+  \begin{columns}[T]
+    \begin{column}{0.52\textwidth}
+\begin{codigo}[title=Funções anônimas]{Dart}
+// funções são objetos
+int Function(int) dobro = (x) => x * 2;
+final ehPar = (int n) => n % 2 == 0;
+
+// recebe uma função como parâmetro
+Duration medir(int n, void Function() acao) {
+  final sw = Stopwatch()..start();
+  for (var i = 0; i < n; i++) acao();
+  return sw.elapsed;
+}
+
+final tempo = medir(1000, () => calcularFFT());
+\end{codigo}
+    \end{column}
+    \begin{column}{0.46\textwidth}
+\begin{codigo}[title=Extensões]{Dart}
+extension Conversoes on double {
+  String get emCelsius =>
+      '${toStringAsFixed(1)} °C';
+}
+extension Adc on int {
+  double paraVolts({double vref = 3.3,
+                    int bits = 12}) =>
+      this * vref / ((1 << bits) - 1);
+}
+
+print(24.567.emCelsius);   // 24.6 °C
+print(2048.paraVolts());   // 1.65
+\end{codigo}
+      \begin{atencao}[Isto é Flutter!]
+        \cod{onPressed: () \{ \ldots \}} é uma função anônima passada como parâmetro nomeado.
+      \end{atencao}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% =============================================================================
+\section{Coleções}
+
+\begin{frame}[fragile]{List, Set e Map}
+  \begin{columns}[T]
+    \begin{column}{0.52\textwidth}
+\begin{codigo}[title=Coleções]{Dart}
+final nomes = <String>['DHT22', 'BMP280', 'LDR'];
+final ids = {1, 2, 2, 3};               // Set: {1, 2, 3}
+final pinos = {'led': 2, 'rele': 4};    // Map
+
+nomes.add('DS18B20');
+pinos['buzzer'] = 5;
+final pinoLed = pinos['led'] ?? -1;     // pode ser nulo
+
+const fixas = ['A', 'B'];   // lista imutável
+// fixas.add('C');           // erro em execução
+
+// collection if/for e spread
+final menu = [
+  'Painel',
+  if (ehAdmin) 'Usuários',
+  for (final b in bancadas) 'Bancada ${b.id}',
+  ...extras,
+];
+\end{codigo}
+    \end{column}
+    \begin{column}{0.46\textwidth}
+      \footnotesize
+      \begin{tabular}{@{}l l@{}}
+        \toprule
+        \cabecalho{Tipo} & \cabecalho{Característica} \\
+        \midrule
+        \cod{List} & ordenada, aceita repetidos \\
+        \cod{Set} & sem repetidos \\
+        \cod{Map} & pares chave $\rightarrow$ valor \\
+        \bottomrule
+      \end{tabular}
+      \begin{conceito}[\emph{Collection if/for}]
+        \cod{if}, \cod{for} e \cod{...} (\emph{spread}) dentro de literais de lista. Muito usados para montar listas de widgets condicionalmente.
+      \end{conceito}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}[fragile]{Operações funcionais}
+  \begin{columns}[T]
+    \begin{column}{0.56\textwidth}
+\begin{codigo}[title=Pipeline de dados]{Dart}
+final leituras = [
+  Leitura('t1', 24.1), Leitura('t2', 81.3),
+  Leitura('t1', 24.9), Leitura('t3', 19.0),
+];
+
+final alertas = leituras
+    .where((l) => l.valor > 75)           // filtra
+    .map((l) => '${l.sensor}: ${l.valor}') // transforma
+    .toList();
+
+final total = leituras.fold<double>(0, (s, l) => s + l.valor);
+final temAlerta = leituras.any((l) => l.valor > 80);
+final t3 = leituras.where((l) => l.sensor == 't3').firstOrNull;
+final ordenadas = [...leituras]   // .. = cascata
+  ..sort((a, b) => b.valor.compareTo(a.valor));
+\end{codigo}
+    \end{column}
+    \begin{column}{0.42\textwidth}
+      \scriptsize
+      \begin{tabular}{@{}l l@{}}
+        \toprule
+        \cabecalho{Método} & \cabecalho{Resultado} \\
+        \midrule
+        \cod{where} & mantém os que passam \\
+        \cod{map} & transforma cada item \\
+        \cod{fold}, \cod{reduce} & agrega \\
+        \cod{any}, \cod{every} & testes lógicos \\
+        \cod{firstWhere} & primeiro que satisfaz \\
+        \cod{sort} & ordena a própria lista \\
+        \cod{toList}, \cod{toSet} & materializa \\
+        \bottomrule
+      \end{tabular}
+      \begin{dica}
+        \cod{where} e \cod{map} devolvem \cod{Iterable} preguiçoso: chame \cod{toList()} quando precisar de uma lista.
+      \end{dica}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% =============================================================================
+\section{Orientação a objetos}
+
+\begin{frame}[fragile]{Classes e construtores}
+  \begin{columns}[T]
+    \begin{column}{0.54\textwidth}
+\begin{codigo}[title=equipamento.dart]{Dart}
+class Equipamento {
+  final String patrimonio;
+  String descricao;
+  int _horasDeUso = 0;          // _ = privado ao arquivo
+
+  Equipamento(this.patrimonio, this.descricao)
+      : assert(patrimonio.isNotEmpty);
+
+  // construtor nomeado
+  Equipamento.semDescricao(String p) : this(p, '---');
+
+  bool get precisaManutencao => _horasDeUso > 500;
+
+  void registrarUso(int horas) => _horasDeUso += horas;
+}
+
+final osc = Equipamento('IFMA-0042', 'Osciloscópio');
+osc.registrarUso(12);
+\end{codigo}
+    \end{column}
+    \begin{column}{0.44\textwidth}
+      \begin{itemize}
+        \item \cod{this.campo} no construtor atribui direto.
+        \item Lista de inicialização após \cod{:}.
+        \item Construtores nomeados: \cod{Classe.nome()}.
+        \item \cod{get}/\cod{set} para propriedades calculadas.
+        \item Prefixo \cod{\_} = privado à biblioteca (arquivo).
+        \item Não precisa de \cod{new}.
+      \end{itemize}
+      \begin{dica}[Construtores \cod{const} e \cod{factory}]
+        \cod{const Classe(\ldots)} cria objetos imutáveis compartilhados (como os widgets). \cod{factory} pode devolver um objeto já existente ou de outro subtipo.
+      \end{dica}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}[fragile]{Herança, interfaces, mixins}
+  \begin{columns}[T]
+    \begin{column}{0.54\textwidth}
+\begin{codigo}[title=Hierarquia]{Dart}
+abstract class Medidor {
+  String get unidade;
+  double ler();
+  String formatado() => '${ler()} $unidade';
+}
+
+mixin Calibravel {
+  double offset = 0;
+  void calibrar(double referencia, double lido) =>
+      offset = referencia - lido;
+}
+
+class Sensor { final int pino; Sensor(this.pino); }
+
+class Termistor extends Sensor
+    with Calibravel implements Medidor {
+  Termistor(super.pino);
+  @override String get unidade => '°C';
+  @override double ler() => 25.0 + offset;
+}
+\end{codigo}
+    \end{column}
+    \begin{column}{0.44\textwidth}
+      \begin{conceito}[Regras]
+        \begin{itemize}
+          \item \cod{extends}: herança simples.
+          \item \cod{implements}: toda classe é também uma interface.
+          \item \cod{with}: \emph{mixin} reaproveita código em várias classes.
+          \item \cod{abstract}: não pode ser instanciada.
+        \end{itemize}
+      \end{conceito}
+      \begin{dica}
+        \cod{@override} documenta a sobrescrita e o analisador avisa se o método não existir na superclasse.
+      \end{dica}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}[fragile]{Enum, records e patterns}
+  \begin{columns}[T]
+    \begin{column}{0.5\textwidth}
+\begin{codigo}[title=Enum aprimorado]{Dart}
+enum StatusBancada {
+  livre('verde'),
+  reservada('âmbar'),
+  manutencao('vermelho');
+
+  const StatusBancada(this.cor);
+  final String cor;
+  bool get disponivel => this == livre;
+}
+
+print(StatusBancada.values);
+\end{codigo}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+\begin{codigo}[title=Records e desestruturação]{Dart}
+// record: vários valores sem criar classe
+(double, double) faixa() => (10.0, 40.0);
+({double min, double max}) faixa2() =>
+    (min: 10, max: 40);
+
+final (min, max) = faixa();
+final (:min2, :max2) = (min2: 1, max2: 2);
+
+// pattern em JSON
+if (json case {'id': int id, 'nome': String n}) {
+  print('Bancada $id: $n');
+}
+\end{codigo}
+    \end{column}
+  \end{columns}
+  \begin{conceito}[\emph{Records} e \emph{patterns} (Dart 3)]
+    \emph{Records} agrupam valores com tipo, sem criar uma classe. \emph{Patterns} desestruturam e validam dados, muito úteis para ler JSON com segurança.
+  \end{conceito}
+\end{frame}
+
+\begin{frame}[fragile]{Sealed classes: modelando estados}
+  \begin{columns}[T]
+    \begin{column}{0.54\textwidth}
+\begin{codigo}[title=resultado.dart]{Dart}
+sealed class Resultado {}
+class Carregando extends Resultado {}
+class Sucesso extends Resultado {
+  final List<Leitura> dados;
+  Sucesso(this.dados);
+}
+class Erro extends Resultado {
+  final String mensagem;
+  Erro(this.mensagem);
+}
+
+// switch exaustivo: sem default
+String render(Resultado r) => switch (r) {
+  Carregando() => 'Carregando...',
+  Sucesso(:final dados) => '${dados.length} leituras',
+  Erro(:final mensagem) => 'Falha: $mensagem',
+};
+\end{codigo}
+    \end{column}
+    \begin{column}{0.44\textwidth}
+      \begin{conceito}[Por que \cod{sealed}?]
+        Todos os subtipos ficam no mesmo arquivo; o compilador conhece a lista completa e exige que o \cod{switch} trate todos.
+      \end{conceito}
+      \begin{caixaambar}
+        É exatamente o padrão usado para os estados de tela (carregando, sucesso, erro) nos Módulos 07 e 08.
+      \end{caixaambar}
+      \begin{dica}[Modificadores de classe]
+        \cod{final}, \cod{base} e \cod{interface} controlam quem pode estender ou implementar a classe fora da biblioteca.
+      \end{dica}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% =============================================================================
+\section{Erros}
+
+\begin{frame}[fragile]{Exceções}
+  \begin{columns}[T]
+    \begin{column}{0.52\textwidth}
+\begin{codigo}[title=Tratando falhas]{Dart}
+class SensorDesconectado implements Exception {
+  final String id;
+  SensorDesconectado(this.id);
+  @override
+  String toString() => 'Sensor $id desconectado';
+}
+
+double lerSensor(String id) {
+  if (!conectado) throw SensorDesconectado(id);
+  return 24.5;
+}
+
+try {
+  final v = double.parse(entrada);
+  print(lerSensor('t1') + v);
+} on FormatException {
+  print('valor inválido: $entrada');
+} on SensorDesconectado catch (e) {
+  print(e);
+} finally {
+  fecharArquivo();
+}
+\end{codigo}
+    \end{column}
+    \begin{column}{0.46\textwidth}
+      \begin{conceito}[\cod{on} \emph{versus} \cod{catch}]
+        \cod{on Tipo} trata um tipo específico; \cod{catch (e, pilha)} dá acesso ao objeto e à pilha de chamadas.
+      \end{conceito}
+      \begin{dica}
+        \cod{double.tryParse(texto)} devolve \cod{null} em vez de lançar exceção. Ótimo para validar campos de formulário.
+      \end{dica}
+      \begin{atencao}[\cod{Exception} \emph{versus} \cod{Error}]
+        \cod{Exception}: falhas esperadas (rede, formato) que devem ser tratadas. \cod{Error}: bugs de programação, que devem ser corrigidos.
+      \end{atencao}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% =============================================================================
+\section{Fechamento}
+
+\begin{frame}{Resumo}
+  \begin{resumo}
+    \begin{itemize}
+      \item Prefira \cod{final}; \cod{const} para valores de compilação; \cod{late} com cuidado.
+      \item \cod{T?} marca valores anuláveis; use \cod{?.}, \cod{??} e promoção de tipo; evite \cod{!}.
+      \item \cod{switch} de expressão com \emph{patterns} substitui cadeias de \cod{if}.
+      \item Parâmetros nomeados e funções anônimas são a base da API do Flutter.
+      \item Coleções com \cod{where}/\cod{map}/\cod{fold} e \emph{collection if/for}.
+      \item Classes, \emph{mixins}, extensões, \emph{records} e \cod{sealed class} para modelar o domínio e os estados.
+    \end{itemize}
+  \end{resumo}
+\end{frame}
+
+\begin{frame}{Glossário}
+  \begin{glossario}
+    Paradigma & estilo de organizar o código (imperativo, objetos, funcional, declarativo) \\
+    Tipagem estática & tipos verificados na compilação \\
+    Solidez (\emph{soundness}) & garantia de que o tipo declarado vale também na execução \\
+    \emph{Null safety} & distinção entre tipos anuláveis (\cod{String?}) e não anuláveis \\
+    Promoção de tipo & o compilador refina o tipo após uma verificação (\cod{if (x != null)}) \\
+    \emph{Mixin} & conjunto de membros reutilizado em várias classes sem herança \\
+    \emph{Record} & valor anônimo e imutável com campos, comparado por valor \\
+    \emph{Pattern} & forma que confere e desestrutura valores (\cod{switch}, \cod{if case}) \\
+    Coleta de lixo & liberação automática de objetos sem referências \\
+  \end{glossario}
+\end{frame}
+
+\begin{frame}{Questões de revisão}
+  \begin{questoes}
+    \item Que vantagens a tipagem estática e sólida do Dart traz para um app que vai crescer?
+    \item Por que o nulo foi chamado de ``erro de um bilhão de dólares''? Como o Dart o trata?
+    \item Qual a diferença entre \cod{final} e \cod{const}?
+    \item Dê um exemplo de encapsulamento e um de polimorfismo no LabMonitor.
+    \item O que é uma função pura? Por que ela é fácil de testar?
+    \item Para que servem \cod{sealed class} e \cod{switch} exaustivo ao modelar o estado de uma tela?
+    \item Qual a diferença entre igualdade de valor e de identidade? Como os \emph{records} se comportam?
+    \item O que acontece com um objeto quando nenhuma variável aponta mais para ele?
+  \end{questoes}
+\end{frame}
+
+\begin{frame}{Exercícios}
+  \begin{exercicio}[Exercício 1 --- Conversões]
+    Crie extensões \cod{cParaF}, \cod{fParaC} em \cod{double} e \cod{paraVolts} em \cod{int} (ADC de 12 bits, $V_{ref}$ = 3,3\,V).
+  \end{exercicio}
+  \begin{exercicio}[Exercício 2 --- Coleções]
+    Dada uma lista de \cod{Leitura}, calcule a média por sensor (\cod{Map<String, double>}), as leituras fora de 10--40\,°C e a média móvel de 5 amostras do sensor \cod{'t1'}.
+  \end{exercicio}
+  \begin{exercicio}[Exercício 3 --- Estados]
+    Modele com \cod{sealed class} os estados de uma conexão BLE (desconectado, procurando, conectando, conectado com RSSI, falha) e escreva um \cod{switch} exaustivo que gera a mensagem de cada estado.
+  \end{exercicio}
+  \begin{projeto}[LabMonitor --- Etapa 2]
+    Crie \arq{lib/domain/models/} com \cod{Equipamento}, \cod{Bancada}, \cod{Leitura} e \cod{enum StatusBancada}, mais uma lista de dados fictícios.
+  \end{projeto}
+\end{frame}
+
+\begin{frame}{Para aprofundar}
+  \small
+  \begin{itemize}
+    \item Tour da linguagem: \url{https://dart.dev/language}
+    \item Null safety: \url{https://dart.dev/null-safety}
+    \item Patterns e records: \url{https://dart.dev/language/patterns}
+    \item Modificadores de classe: \url{https://dart.dev/language/class-modifiers}
+    \item Effective Dart (boas práticas): \url{https://dart.dev/effective-dart}
+    \item DartPad: \url{https://dartpad.dev}
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{Respostas das questões de revisão}
+  \begin{respostas}
+    \item Erros de tipo aparecem na compilação, a IDE completa e refatora com segurança e, por ser sólida, a tipagem garante os tipos também em execução.
+    \item Porque referências nulas causaram incontáveis falhas. O Dart separa \cod{String} de \cod{String?} e exige tratar o nulo (\cod{?.}, \cod{??}, promoção de tipo) antes do uso.
+    \item \cod{final} é atribuída uma vez, em tempo de execução; \cod{const} é um valor conhecido na compilação, compartilhado e imutável.
+    \item Encapsulamento: \cod{Reserva} só muda por \cod{cancelar()}. Polimorfismo: \cod{FonteBle} e \cod{FonteFake} implementam \cod{leituras()} cada uma do seu jeito.
+    \item Devolve sempre o mesmo resultado para a mesma entrada, sem efeitos colaterais; o teste só confere entrada e saída.
+    \item A \cod{sealed class} fecha o conjunto de estados (carregando, sucesso, erro) e o \cod{switch} exaustivo obriga a tratar todos.
+    \item Identidade: o mesmo objeto (\cod{identical}); valor: o mesmo conteúdo. \emph{Records} com os mesmos campos são iguais por valor.
+    \item Ele se torna inalcançável e é liberado pelo coletor de lixo em algum momento.
+  \end{respostas}
+\end{frame}
+
+\encerramento{Módulo 03 (comum) --- Engenharia de software e Git: requisitos, métodos ágeis, versionamento e colaboração.}
+
+\end{document}

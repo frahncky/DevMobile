@@ -1,0 +1,733 @@
+\documentclass[aspectratio=169,10pt]{beamer}
+\makeatletter\def\input@path{{../../estilo/}{../estilo/}{estilo/}}\makeatother
+\usepackage{devmobile}
+\modulo{18}{Engenharia Avançada}{Dívida técnica, modularização, desempenho, memória, observabilidade, SLOs, CI/CD com GitHub Actions, \emph{feature flags} e decisões de arquitetura}
+
+\begin{document}
+\capa
+
+\begin{frame}{Objetivos do módulo}
+  \begin{conceito}[Ao final deste módulo você será capaz de]
+    \begin{itemize}
+      \item Reconhecer e gerenciar dívida técnica.
+      \item Dividir um app em módulos com dependências bem definidas, em Gradle e em pacotes Dart.
+      \item Explicar o orçamento de quadro, medir desempenho e corrigir vazamentos de memória.
+      \item Instrumentar o app com \emph{logs}, métricas e \emph{traces} e definir SLOs.
+      \item Montar \emph{pipelines} de CI/CD para Android e Flutter.
+      \item Lançar com segurança usando \emph{feature flags} e registrar decisões de arquitetura.
+    \end{itemize}
+  \end{conceito}
+\end{frame}
+
+\sumario
+
+% =============================================================================
+\section{Fundamentos: software que cresce}
+
+\begin{frame}{O que muda quando o app cresce}
+  \begin{columns}[T]
+    \begin{column}{0.5\textwidth}
+      \scriptsize
+      \begin{tabularx}{\linewidth}{@{}l L@{}}
+        \toprule
+        \cabecalho{Cresce} & \cabecalho{Problema que aparece} \\
+        \midrule
+        Código & \emph{build} lento, mudanças com efeitos inesperados \\
+        Equipe & conflitos, decisões esquecidas, revisão lenta \\
+        Usuários & aparelhos fracos, redes ruins, falhas raras que viram milhares \\
+        Entregas & lançamentos manuais arriscados e demorados \\
+        \bottomrule
+      \end{tabularx}
+      \begin{historia}
+        Nos anos 1970, Meir Lehman observou ``leis'' da evolução de software: um sistema em uso precisa mudar continuamente, e sua complexidade cresce a menos que se trabalhe ativamente para reduzi-la.
+      \end{historia}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \begin{conceito}[As respostas deste módulo]
+        \begin{itemize}
+          \item \textbf{Modularização} para o código e a equipe.
+          \item \textbf{Medição de desempenho} para os aparelhos reais.
+          \item \textbf{Observabilidade} para enxergar o app em produção.
+          \item \textbf{CI/CD} e \emph{feature flags} para entregar com frequência e segurança.
+          \item \textbf{Registros de decisão} para a memória da equipe.
+        \end{itemize}
+      \end{conceito}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Dívida técnica}
+  \begin{columns}[c]
+    \begin{column}{0.48\textwidth}
+      \centering
+      \begin{tikzpicture}[x=2.3cm,y=1.25cm,every node/.style={font=\tiny,align=center,text width=2.0cm}]
+        \fill[vermelhoerro!12] (0,1) rectangle (1,2); \fill[ambar!25] (1,1) rectangle (2,2);
+        \fill[vermelhoerro!6] (0,0) rectangle (1,1); \fill[verdeok!15] (1,0) rectangle (2,1);
+        \draw[cinzamedio] (0,0) rectangle (2,2) (1,0) -- (1,2) (0,1) -- (2,1);
+        \node at (0.5,1.5) {``Não temos tempo para projeto.''};
+        \node at (1.5,1.5) {``Lançamos agora e pagamos depois, conscientes.''};
+        \node at (0.5,0.5) {``O que é arquitetura em camadas?''};
+        \node at (1.5,0.5) {``Agora sabemos como deveríamos ter feito.''};
+        \node[font=\tiny\bfseries,text=azulpetroleo] at (0.5,2.2) {imprudente};
+        \node[font=\tiny\bfseries,text=azulpetroleo] at (1.5,2.2) {prudente};
+        \node[font=\tiny\bfseries,text=azulpetroleo,rotate=90] at (-0.18,1.5) {deliberada};
+        \node[font=\tiny\bfseries,text=azulpetroleo,rotate=90] at (-0.18,0.5) {inadvertida};
+      \end{tikzpicture}\\[2pt]
+      {\tiny Quadrante de Martin Fowler.}
+    \end{column}
+    \begin{column}{0.5\textwidth}
+      \begin{definicao}[Dívida técnica]
+        Metáfora de Ward Cunningham (1992): atalhos no código são como um empréstimo. Entregam mais rápido hoje, mas cobram \textbf{juros} em cada mudança futura, até serem ``pagos'' com refatoração.
+      \end{definicao}
+      \begin{conceito}[Gerenciando]
+        \begin{itemize}
+          \item Registre a dívida como \emph{issue}, com o custo que ela causa.
+          \item Reserve parte de cada \emph{sprint} para pagá-la.
+          \item Pague primeiro onde o código muda com mais frequência.
+        \end{itemize}
+      \end{conceito}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% =============================================================================
+\section{Modularização}
+
+\begin{frame}{Por que dividir o app em módulos}
+  \begin{columns}[c]
+    \begin{column}{0.52\textwidth}
+      \centering
+      \begin{tikzpicture}[node distance=5mm,every node/.style={font=\tiny,minimum width=1.6cm,minimum height=6mm}]
+        \node[caixaescura] (app) {:app};
+        \node[caixapetroleo,below left=6mm and 4mm of app] (f1) {:feature:painel};
+        \node[caixapetroleo,below=6mm of app] (f2) {:feature:reservas};
+        \node[caixapetroleo,below right=6mm and 4mm of app] (f3) {:feature:alertas};
+        \node[caixaambar,below=9mm of f1] (ui) {:core:ui};
+        \node[caixaambar,below=9mm of f2] (data) {:core:data};
+        \node[caixaambar,below=9mm of f3] (iot) {:core:iot};
+        \node[caixa,below=8mm of data] (model) {:core:model};
+        \foreach \f in {f1,f2,f3} \draw[seta] (app) -- (\f);
+        \foreach \f in {f1,f2,f3} {\draw[seta] (\f) -- (ui); \draw[seta] (\f) -- (data);}
+        \draw[seta] (f3) -- (iot);
+        \draw[seta] (data) -- (model); \draw[seta] (ui) -- (model); \draw[seta] (iot) -- (model);
+      \end{tikzpicture}
+    \end{column}
+    \begin{column}{0.46\textwidth}
+      \begin{conceito}[Benefícios]
+        \begin{itemize}
+          \item \emph{Build} incremental e em paralelo: só recompila o que mudou.
+          \item Encapsulamento: o que é interno não vaza (\cod{internal}, \cod{src/}).
+          \item Times trabalham em módulos diferentes sem conflito.
+          \item Módulos de base reutilizáveis (outro app, servidor, painel web).
+        \end{itemize}
+      \end{conceito}
+      \begin{atencao}[Regras do grafo]
+        Dependências só para baixo; \emph{features} não dependem umas das outras; sem ciclos.
+      \end{atencao}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}[fragile]{Módulos nas duas trilhas}
+  \begin{columns}[T]
+    \begin{column}{0.49\textwidth}
+\begin{codigo}[title=Kotlin: settings.gradle.kts]{Kotlin}
+include(
+  ":app",
+  ":core:model", ":core:data", ":core:ui",
+  ":feature:painel", ":feature:reservas",
+)
+\end{codigo}
+\begin{codigo}[title=feature/painel/build.gradle.kts]{Kotlin}
+plugins {
+  id("labmonitor.android.feature")  // convenção
+}
+dependencies {
+  implementation(project(":core:data"))
+  implementation(project(":core:ui"))
+}
+\end{codigo}
+    \end{column}
+    \begin{column}{0.49\textwidth}
+\begin{codigo}[title=Flutter: pubspec.yaml da raiz]{YAML}
+name: labmonitor_workspace
+environment:
+  sdk: ^3.6.0
+workspace:
+  - app
+  - packages/core_model
+  - packages/core_data
+  - packages/feature_painel
+\end{codigo}
+\begin{codigo}[title=packages/feature\_painel/pubspec.yaml]{YAML}
+name: feature_painel
+resolution: workspace
+dependencies:
+  core_data: any
+  flutter: { sdk: flutter }
+\end{codigo}
+      \begin{dica}
+        \emph{Pub workspaces} exigem Dart 3.6 ou mais novo.
+      \end{dica}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% =============================================================================
+\section{Desempenho}
+
+\begin{frame}{A física do desempenho}
+  \begin{columns}[T]
+    \begin{column}{0.5\textwidth}
+      \begin{definicao}[Orçamento de quadro]
+        Para animar com fluidez, cada quadro precisa ficar pronto antes do próximo \emph{refresh} da tela: 16,7\,ms a 60\,Hz, 11,1\,ms a 90\,Hz e 8,3\,ms a 120\,Hz. Quadro atrasado = \emph{jank} (engasgo).
+      \end{definicao}
+      \centering
+      \begin{tikzpicture}[x=0.32cm]
+        \foreach \i in {0,...,6} \draw[cinzamedio] (\i*2.6,0) -- ++(0,0.6);
+        \foreach \i/\w/\c in {0/1.9/verdeok,1/2.2/verdeok,2/4.3/vermelhoerro,4/1.8/verdeok,5/2.0/verdeok}
+          \fill[\c!70] (\i*2.6+0.1,0.1) rectangle ++(\w,0.4);
+        \node[font=\tiny,text=vermelhoerro] at (8.4,-0.25) {quadro perdido};
+      \end{tikzpicture}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \scriptsize
+      \begin{tabularx}{\linewidth}{@{}l L@{}}
+        \toprule
+        \cabecalho{Inicialização} & \cabecalho{Situação} \\
+        \midrule
+        A frio & processo não existia: tudo é criado \\
+        Morna & processo existe, tela recriada \\
+        A quente & app volta do fundo \\
+        \bottomrule
+      \end{tabularx}
+      \begin{atencao}[Limites do Android vitals]
+        São considerados excessivos: 5\,s ou mais a frio, 2\,s a morna e 1,5\,s a quente. Sem resposta a um toque por 5\,s, o Android mostra um ANR.
+      \end{atencao}
+      \begin{dica}
+        Rádio de celular gasta energia para ``acordar'': agrupe requisições em vez de fazer muitas pequenas.
+      \end{dica}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Medir antes de otimizar}
+  \begin{columns}[T]
+    \begin{column}{0.5\textwidth}
+      \begin{conceito}[O método]
+        \begin{enumerate}
+          \item Reproduza num \textbf{aparelho real} e modesto.
+          \item Meça em modo \emph{release} ou \emph{profile}, nunca em \emph{debug}.
+          \item Encontre o gargalo com o \emph{profiler}.
+          \item Mude \textbf{uma} coisa e meça de novo.
+          \item Proteja o ganho com um teste de desempenho.
+        \end{enumerate}
+      \end{conceito}
+      \begin{historia}
+        Donald Knuth (1974): a otimização prematura é a raiz de todos os males.
+      \end{historia}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \scriptsize
+      \begin{tabularx}{\linewidth}{@{}l L@{}}
+        \toprule
+        \cabecalho{Ferramenta} & \cabecalho{Para quê} \\
+        \midrule
+        Android Studio Profiler & CPU, memória, rede e energia (Kotlin) \\
+        Perfetto & rastreamento do sistema inteiro, quadro a quadro \\
+        Macrobenchmark & medir inicialização e rolagem de forma reprodutível \\
+        \emph{Baseline Profiles} & pré-compilar o código mais usado e acelerar a inicialização \\
+        Flutter DevTools & quadros, CPU, memória, rede e reconstruções de widgets \\
+        \bottomrule
+      \end{tabularx}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Técnicas que mais rendem}
+  \footnotesize
+  \begin{tabularx}{\textwidth}{@{}p{2.6cm} L L@{}}
+    \toprule
+    & \cabecalho{Compose (Kotlin)} & \cabecalho{Flutter} \\
+    \midrule
+    Evitar trabalho repetido & \cod{remember}, \cod{derivedStateOf}, parâmetros estáveis & construtores \cod{const}, dividir widgets, \cod{ValueListenableBuilder} \\
+    Listas longas & \cod{LazyColumn} com \cod{key} & \cod{ListView.builder} com chaves \\
+    Trabalho pesado & \cod{Dispatchers.Default} & \cod{Isolate.run} (Módulo 06) \\
+    Imagens & tamanho certo (Coil), cache & \cod{cacheWidth}, cache, formato adequado \\
+    Desenho & evitar recomposição na fase de desenho & \cod{RepaintBoundary} em áreas animadas \\
+    Inicialização & \emph{Baseline Profiles}, iniciar sob demanda & adiar inicializações, \emph{deferred imports} \\
+    \bottomrule
+  \end{tabularx}
+  \vspace{4pt}
+  \begin{columns}[T]
+    \begin{column}{0.48\textwidth}
+      \begin{conceito}[Comum às duas]
+        Paginação, cache local, menos dados por requisição, nada de E/S na \emph{thread} principal.
+      \end{conceito}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \begin{dica}
+        O Impeller pré-compila os \emph{shaders} do Flutter, eliminando o engasgo da primeira animação que existia no renderizador antigo.
+      \end{dica}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}[fragile]{Memória e vazamentos}
+  \begin{columns}[T]
+    \begin{column}{0.36\textwidth}
+      \begin{definicao}[Vazamento de memória]
+        Objeto inútil, mas ainda \textbf{alcançável} por alguma referência: o coletor de lixo não pode liberá-lo.
+      \end{definicao}
+      \begin{conceito}[Causas típicas]
+        \emph{Listeners} e \emph{streams} não cancelados, \emph{controllers} não descartados, referência estática a uma tela.
+      \end{conceito}
+      \begin{dica}
+        LeakCanary (Android) e o DevTools detectam vazamentos.
+      \end{dica}
+    \end{column}
+    \begin{column}{0.31\textwidth}
+\begin{codigo}[title=Kotlin]{Kotlin}
+// coleta só com a tela visível
+lifecycleScope.launch {
+  repeatOnLifecycle(
+      Lifecycle.State.STARTED) {
+    vm.estado.collect {
+      desenhar(it)
+    }
+  }
+}
+// em Compose:
+// collectAsStateWithLifecycle()
+\end{codigo}
+    \end{column}
+    \begin{column}{0.31\textwidth}
+\begin{codigo}[title=Flutter]{Dart}
+late final _ctrl =
+    TextEditingController();
+StreamSubscription? _sub;
+
+@override
+void dispose() {
+  _ctrl.dispose();
+  _sub?.cancel();
+  super.dispose();
+}
+\end{codigo}
+    \end{column}
+  \end{columns}
+  \begin{destaque}
+    Quem cria, descarta: todo recurso aberto num ciclo de vida é fechado no mesmo ciclo.
+  \end{destaque}
+\end{frame}
+
+% =============================================================================
+\section{Observabilidade}
+
+\begin{frame}{Os três pilares da observabilidade}
+  \begin{columns}[c]
+    \begin{column}{0.46\textwidth}
+      \centering
+      \begin{tikzpicture}[node distance=3mm,every node/.style={font=\scriptsize,align=center,minimum width=1.7cm,minimum height=1.6cm}]
+        \node[caixapetroleo] (l) {\emph{Logs}\\ \tiny eventos\\ \tiny detalhados};
+        \node[caixaambar,right=of l] (m) {Métricas\\ \tiny números\\ \tiny no tempo};
+        \node[caixaescura,right=of m] (t) {\emph{Traces}\\ \tiny caminho de\\ \tiny uma operação};
+        \node[caixa,below=4mm of m,minimum width=5.7cm,minimum height=7mm] (o) {Entender o sistema em produção};
+        \draw[seta] (l) -- (o); \draw[seta] (m) -- (o); \draw[seta] (t) -- (o);
+      \end{tikzpicture}
+    \end{column}
+    \begin{column}{0.52\textwidth}
+      \begin{definicao}[Observabilidade]
+        Capacidade de entender o que acontece dentro do sistema a partir dos dados que ele emite, inclusive para problemas que ninguém previu.
+      \end{definicao}
+      \scriptsize
+      \begin{tabularx}{\linewidth}{@{}l L@{}}
+        \toprule
+        \cabecalho{No app} & \cabecalho{Exemplo} \\
+        \midrule
+        Falhas & Crashlytics: pilha, aparelho, versão \\
+        Métricas & tempo de inicialização, quadros lentos \\
+        \emph{Traces} & ``reservar'': toque $\rightarrow$ API $\rightarrow$ banco \\
+        Eventos & reservas por dia, telas mais usadas \\
+        \bottomrule
+      \end{tabularx}
+      \begin{dica}
+        OpenTelemetry é o padrão aberto para emitir os três tipos de dados, no app e no servidor.
+      \end{dica}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}[fragile]{\emph{Logs} úteis e rastreamento ponta a ponta}
+  \begin{columns}[T]
+    \begin{column}{0.5\textwidth}
+\begin{codigo}[title=Dart (pacote logging)]{Dart}
+final log = Logger('reservas');
+log.info('reserva criada', {
+  'bancada': 7, 'duracao_min': 120,
+  'requisicao': idRequisicao,
+});
+log.severe('falha ao reservar', erro, pilha);
+\end{codigo}
+\begin{codigo}[title=Kotlin]{Kotlin}
+Log.i("reservas",
+  "reserva criada bancada=7 req=$idRequisicao")
+\end{codigo}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \begin{conceito}[Boas práticas]
+        \begin{itemize}
+          \item Níveis: \emph{debug}, \emph{info}, \emph{warning}, \emph{error}.
+          \item Campos estruturados, não frases soltas.
+          \item Nunca senhas, \emph{tokens} ou dados pessoais.
+          \item Em \emph{release}, só o necessário.
+        \end{itemize}
+      \end{conceito}
+      \begin{definicao}[ID de correlação]
+        O app gera um identificador por operação e o envia no cabeçalho \cod{X-Request-ID}; app e servidor registram o mesmo ID, e a busca por ele mostra o caminho completo.
+      \end{definicao}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{SLIs, SLOs e orçamento de erro}
+  \begin{columns}[T]
+    \begin{column}{0.5\textwidth}
+      \begin{definicao}[SLI --- indicador de nível de serviço]
+        Medida da experiência do usuário: \% de sessões sem falha, \% de reservas concluídas em menos de 2\,s.
+      \end{definicao}
+      \begin{definicao}[SLO --- objetivo de nível de serviço]
+        Meta para o SLI num período: ``99,5\,\% das sessões sem falha em 28 dias''.
+      \end{definicao}
+      \begin{definicao}[Orçamento de erro]
+        O que sobra até 100\,\%: 0,5\,\% das sessões. Enquanto há orçamento, lança-se rápido; se ele acaba, a prioridade vira estabilidade.
+      \end{definicao}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \begin{exemplo}[Conta rápida]
+        Com 20\,000 sessões no mês e SLO de 99,5\,\%, o orçamento é de 100 sessões com falha. Uma versão que gera 80 falhas na primeira semana já consumiu 80\,\% dele: hora de pausar novidades e corrigir.
+      \end{exemplo}
+      \begin{conceito}[Alertas]
+        Alerte sobre \textbf{sintomas} que o usuário sente (falhas, lentidão), não sobre cada detalhe interno, e só quando alguém precisa agir.
+      \end{conceito}
+      \begin{historia}
+        SLOs e orçamentos de erro foram difundidos pela engenharia de confiabilidade (SRE) do Google.
+      \end{historia}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% =============================================================================
+\section{CI/CD}
+
+\begin{frame}{Integração, entrega e implantação contínuas}
+  \centering
+  \begin{tikzpicture}[node distance=3mm,every node/.style={font=\scriptsize,align=center,minimum height=10mm,text width=1.55cm}]
+    \node[caixa] (c) {\emph{Commit}\\ ou PR};
+    \node[caixapetroleo,right=of c] (b) {\emph{Build}};
+    \node[caixapetroleo,right=of b] (t) {Testes e análise};
+    \node[caixaambar,right=of t] (a) {Artefato assinado};
+    \node[caixaambar,right=of a] (i) {Faixa interna};
+    \node[caixaescura,right=of i] (p) {Produção gradual};
+    \foreach \x/\y in {c/b,b/t,t/a,a/i,i/p} \draw[seta] (\x) -- (\y);
+    \draw[decorate,decoration={brace,amplitude=4pt,mirror}] ([yshift=-1mm]c.south west) -- ([yshift=-1mm]t.south east)
+      node[midway,below=2mm,font=\tiny,text width=4cm] {integração contínua (CI)};
+    \draw[decorate,decoration={brace,amplitude=4pt,mirror}] ([yshift=-1mm]a.south west) -- ([yshift=-1mm]i.south east)
+      node[midway,below=2mm,font=\tiny,text width=3cm] {entrega contínua};
+    \draw[decorate,decoration={brace,amplitude=4pt,mirror}] ([yshift=-1mm]p.south west) -- ([yshift=-1mm]p.south east)
+      node[midway,below=2mm,font=\tiny,text width=2cm] {implantação contínua};
+  \end{tikzpicture}
+  \vspace{4pt}
+  \begin{columns}[T]
+    \begin{column}{0.32\textwidth}
+      \begin{definicao}[CI]
+        Integrar na \emph{main} várias vezes ao dia, com \emph{build} e testes automáticos a cada mudança.
+      \end{definicao}
+    \end{column}
+    \begin{column}{0.32\textwidth}
+      \begin{definicao}[Entrega contínua]
+        Toda mudança aprovada gera uma versão pronta para publicar com um clique.
+      \end{definicao}
+    \end{column}
+    \begin{column}{0.32\textwidth}
+      \begin{definicao}[Implantação contínua]
+        A versão vai sozinha para os usuários. Em apps, é sempre gradual e com monitoramento.
+      \end{definicao}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}[fragile]{\emph{Pipeline} Android (Kotlin)}
+  \begin{columns}[T]
+    \begin{column}{0.6\textwidth}
+\begin{codigo}[title=.github/workflows/android.yml]{YAML}
+name: android
+on: { push: { branches: [main] }, pull_request: {} }
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: 17 }
+      - uses: gradle/actions/setup-gradle@v4
+      - run: ./gradlew lint testDebugUnitTest
+      - if: github.ref == 'refs/heads/main'
+        run: |
+          echo "$CHAVE_B64" | base64 -d > app/upload.jks
+          ./gradlew bundleRelease
+        env:
+          CHAVE_B64: ${{ secrets.CHAVE_UPLOAD_B64 }}
+          SENHA_CHAVE: ${{ secrets.SENHA_CHAVE }}
+      - if: github.ref == 'refs/heads/main'
+        uses: actions/upload-artifact@v4
+        with: { name: aab, path: app/build/outputs/bundle/release/ }
+\end{codigo}
+    \end{column}
+    \begin{column}{0.38\textwidth}
+      \begin{conceito}[Leitura]
+        Em todo PR: \emph{lint} e testes. Na \emph{main}: também o AAB assinado, com a chave vinda dos segredos do repositório.
+      \end{conceito}
+      \begin{dica}
+        O passo seguinte envia o AAB à faixa interna da Play (\emph{action} de upload ou fastlane \cod{supply}, Módulo 15).
+      \end{dica}
+      \begin{atencao}
+        Segredos nunca aparecem no \emph{log}: o GitHub os mascara, mas não os imprima de propósito.
+      \end{atencao}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}[fragile]{\emph{Pipeline} Flutter}
+  \begin{columns}[T]
+    \begin{column}{0.6\textwidth}
+\begin{codigo}[title=.github/workflows/flutter.yml]{YAML}
+name: flutter
+on: { push: { branches: [main] }, pull_request: {} }
+jobs:
+  qualidade:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: subosito/flutter-action@v2
+        with: { channel: stable, cache: true }
+      - run: flutter pub get
+      - run: dart format --set-exit-if-changed .
+      - run: flutter analyze
+      - run: flutter test --coverage
+  ios:
+    needs: qualidade
+    if: github.ref == 'refs/heads/main'
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: subosito/flutter-action@v2
+      - run: cd ios && fastlane beta    # Módulo 15
+\end{codigo}
+    \end{column}
+    \begin{column}{0.38\textwidth}
+      \begin{conceito}[Dependência entre \emph{jobs}]
+        \cod{needs} faz o \emph{job} iOS esperar a qualidade passar; ele roda numa máquina macOS, exigida para compilar para iOS.
+      \end{conceito}
+      \begin{dica}
+        Use \emph{environments} do GitHub com aprovação manual para o passo que publica em produção.
+      \end{dica}
+      \begin{atencao}
+        Máquinas macOS custam mais minutos de CI: rode o \emph{job} iOS só na \emph{main}.
+      \end{atencao}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{\emph{Builds} reprodutíveis e cadeia de suprimentos}
+  \begin{columns}[T]
+    \begin{column}{0.5\textwidth}
+      \begin{definicao}[\emph{Build} reprodutível]
+        O mesmo código produz o mesmo artefato em qualquer máquina e momento. Exige versões fixas de tudo o que entra no \emph{build}.
+      \end{definicao}
+      \begin{conceito}[Como chegar lá]
+        \begin{itemize}
+          \item Arquivos de trava no Git: \cod{pubspec.lock}, catálogo de versões e travas do Gradle.
+          \item Versão fixa do SDK no CI (Flutter, JDK).
+          \item \emph{Actions} fixadas por versão ou pelo \emph{hash} do \emph{commit}.
+        \end{itemize}
+      \end{conceito}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \begin{definicao}[Ataque à cadeia de suprimentos]
+        Comprometer uma dependência (biblioteca, \emph{action}, imagem Docker) para atingir todos que a usam. É o risco M2 do OWASP Mobile Top 10.
+      \end{definicao}
+      \begin{dica}
+        Dependabot ou Renovate abrem PRs de atualização com o CI rodando: atualizar vira rotina, não evento.
+      \end{dica}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}[fragile]{\emph{Feature flags} e lançamentos seguros}
+  \begin{columns}[T]
+    \begin{column}{0.48\textwidth}
+      \begin{definicao}[\emph{Feature flag}]
+        Chave remota que liga ou desliga uma funcionalidade sem publicar nova versão. Separa \textbf{implantar} o código de \textbf{liberar} a funcionalidade.
+      \end{definicao}
+      \begin{conceito}[Usos]
+        Lançar para 10\,\% dos usuários; desligar uma função com defeito (\emph{kill switch}); testes A/B; liberar só para a equipe.
+      \end{conceito}
+      \begin{atencao}
+        \emph{Flags} velhas são dívida técnica: remova-as quando a funcionalidade estiver estável.
+      \end{atencao}
+    \end{column}
+    \begin{column}{0.5\textwidth}
+\begin{codigo}[title=Dart + Remote Config (Módulo 12)]{Dart}
+final assistenteIa = rc.getBool('assistente_ia');
+if (assistenteIa) {
+  botoes.add(BotaoExplicarAlerta(alerta));
+}
+\end{codigo}
+\begin{codigo}[title=Kotlin]{Kotlin}
+if (remoteConfig.getBoolean("assistente_ia")) {
+  BotaoExplicarAlerta(alerta)
+}
+\end{codigo}
+      \begin{definicao}[Desenvolvimento baseado em tronco]
+        Todos integram na \emph{main} com frequência, em \emph{branches} curtas; o que não está pronto fica atrás de uma \emph{flag}.
+      \end{definicao}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% =============================================================================
+\section{Decisões e trabalho em equipe}
+
+\begin{frame}[fragile]{Registros de decisão de arquitetura (ADR)}
+  \begin{columns}[T]
+    \begin{column}{0.54\textwidth}
+\begin{codigo}[title=docs/adr/0004-backend-supabase.md]{bash}
+# 4. Usar Supabase como backend das reservas
+Data: 2026-10-20   Status: aceita
+
+## Contexto
+Reservas e relatórios são relacionais; a instituição
+quer poder hospedar o backend no futuro.
+
+## Decisão
+Supabase (PostgreSQL + RLS); FCM só para push.
+
+## Consequências
++ restrições no banco impedem reservas sobrepostas
++ migração para servidor próprio é viável
+- offline exige banco local no app (Módulo 10)
+\end{codigo}
+    \end{column}
+    \begin{column}{0.44\textwidth}
+      \begin{definicao}[ADR]
+        Documento curto que registra uma decisão importante: contexto, decisão e consequências. Fica no repositório, numerado, e nunca é apagado; se mudar, um ADR novo o substitui.
+      \end{definicao}
+      \begin{conceito}[Por que registrar]
+        Daqui a um ano, ninguém lembrará por que a escolha foi feita. O ADR evita refazer discussões e ajuda quem chega ao time.
+      \end{conceito}
+      \begin{dica}
+        Complete com \cod{CODEOWNERS} (quem revisa cada pasta) e um guia de contribuição.
+      \end{dica}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% =============================================================================
+\section{Fechamento}
+
+\begin{frame}{Resumo}
+  \begin{resumo}
+    \begin{itemize}
+      \item Dívida técnica cobra juros; registre-a e pague onde o código muda mais.
+      \item Módulos com dependências só para baixo aceleram o \emph{build} e organizam a equipe.
+      \item Desempenho se mede em aparelho real e em \emph{release}: orçamento de quadro, inicialização, memória.
+      \item Observabilidade une \emph{logs}, métricas e \emph{traces}; SLOs e orçamento de erro guiam prioridades.
+      \item CI/CD automatiza qualidade e entrega; \emph{builds} reprodutíveis protegem a cadeia de suprimentos.
+      \item \emph{Feature flags} separam implantar de liberar; ADRs guardam as decisões.
+    \end{itemize}
+  \end{resumo}
+\end{frame}
+
+\begin{frame}{Glossário (1/2)}
+  \begin{glossario}
+    Dívida técnica & custo futuro gerado por atalhos no código \\
+    Módulo & parte do código com fronteira e dependências explícitas \\
+    Orçamento de quadro & tempo máximo para produzir um quadro (16,7\,ms a 60\,Hz) \\
+    \emph{Jank} & engasgo visível causado por quadros atrasados \\
+    Inicialização a frio & abertura do app sem processo existente \\
+    Vazamento de memória & objeto inútil que continua alcançável e não é liberado \\
+    \emph{Profiler} & ferramenta que mede onde o tempo e a memória são gastos \\
+    \emph{Baseline Profile} & lista de código pré-compilado para acelerar o app Android \\
+  \end{glossario}
+\end{frame}
+
+\begin{frame}{Glossário (2/2)}
+  \begin{glossario}
+    Observabilidade & entender o sistema a partir de \emph{logs}, métricas e \emph{traces} \\
+    ID de correlação & identificador que acompanha uma operação do app ao servidor \\
+    SLI / SLO & indicador de serviço / meta para esse indicador \\
+    Orçamento de erro & margem de falhas permitida pelo SLO \\
+    CI / CD & integração contínua / entrega ou implantação contínua \\
+    \emph{Build} reprodutível & mesmo código gera o mesmo artefato em qualquer máquina \\
+    \emph{Feature flag} & chave remota que liga ou desliga funcionalidades \\
+    ADR & registro curto de uma decisão de arquitetura \\
+  \end{glossario}
+\end{frame}
+
+\begin{frame}{Questões de revisão}
+  \begin{questoes}
+    \item Dê um exemplo de dívida técnica prudente e deliberada e diga quando ela deve ser paga.
+    \item Por que \emph{features} não devem depender umas das outras?
+    \item Quanto tempo há para cada quadro a 120\,Hz? O que acontece se ele for excedido?
+    \item Por que medir desempenho em modo \emph{debug} leva a conclusões erradas?
+    \item Cite duas causas de vazamento de memória e como evitá-las nas duas trilhas.
+    \item Com SLO de 99\,\% sem falhas e 50\,000 sessões no mês, qual é o orçamento de erro?
+    \item Qual a diferença entre entrega contínua e implantação contínua?
+    \item Como uma \emph{feature flag} reduz o risco de um lançamento?
+  \end{questoes}
+\end{frame}
+
+\begin{frame}{Exercícios}
+  \begin{exercicio}[Exercício 1 --- Modularização]
+    Divida o LabMonitor em \cod{core} e \cod{feature} (Gradle ou \emph{pub workspace}) e desenhe o grafo de dependências.
+  \end{exercicio}
+  \begin{exercicio}[Exercício 2 --- Desempenho]
+    Meça a inicialização a frio e a rolagem do painel em \emph{release} num aparelho modesto, aplique uma otimização e meça de novo.
+  \end{exercicio}
+  \begin{exercicio}[Exercício 3 --- Observabilidade]
+    Defina dois SLIs e um SLO para o LabMonitor e implemente o ID de correlação entre app e API.
+  \end{exercicio}
+  \begin{projeto}[LabMonitor --- Etapa 18]
+    \emph{Pipeline} completo no GitHub Actions (qualidade em todo PR, artefato assinado na \emph{main}), uma \emph{feature flag} para o assistente de IA e dois ADRs registrados.
+  \end{projeto}
+\end{frame}
+
+\begin{frame}{Para aprofundar}
+  \small
+  \begin{itemize}
+    \item Modularização no Android: \url{https://developer.android.com/topic/modularization}
+    \item Desempenho no Android: \url{https://developer.android.com/topic/performance}
+    \item Desempenho no Flutter: \url{https://docs.flutter.dev/perf}
+    \item \emph{Pub workspaces}: \url{https://dart.dev/tools/pub/workspaces}
+    \item Livros de SRE do Google (gratuitos): \url{https://sre.google/books}
+    \item GitHub Actions: \url{https://docs.github.com/actions}
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{Respostas das questões de revisão}
+  \begin{respostas}
+    \item Lançar a reserva sem o filtro avançado para cumprir a data da feira, sabendo que o código da lista será refeito. Deve ser paga logo após o lançamento, antes que outras funções se apoiem nele.
+    \item Para evitar ciclos e permitir que cada \emph{feature} seja compilada, testada e mantida isoladamente; o que elas compartilham vai para um módulo \cod{core}.
+    \item 8,3\,ms. O quadro é descartado e a tela repete o anterior: o usuário vê um engasgo.
+    \item Em \emph{debug} o código roda com verificações extras e sem otimizações (JIT no Flutter); os gargalos e os tempos são diferentes dos reais.
+    \item Coletar \cod{Flow} fora do ciclo de vida (usar \cod{repeatOnLifecycle}) e não descartar \emph{controllers} ou assinaturas (\cod{dispose} e \cod{cancel}).
+    \item 1\,\% de 50\,000 = 500 sessões com falha no mês.
+    \item Na entrega contínua, cada versão fica pronta para publicar, mas alguém decide quando; na implantação contínua, ela é publicada automaticamente.
+    \item Permite liberar para poucos usuários, observar e desligar na hora se algo der errado, sem esperar uma nova versão passar pela loja.
+  \end{respostas}
+\end{frame}
+
+\encerramento{Módulo 19 --- Multiplataforma (trilha Kotlin) ou código nativo, web, desktop e embarcados (trilha Flutter).}
+
+\end{document}

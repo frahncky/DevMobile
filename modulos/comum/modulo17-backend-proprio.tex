@@ -1,0 +1,804 @@
+\documentclass[aspectratio=169,10pt]{beamer}
+\makeatletter\def\input@path{{../../estilo/}{../estilo/}{estilo/}}\makeatother
+\usepackage{devmobile}
+\modulo{17}{Backend Próprio}{Servidores web, projeto de APIs REST, autenticação com JWT, PostgreSQL, implementação em Dart (Shelf) e Kotlin (Ktor), OpenAPI, Docker, HTTPS e segurança de APIs}
+
+\begin{document}
+\capa
+
+\begin{frame}{Objetivos do módulo}
+  \begin{conceito}[Ao final deste módulo você será capaz de]
+    \begin{itemize}
+      \item Explicar o caminho de uma requisição do app até o banco de dados.
+      \item Projetar uma API REST com recursos, métodos, códigos de status e erros padronizados.
+      \item Implementar autenticação com senhas protegidas e JWT, e autorização por papéis.
+      \item Construir a API do LabMonitor em Dart (Shelf) e reconhecer o equivalente em Kotlin (Ktor).
+      \item Documentar o contrato com OpenAPI.
+      \item Empacotar com Docker e publicar com HTTPS, aplicando as práticas de segurança de APIs.
+    \end{itemize}
+  \end{conceito}
+\end{frame}
+
+\sumario
+
+% =============================================================================
+\section{Fundamentos: como funciona um servidor web}
+
+\begin{frame}{O caminho de uma requisição}
+  \centering
+  \begin{tikzpicture}[node distance=4mm,every node/.style={font=\scriptsize,align=center,minimum height=11mm}]
+    \node[caixa,text width=1.3cm] (app) {App};
+    \node[caixa,right=of app,text width=1.4cm] (dns) {DNS\\ \tiny nome $\rightarrow$ IP};
+    \node[caixaambar,right=of dns,text width=1.7cm] (tls) {TLS\\ \tiny canal cifrado};
+    \node[caixapetroleo,right=of tls,text width=1.9cm] (px) {Proxy reverso\\ \tiny Caddy, Nginx};
+    \node[caixapetroleo,right=of px,text width=2.0cm] (srv) {Servidor da API\\ \tiny Shelf, Ktor};
+    \node[caixaescura,right=of srv,text width=1.5cm] (db) {PostgreSQL};
+    \foreach \a/\b in {app/dns,dns/tls,tls/px,px/srv,srv/db} \draw[seta] (\a) -- (\b);
+  \end{tikzpicture}
+  \vspace{6pt}
+  \begin{columns}[T]
+    \begin{column}{0.32\textwidth}
+      \begin{definicao}[DNS]
+        Sistema que traduz \cod{api.labmonitor.dev} no endereço IP do servidor.
+      \end{definicao}
+    \end{column}
+    \begin{column}{0.32\textwidth}
+      \begin{definicao}[Proxy reverso]
+        Recebe as conexões da internet, cuida do HTTPS e encaminha para a aplicação, que fica protegida na rede interna.
+      \end{definicao}
+    \end{column}
+    \begin{column}{0.32\textwidth}
+      \begin{definicao}[Servidor de aplicação]
+        Processo que interpreta a requisição HTTP, executa a regra de negócio e responde, em geral com JSON.
+      \end{definicao}
+    \end{column}
+  \end{columns}
+  \begin{dica}
+    Cada etapa pode falhar de um jeito diferente (nome não resolvido, certificado vencido, 502 do proxy, erro de SQL). Conhecer o caminho é o que permite diagnosticar.
+  \end{dica}
+\end{frame}
+
+\begin{frame}{Camadas e \emph{middlewares} no servidor}
+  \begin{columns}[c]
+    \begin{column}{0.5\textwidth}
+      \centering
+      \begin{tikzpicture}[node distance=2mm,every node/.style={font=\scriptsize,minimum width=4.6cm}]
+        \node[caixaambar] (m1) {\emph{log} da requisição};
+        \node[caixaambar,below=of m1] (m2) {autenticação (JWT)};
+        \node[caixaambar,below=of m2] (m3) {tratamento de erros};
+        \node[caixapetroleo,below=4mm of m3] (r) {Rotas / controladores};
+        \node[caixapetroleo,below=of r] (s) {Serviços (regras de negócio)};
+        \node[caixapetroleo,below=of s] (p) {Repositórios (SQL)};
+        \node[caixaescura,below=of p] (b) {Banco de dados};
+        \foreach \a/\b in {m1/m2,m2/m3,m3/r,r/s,s/p,p/b} \draw[seta] (\a) -- (\b);
+      \end{tikzpicture}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \begin{definicao}[\emph{Middleware}]
+        Função que envolve o tratamento de \textbf{todas} as requisições: pode registrar, validar, recusar ou modificar antes e depois do \emph{handler}.
+      \end{definicao}
+      \begin{conceito}[Mesmos princípios do app]
+        Rotas só traduzem HTTP; serviços concentram as regras; repositórios falam com o banco. Separação de responsabilidades e inversão de dependência (Módulos 03 e 08) valem também aqui.
+      \end{conceito}
+      \begin{analogia}
+        Portaria de um prédio: identificação, registro e encaminhamento acontecem antes de chegar ao apartamento.
+      \end{analogia}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Projeto de APIs REST}
+  \begin{columns}[T]
+    \begin{column}{0.5\textwidth}
+      \begin{definicao}[REST]
+        Estilo arquitetural descrito por Roy Fielding (2000): recursos identificados por URIs, manipulados por uma interface uniforme (métodos HTTP), com comunicação \textbf{sem estado} e respostas que podem ser guardadas em cache.
+      \end{definicao}
+      \scriptsize
+      \begin{tabularx}{\linewidth}{@{}l L@{}}
+        \toprule
+        \cabecalho{Requisição} & \cabecalho{Significado} \\
+        \midrule
+        \cod{GET /v1/bancadas?livre=true} & listar com filtro \\
+        \cod{GET /v1/bancadas/7} & uma bancada \\
+        \cod{POST /v1/reservas} & criar (201 + \cod{Location}) \\
+        \cod{DELETE /v1/reservas/42} & cancelar (204) \\
+        \bottomrule
+      \end{tabularx}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \scriptsize
+      \begin{tabularx}{\linewidth}{@{}l c c@{}}
+        \toprule
+        \cabecalho{Método} & \cabecalho{Seguro} & \cabecalho{Idempotente} \\
+        \midrule
+        GET & sim & sim \\
+        PUT & não & sim \\
+        DELETE & não & sim \\
+        POST & não & não \\
+        PATCH & não & não garantido \\
+        \bottomrule
+      \end{tabularx}
+      \begin{definicao}[Idempotente]
+        Repetir a requisição tem o mesmo efeito que fazê-la uma vez. Por isso é seguro repetir um \cod{PUT} após uma falha de rede, mas não um \cod{POST}.
+      \end{definicao}
+      \begin{dica}
+        Versione a API (\cod{/v1}): apps antigos continuam funcionando quando a \cod{/v2} chegar.
+      \end{dica}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}[fragile]{Erros padronizados e paginação}
+  \begin{columns}[T]
+    \begin{column}{0.52\textwidth}
+\begin{codigo}[title=409 Conflict --- application/problem+json]{JSON}
+{
+  "type": "https://labmonitor.dev/erros/conflito",
+  "title": "Horário indisponível",
+  "status": 409,
+  "detail": "A bancada B7 já está reservada das 14h às 16h.",
+  "instance": "/v1/reservas"
+}
+\end{codigo}
+      \begin{definicao}[\emph{Problem Details} (RFC 9457)]
+        Formato padrão para erros de APIs HTTP: tipo, título, status e detalhe legível. O app mostra o \cod{title} e decide pela combinação de \cod{status} e \cod{type}.
+      \end{definicao}
+    \end{column}
+    \begin{column}{0.46\textwidth}
+\begin{codigo}[title=Paginação por cursor]{JSON}
+GET /v1/leituras?bancada=7&limite=50&depois=9831
+{
+  "itens": [ ... 50 leituras ... ],
+  "proximo": 9881
+}
+\end{codigo}
+      \begin{conceito}[Por que paginar]
+        Listas sem limite crescem com o tempo e derrubam app e servidor. O cursor (``depois do id 9831'') é estável mesmo com inserções novas, ao contrário do deslocamento por página.
+      \end{conceito}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Autenticação: senhas e \emph{tokens}}
+  \begin{columns}[T]
+    \begin{column}{0.5\textwidth}
+      \begin{definicao}[Autenticação e autorização]
+        \textbf{Autenticação}: provar quem é. \textbf{Autorização}: decidir o que pode fazer.
+      \end{definicao}
+      \begin{pordentro}[Guardando senhas]
+        O servidor guarda só o \textbf{\emph{hash}} da senha, com algoritmo lento e \textbf{sal} (valor aleatório por usuário): Argon2id ou bcrypt. Nunca texto puro nem \emph{hash} rápido (MD5, SHA-1).
+      \end{pordentro}
+      \begin{atencao}
+        O JWT é \textbf{assinado}, não cifrado: nada de dados sensíveis no \emph{payload}.
+      \end{atencao}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \centering
+      \begin{tikzpicture}[font=\tiny]
+        \foreach \x/\t in {0/App,2.6/API} {\node[caixa,minimum width=1.2cm] at (\x,0) {\t}; \draw[cinzamedio,dashed] (\x,-0.3) -- (\x,-2.75);}
+        \draw[seta] (0,-0.6) -- node[above,fill=white,inner sep=1pt]{e-mail + senha} (2.6,-0.6);
+        \draw[seta,dashed] (2.6,-1.05) -- node[above,fill=white,inner sep=1pt]{JWT (15 min) + refresh} (0,-1.05);
+        \draw[seta] (0,-1.55) -- node[above,fill=white,inner sep=1pt]{GET + Bearer JWT} (2.6,-1.55);
+        \draw[seta,dashed] (2.6,-2.0) -- node[above,fill=white,inner sep=1pt]{200 (assinatura válida)} (0,-2.0);
+        \draw[seta] (0,-2.5) -- node[above,fill=white,inner sep=1pt]{refresh $\rightarrow$ novo JWT} (2.6,-2.5);
+      \end{tikzpicture}
+      \begin{definicao}[JWT (RFC 7519)]
+        Cabeçalho, \emph{payload} (\cod{sub}, \cod{exp}, papel) e assinatura, em Base64URL. O servidor confere a assinatura sem consultar o banco.
+      \end{definicao}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Banco de dados no servidor}
+  \begin{columns}[T]
+    \begin{column}{0.5\textwidth}
+      \begin{definicao}[\emph{Pool} de conexões]
+        Conexões abertas e reutilizadas. Abrir conexão é caro (rede, autenticação, TLS); o \emph{pool} empresta uma pronta a cada requisição.
+      \end{definicao}
+      \centering
+      \begin{tikzpicture}[node distance=2mm,every node/.style={font=\tiny}]
+        \foreach \i in {0,1,2,3} \node[caixa,minimum width=0.9cm] (r\i) at (0,-\i*0.42) {req \i};
+        \node[caixapetroleo,minimum width=1.6cm,minimum height=1.5cm] (pool) at (2.3,-0.63) {\emph{pool}\\ (10 conexões)};
+        \node[caixaescura,minimum width=1.3cm] (pg) at (4.4,-0.63) {PostgreSQL};
+        \foreach \i in {0,1,2,3} \draw[seta] (r\i) -- (pool.west);
+        \draw[seta,<->] (pool) -- (pg);
+      \end{tikzpicture}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \begin{conceito}[Práticas]
+        \begin{itemize}
+          \item \textbf{Consultas parametrizadas} sempre (SQL \emph{injection}, Módulo 09).
+          \item \textbf{Transações} para operações que mudam várias tabelas.
+          \item \textbf{Migrações} versionadas aplicadas na implantação.
+          \item Usuário do banco com o \textbf{mínimo de privilégios}.
+          \item Restrições no banco (\cod{unique}, \cod{check}, exclusão), como no Módulo 16.
+        \end{itemize}
+      \end{conceito}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% =============================================================================
+\section{A API em Dart com Shelf}
+
+\begin{frame}[fragile]{Servidor, rotas e \emph{pipeline}}
+  \begin{columns}[T]
+    \begin{column}{0.62\textwidth}
+\begin{codigo}[title=bin/server.dart]{Dart}
+Future<void> main() async {
+  final db = Pool.withEndpoints([
+    Endpoint(host: env('DB_HOST'), database: 'labmonitor',
+        username: env('DB_USER'), password: env('DB_PASS')),
+  ], settings: const PoolSettings(maxConnectionCount: 10,
+      sslMode: SslMode.disable));            // rede interna
+  final reservas = ReservaService(ReservaRepository(db));
+  final rotas = Router()
+    ..get('/saude', (Request r) => Response.ok('ok'))
+    ..post('/v1/login', LoginHandler(db).call)
+    ..get('/v1/bancadas', reservas.listarBancadas)
+    ..post('/v1/reservas', reservas.criar)
+    ..delete('/v1/reservas/<id|[0-9]+>', reservas.cancelar);
+  final app = const Pipeline()
+      .addMiddleware(logRequests())
+      .addMiddleware(tratarErros())
+      .addMiddleware(autenticar(env('JWT_SEGREDO')))
+      .addHandler(rotas.call);
+  await serve(app, InternetAddress.anyIPv4, 8080);
+}
+\end{codigo}
+    \end{column}
+    \begin{column}{0.36\textwidth}
+\begin{terminal}
+$ dart create -t server-shelf api
+$ dart pub add shelf_router \
+    postgres dart_jsonwebtoken bcrypt
+$ dart run bin/server.dart
+\end{terminal}
+      \begin{conceito}[Shelf]
+        Biblioteca do time do Dart para servidores HTTP: um \emph{handler} recebe \cod{Request} e devolve \cod{Response}; \emph{middlewares} se encaixam num \cod{Pipeline}.
+      \end{conceito}
+      \begin{dica}
+        Configuração vem de variáveis de ambiente (\cod{env}), nunca do código.
+      \end{dica}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}[fragile]{Repositório com SQL parametrizado}
+  \begin{columns}[T]
+    \begin{column}{0.6\textwidth}
+\begin{codigo}[title=lib/reserva\_repository.dart]{Dart}
+class ReservaRepository {
+  ReservaRepository(this.db);
+  final Pool db;
+  Future<List<Map<String, dynamic>>> bancadas() async {
+    final r = await db.execute(
+        'SELECT id, codigo, livre FROM bancadas ORDER BY codigo');
+    return [for (final linha in r) linha.toColumnMap()];
+  }
+  Future<int> criar(String usuario, int bancada,
+      DateTime inicio, DateTime fim) async {
+    final r = await db.execute(
+      Sql.named('INSERT INTO reservas '
+          '(usuario_id, bancada_id, inicio, fim) '
+          'VALUES (@u, @b, @i, @f) RETURNING id'),
+      parameters: {'u': usuario, 'b': bancada,
+                   'i': inicio, 'f': fim},
+    );
+    return r.first[0] as int;
+  }
+}
+\end{codigo}
+    \end{column}
+    \begin{column}{0.38\textwidth}
+      \begin{conceito}[Parâmetros nomeados]
+        O texto do SQL e os valores viajam separados; o PostgreSQL nunca interpreta o valor como código. É a defesa contra SQL \emph{injection}.
+      \end{conceito}
+      \begin{pordentro}[E o conflito de horário?]
+        Se a reserva sobrepõe outra, o banco lança o erro 23P01 (restrição de exclusão). O serviço o converte em \cod{409 Conflict} no formato \emph{Problem Details}.
+      \end{pordentro}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}[fragile]{Login e \emph{middleware} de autenticação}
+  \begin{columns}[T]
+    \begin{column}{0.54\textwidth}
+\begin{codigo}[title=lib/auth.dart]{Dart}
+Middleware autenticar(String segredo) =>
+    (Handler interno) => (Request req) {
+  const publicas = {'saude', 'v1/login'};
+  if (publicas.contains(req.url.path)) return interno(req);
+  final h = req.headers['authorization'] ?? '';
+  if (!h.startsWith('Bearer ')) {
+    return Response.unauthorized('token ausente');
+  }
+  try {
+    final jwt = JWT.verify(h.substring(7), SecretKey(segredo));
+    return interno(req.change(context: {
+      'usuario': jwt.payload['sub'],
+      'papel': jwt.payload['papel'],
+    }));
+  } on JWTException {
+    return Response.unauthorized('token inválido');
+  }
+};
+\end{codigo}
+    \end{column}
+    \begin{column}{0.44\textwidth}
+\begin{codigo}[title={No login, após conferir a senha}]{Dart}
+if (!BCrypt.checkpw(senha, usuario.hash)) {
+  return Response.unauthorized('credenciais');
+}
+final token = JWT(
+  {'sub': usuario.id, 'papel': usuario.papel},
+).sign(SecretKey(segredo),
+    expiresIn: const Duration(minutes: 15));
+return Response.ok(jsonEncode({'token': token}),
+    headers: {'content-type': 'application/json'});
+\end{codigo}
+      \begin{dica}
+        No cadastro: \cod{BCrypt.hashpw(senha, BCrypt.gensalt())}. Mensagem de erro igual para e-mail e senha errados.
+      \end{dica}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}[fragile]{Autorização: o dono do recurso}
+  \begin{columns}[T]
+    \begin{column}{0.56\textwidth}
+\begin{codigo}[title=lib/reserva\_service.dart (cancelar)]{Dart}
+Future<Response> cancelar(Request req, String id) async {
+  final usuario = req.context['usuario'] as String;
+  final papel = req.context['papel'] as String;
+  final reserva = await repo.buscar(int.parse(id));
+  if (reserva == null) return problema(404, 'Não encontrada');
+
+  final dono = reserva.usuarioId == usuario;
+  if (!dono && papel != 'tecnico') {
+    return problema(403, 'Só o autor ou um técnico cancela');
+  }
+  await repo.apagar(reserva.id);
+  return Response(204);
+}
+\end{codigo}
+    \end{column}
+    \begin{column}{0.42\textwidth}
+      \begin{erro}[O defeito número 1 das APIs]
+        \textbf{BOLA} (\emph{Broken Object Level Authorization}): a API confere se o usuário está logado, mas não se o objeto pedido é dele. Basta trocar o \cod{42} da URL para cancelar a reserva de outra pessoa.
+      \end{erro}
+      \begin{definicao}[RBAC]
+        Controle de acesso por papéis: permissões ligadas a papéis (aluno, técnico, administrador), e usuários ligados a papéis.
+      \end{definicao}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% =============================================================================
+\section{O mesmo backend em Kotlin (Ktor)}
+
+\begin{frame}[fragile]{Ktor: servidor, JSON e JWT}
+  \begin{columns}[T]
+    \begin{column}{0.54\textwidth}
+\begin{codigo}[title=Application.kt]{Kotlin}
+fun main() {
+  embeddedServer(Netty, port = 8080) {
+    install(ContentNegotiation) { json() }
+    install(Authentication) {
+      jwt("auth") {
+        verifier(JWT.require(Algorithm.HMAC256(segredo))
+          .build())
+        validate { c ->
+          c.payload.subject?.let { JWTPrincipal(c.payload) }
+        }
+      }
+    }
+    rotas(repo, servico)     // próximo slide
+  }.start(wait = true)
+}
+\end{codigo}
+      \begin{conceito}[Ktor]
+        \emph{Framework} da JetBrains, com \emph{coroutines}; recursos entram como \emph{plugins}.
+      \end{conceito}
+    \end{column}
+    \begin{column}{0.44\textwidth}
+      \scriptsize
+      \begin{tabularx}{\linewidth}{@{}l L@{}}
+        \toprule
+        \cabecalho{Shelf (Dart)} & \cabecalho{Ktor (Kotlin)} \\
+        \midrule
+        \cod{Router} & \cod{routing \{ \}} \\
+        \cod{Pipeline} + \cod{Middleware} & \emph{plugins} e \cod{intercept} \\
+        \cod{Request.context} & \cod{call.principal} \\
+        \cod{postgres} & Exposed ou JDBC + HikariCP \\
+        \cod{dart\_jsonwebtoken} & \cod{ktor-server-auth-jwt} \\
+        \cod{dart compile exe} & \emph{fat JAR} ou imagem nativa \\
+        \bottomrule
+      \end{tabularx}
+      \begin{dica}
+        App e servidor na mesma linguagem permitem compartilhar modelos e validações.
+      \end{dica}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}[fragile]{Ktor: rotas e autorização}
+  \begin{columns}[T]
+    \begin{column}{0.58\textwidth}
+\begin{codigo}[title=Rotas.kt]{Kotlin}
+fun Application.rotas(repo: Repo, servico: Servico) {
+  routing {
+    authenticate("auth") {
+      get("/v1/bancadas") { call.respond(repo.bancadas()) }
+      post("/v1/reservas") {
+        val nova = call.receive<NovaReserva>()
+        val uid = call.principal<JWTPrincipal>()!!.subject!!
+        call.respond(HttpStatusCode.Created,
+          servico.criar(uid, nova))
+      }
+      delete("/v1/reservas/{id}") {
+        val id = call.parameters["id"]!!.toLong()
+        val jwt = call.principal<JWTPrincipal>()!!
+        val status = servico.cancelar(id, jwt.subject!!,
+          jwt.getClaim("papel", String::class))
+        call.respond(status)     // 204, 403 ou 404
+      }
+    }
+  }
+}
+\end{codigo}
+    \end{column}
+    \begin{column}{0.4\textwidth}
+      \begin{conceito}[Mesma lógica do Shelf]
+        Rotas protegidas ficam dentro de \cod{authenticate}; o usuário vem do JWT; a regra de dono fica no serviço, que devolve um resultado traduzido em código HTTP.
+      \end{conceito}
+      \begin{dica}
+        \cod{call.receive} desserializa o JSON com \emph{kotlinx.serialization}; valide os campos antes de usar.
+      \end{dica}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% =============================================================================
+\section{Contrato com OpenAPI}
+
+\begin{frame}[fragile]{Descrevendo a API}
+  \begin{columns}[T]
+    \begin{column}{0.56\textwidth}
+\begin{codigo}[title=openapi.yaml (trecho)]{YAML}
+openapi: 3.1.0
+info: { title: LabMonitor API, version: 1.0.0 }
+paths:
+  /v1/reservas:
+    post:
+      summary: Cria uma reserva
+      security: [{ bearer: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/NovaReserva' }
+      responses:
+        '201': { description: Reserva criada }
+        '401': { description: Sem autenticação }
+        '409': { description: Horário indisponível }
+\end{codigo}
+    \end{column}
+    \begin{column}{0.42\textwidth}
+      \begin{definicao}[OpenAPI]
+        Especificação aberta para descrever APIs HTTP: rotas, parâmetros, corpos, respostas e segurança, num arquivo YAML ou JSON.
+      \end{definicao}
+      \begin{conceito}[O que o contrato permite]
+        \begin{itemize}
+          \item Documentação navegável (Swagger UI, Redoc).
+          \item Gerar clientes para Dart e Kotlin.
+          \item Testar se o servidor cumpre o contrato.
+          \item Equipes de app e de servidor trabalharem em paralelo.
+        \end{itemize}
+      \end{conceito}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% =============================================================================
+\section{Contêineres e implantação}
+
+\begin{frame}{Máquinas virtuais e contêineres}
+  \begin{columns}[c]
+    \begin{column}{0.5\textwidth}
+      \centering
+      \begin{tikzpicture}[every node/.style={font=\tiny,minimum height=5mm,inner sep=1pt,text width=1.15cm,align=center}]
+        \node[font=\scriptsize\bfseries,text=azulpetroleo,text width=3cm] at (1.3,3.2) {Máquinas virtuais};
+        \foreach \x in {0,1.3} {
+          \node[caixa] at (\x+0.65,2.6) {App};
+          \node[caixa] at (\x+0.65,2.0) {Bibliotecas};
+          \node[caixapetroleo] at (\x+0.65,1.4) {SO convidado};}
+        \node[caixaambar,text width=2.45cm] at (1.3,0.8) {Hipervisor};
+        \node[caixaescura,text width=2.45cm] at (1.3,0.2) {Hardware};
+        \node[font=\scriptsize\bfseries,text=azulpetroleo,text width=3cm] at (4.55,3.2) {Contêineres};
+        \foreach \x in {3.25,4.55} {
+          \node[caixa] at (\x+0.65,2.6) {App};
+          \node[caixa] at (\x+0.65,2.0) {Bibliotecas};}
+        \node[caixaambar,text width=2.45cm] at (4.55,1.4) {Motor (Docker)};
+        \node[caixapetroleo,text width=2.45cm] at (4.55,0.8) {SO do servidor};
+        \node[caixaescura,text width=2.45cm] at (4.55,0.2) {Hardware};
+      \end{tikzpicture}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \begin{definicao}[Contêiner]
+        Processo isolado que leva junto tudo de que precisa (bibliotecas, configuração), compartilhando o núcleo do sistema operacional. Sobe em segundos e roda igual no notebook e no servidor.
+      \end{definicao}
+      \scriptsize
+      \begin{tabularx}{\linewidth}{@{}l L@{}}
+        \toprule
+        \cabecalho{Termo} & \cabecalho{Significado} \\
+        \midrule
+        Imagem & modelo imutável (receita pronta) \\
+        Contêiner & imagem em execução \\
+        \emph{Registry} & repositório de imagens (Docker Hub, GHCR) \\
+        \emph{Compose} & vários contêineres descritos num arquivo \\
+        \bottomrule
+      \end{tabularx}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}[fragile]{Empacotando a API}
+  \begin{columns}[T]
+    \begin{column}{0.48\textwidth}
+\begin{codigo}[title=Dockerfile (estágios múltiplos)]{bash}
+FROM dart:stable AS build
+WORKDIR /app
+COPY pubspec.* ./
+RUN dart pub get
+COPY . .
+RUN dart compile exe bin/server.dart \
+    -o bin/server
+
+FROM scratch
+COPY --from=build /runtime/ /
+COPY --from=build /app/bin/server /app/bin/
+EXPOSE 8080
+CMD ["/app/bin/server"]
+\end{codigo}
+      \begin{conceito}[Estágios múltiplos]
+        O primeiro estágio compila; o final leva só o executável e o mínimo do sistema: imagem pequena, com pouca superfície de ataque.
+      \end{conceito}
+    \end{column}
+    \begin{column}{0.5\textwidth}
+\begin{codigo}[title=compose.yaml]{YAML}
+services:
+  db:
+    image: postgres:17
+    environment:
+      POSTGRES_DB: labmonitor
+      POSTGRES_PASSWORD: ${DB_PASS}
+    volumes: [dados:/var/lib/postgresql/data]
+  api:
+    build: .
+    environment:
+      DB_HOST: db
+      DB_PASS: ${DB_PASS}
+      JWT_SEGREDO: ${JWT_SEGREDO}
+    depends_on: [db]
+  proxy:
+    image: caddy:2
+    ports: ["80:80", "443:443"]
+    volumes: [./Caddyfile:/etc/caddy/Caddyfile]
+volumes:
+  dados:
+\end{codigo}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}[fragile]{HTTPS e implantação}
+  \begin{columns}[T]
+    \begin{column}{0.48\textwidth}
+\begin{codigo}[title=Caddyfile]{bash}
+api.labmonitor.dev {
+  reverse_proxy api:8080
+}
+\end{codigo}
+      \begin{pordentro}[Certificado automático]
+        O Caddy obtém e renova o certificado TLS com a Let's Encrypt pelo protocolo ACME: prova que controla o domínio e recebe um certificado gratuito válido por poucos meses, renovado sozinho.
+      \end{pordentro}
+\begin{terminal}
+$ docker compose up -d --build
+$ docker compose logs -f api
+\end{terminal}
+    \end{column}
+    \begin{column}{0.5\textwidth}
+      \scriptsize
+      \begin{tabularx}{\linewidth}{@{}l L@{}}
+        \toprule
+        \cabecalho{Onde publicar} & \cabecalho{Características} \\
+        \midrule
+        Servidor da instituição & controle total; exige manutenção e rede liberada \\
+        VPS (máquina virtual) & barata e flexível; você cuida do sistema \\
+        PaaS de contêineres & Cloud Run, Fly.io, Render: escala sozinho; menos controle \\
+        \bottomrule
+      \end{tabularx}
+      \begin{conceito}[Aplicação de doze fatores]
+        Configuração no ambiente, \emph{logs} na saída padrão, processos sem estado, banco como serviço anexado e ambientes de desenvolvimento e produção parecidos.
+      \end{conceito}
+      \begin{atencao}
+        Agende cópias de segurança do banco (\cod{pg\_dump}) e teste a restauração.
+      \end{atencao}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% =============================================================================
+\section{Segurança e operação}
+
+\begin{frame}{OWASP API Security Top 10 (2023)}
+  \begin{columns}[T]
+    \begin{column}{0.56\textwidth}
+      \scriptsize
+      \begin{tabularx}{\linewidth}{@{}p{3.6cm} L@{}}
+        \toprule
+        \cabecalho{Risco} & \cabecalho{Defesa no LabMonitor} \\
+        \midrule
+        API1 autorização por objeto (BOLA) & conferir o dono em toda rota com id \\
+        API2 autenticação quebrada & \emph{hash} lento, JWT curto, limite de tentativas \\
+        API3 autorização por propriedade & aluno não altera o campo \cod{papel} \\
+        API4 consumo irrestrito de recursos & paginação, limites de taxa e de tamanho \\
+        API5 autorização por função & rotas de técnico exigem papel técnico \\
+        API6 fluxos de negócio sensíveis & impedir reservas automáticas em massa \\
+        API7 falsificação de requisição no servidor & não buscar URLs enviadas pelo cliente \\
+        API8 configuração insegura & CORS restrito, sem mensagens de depuração \\
+        API9 inventário mal gerido & desligar versões e rotas antigas \\
+        API10 consumo inseguro de APIs de terceiros & validar o que outras APIs devolvem \\
+        \bottomrule
+      \end{tabularx}
+    \end{column}
+    \begin{column}{0.42\textwidth}
+      \begin{definicao}[Limite de taxa]
+        Máximo de requisições por cliente num intervalo (ex.: 5 tentativas de login por minuto). Protege contra força bruta e abuso.
+      \end{definicao}
+      \begin{conceito}[Operação]
+        \begin{itemize}
+          \item Rota \cod{/saude} para monitoramento.
+          \item \emph{Logs} estruturados (JSON), sem senhas nem dados pessoais.
+          \item Segredos só em variáveis de ambiente.
+          \item Dependências e imagens atualizadas.
+        \end{itemize}
+      \end{conceito}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}[fragile]{Testando a API}
+  \begin{columns}[T]
+    \begin{column}{0.54\textwidth}
+\begin{codigo}[title=test/reservas\_test.dart]{Dart}
+test('cancelar reserva de outra pessoa dá 403', () async {
+  final app = montarApp(repo: RepoFake(reservas: [
+    Reserva(id: 42, usuarioId: 'ana', bancadaId: 7),
+  ]));
+  final req = Request('DELETE',
+      Uri.parse('http://teste/v1/reservas/42'),
+      headers: {'authorization': 'Bearer ${tokenDe('bruno')}'});
+  final resp = await app(req);
+  expect(resp.statusCode, 403);
+});
+\end{codigo}
+\begin{terminal}
+$ curl -i -X POST https://api.labmonitor.dev/v1/login \
+    -H 'content-type: application/json' \
+    -d '{"email":"ana@ifma.edu.br","senha":"..."}'
+\end{terminal}
+    \end{column}
+    \begin{column}{0.44\textwidth}
+      \begin{conceito}[Camadas de teste]
+        \textbf{Unidade}: serviços com repositórios \emph{fake}.\\
+        \textbf{Integração}: API + PostgreSQL de teste em contêiner.\\
+        \textbf{Contrato}: respostas conferidas contra o \cod{openapi.yaml}.\\
+        \textbf{Manual}: \cod{curl}, Bruno ou Postman.
+      \end{conceito}
+      \begin{dica}
+        Teste os casos de segurança com o mesmo cuidado dos casos de sucesso: sem \emph{token}, \emph{token} vencido, recurso de outro usuário.
+      \end{dica}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% =============================================================================
+\section{Fechamento}
+
+\begin{frame}{Resumo}
+  \begin{resumo}
+    \begin{itemize}
+      \item Uma requisição passa por DNS, TLS, proxy reverso, servidor de aplicação e banco.
+      \item REST organiza a API em recursos e métodos; erros seguem o \emph{Problem Details}.
+      \item Senhas com \emph{hash} lento e sal; JWT curto para autenticar; papéis e dono para autorizar.
+      \item Shelf (Dart) e Ktor (Kotlin) implementam as mesmas ideias: rotas, \emph{middlewares}, camadas.
+      \item OpenAPI documenta o contrato; Docker e Caddy entregam a API com HTTPS.
+      \item BOLA é o risco número 1: confira sempre o dono do recurso.
+    \end{itemize}
+  \end{resumo}
+\end{frame}
+
+\begin{frame}{Glossário (1/2)}
+  \begin{glossario}
+    Proxy reverso & servidor que recebe as conexões externas, faz o TLS e encaminha à aplicação \\
+    \emph{Middleware} & função que envolve todas as requisições (log, autenticação, erros) \\
+    REST & estilo de API com recursos, métodos HTTP e comunicação sem estado \\
+    Idempotência & repetir a operação tem o mesmo efeito que fazê-la uma vez \\
+    \emph{Problem Details} & formato padrão de erro em APIs HTTP (RFC 9457) \\
+    Sal & valor aleatório combinado à senha antes do \emph{hash} \\
+    JWT & \emph{token} assinado com cabeçalho, \emph{payload} e assinatura \\
+    RBAC & controle de acesso baseado em papéis \\
+  \end{glossario}
+\end{frame}
+
+\begin{frame}{Glossário (2/2)}
+  \begin{glossario}
+    BOLA & falha em verificar se o objeto pedido pertence ao usuário \\
+    \emph{Pool} de conexões & conexões abertas reutilizadas entre requisições \\
+    OpenAPI & especificação para descrever o contrato de APIs HTTP \\
+    Contêiner & processo isolado com suas dependências, sobre o núcleo do sistema \\
+    Imagem & modelo imutável a partir do qual contêineres são criados \\
+    ACME / Let's Encrypt & protocolo e autoridade que emitem certificados TLS gratuitos e automáticos \\
+    Limite de taxa & máximo de requisições por cliente num intervalo \\
+    Doze fatores & princípios para aplicações em nuvem (configuração no ambiente, processos sem estado\ldots) \\
+  \end{glossario}
+\end{frame}
+
+\begin{frame}{Questões de revisão}
+  \begin{questoes}
+    \item Descreva o caminho de uma requisição do app até o banco e um erro típico de cada etapa.
+    \item Por que um \cod{POST} repetido após falha de rede pode criar duas reservas? Como evitar?
+    \item Por que senhas devem usar um \emph{hash} lento com sal, e não SHA-256 puro?
+    \item O que o servidor verifica num JWT? Por que ele não deve conter dados sensíveis?
+    \item Explique BOLA com um exemplo e mostre a correção.
+    \item Qual a vantagem de um \emph{pool} de conexões?
+    \item Que problema a imagem Docker de estágios múltiplos resolve?
+    \item Para que serve o arquivo OpenAPI num projeto com equipes de app e de servidor?
+  \end{questoes}
+\end{frame}
+
+\begin{frame}{Exercícios}
+  \begin{exercicio}[Exercício 1 --- API]
+    Implemente \cod{GET /v1/leituras} com paginação por cursor e filtro por bancada e período.
+  \end{exercicio}
+  \begin{exercicio}[Exercício 2 --- Segurança]
+    Escreva testes para os casos sem \emph{token}, \emph{token} vencido, reserva de outra pessoa e papel insuficiente.
+  \end{exercicio}
+  \begin{exercicio}[Exercício 3 --- Contrato]
+    Escreva o \cod{openapi.yaml} completo da API e gere a documentação navegável.
+  \end{exercicio}
+  \begin{projeto}[LabMonitor --- Etapa 17]
+    API própria em Dart (ou Ktor) com login, reservas e leituras, empacotada em Docker com PostgreSQL e Caddy; o app troca o repositório do Supabase pelo da API sem mudar a UI.
+  \end{projeto}
+\end{frame}
+
+\begin{frame}{Para aprofundar}
+  \small
+  \begin{itemize}
+    \item Shelf: \url{https://pub.dev/packages/shelf} \quad postgres: \url{https://pub.dev/packages/postgres}
+    \item Ktor: \url{https://ktor.io/docs}
+    \item OpenAPI: \url{https://spec.openapis.org/oas/latest.html}
+    \item OWASP API Security Top 10: \url{https://owasp.org/API-Security}
+    \item Docker: \url{https://docs.docker.com/get-started}
+    \item Caddy: \url{https://caddyserver.com/docs} \quad Doze fatores: \url{https://12factor.net/pt_br}
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{Respostas das questões de revisão}
+  \begin{respostas}
+    \item App $\rightarrow$ DNS (nome não resolvido) $\rightarrow$ TLS (certificado vencido) $\rightarrow$ proxy (502, aplicação fora do ar) $\rightarrow$ servidor (500, exceção) $\rightarrow$ banco (conexão recusada, restrição violada).
+    \item \cod{POST} não é idempotente: a primeira chegou, mas a resposta se perdeu. Use uma chave de idempotência enviada pelo app ou restrições no banco que recusem a duplicata.
+    \item \emph{Hashes} rápidos permitem testar bilhões de senhas por segundo; o algoritmo lento e o sal tornam o ataque caro e impedem tabelas pré-calculadas.
+    \item A assinatura (com o segredo ou a chave pública) e a validade (\cod{exp}). O \emph{payload} só é codificado em Base64URL: qualquer um o lê.
+    \item \cod{DELETE /v1/reservas/42} apaga a reserva de outra pessoa porque só se verificou o login. Correção: comparar o dono da reserva com o usuário do \emph{token} (ou exigir papel técnico).
+    \item Evita abrir uma conexão nova (rede, autenticação, TLS) a cada requisição e limita a carga sobre o banco.
+    \item Separa compilação e execução: a imagem final não leva SDK nem código-fonte, fica menor e mais segura.
+    \item É o contrato comum: gera documentação e clientes, permite trabalho em paralelo e testes de conformidade.
+  \end{respostas}
+\end{frame}
+
+\encerramento{Módulo 18 (comum) --- Engenharia avançada: modularização, desempenho, observabilidade e CI/CD.}
+
+\end{document}

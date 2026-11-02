@@ -1,0 +1,553 @@
+\documentclass[aspectratio=169,10pt]{beamer}
+\makeatletter\def\input@path{{../../estilo/}{../estilo/}{estilo/}}\makeatother
+\usepackage{devmobile}
+\modulo[Flutter]{05}{Widgets e Layouts}{Árvore de widgets, componentes básicos, Row/Column/Stack, restrições de layout, listas, Material 3, temas e telas responsivas}
+
+\begin{document}
+\capa
+
+\begin{frame}{Objetivos do módulo}
+  \begin{conceito}[Ao final deste módulo você será capaz de]
+    \begin{itemize}
+      \item Explicar a interface declarativa, as árvores do Flutter e o caminho de um quadro.
+      \item Usar textos, ícones, imagens, botões, cartões e campos de entrada.
+      \item Montar telas com \cod{Row}, \cod{Column}, \cod{Stack}, \cod{Expanded} e espaçamentos.
+      \item Entender a regra de restrições do layout e resolver os erros mais comuns.
+      \item Exibir listas e grades eficientes com \cod{ListView.builder} e \cod{GridView}.
+      \item Aplicar Material 3, temas claro e escuro, e adaptar a tela ao tamanho do aparelho.
+    \end{itemize}
+  \end{conceito}
+\end{frame}
+
+\sumario
+
+\input{../fundamentos/f05-ui-declarativa}
+
+% =============================================================================
+\section{Tudo é widget}
+
+\begin{frame}{A árvore de widgets}
+  \begin{columns}[c]
+    \begin{column}{0.5\textwidth}
+      \centering
+      \begin{tikzpicture}[level distance=9mm,sibling distance=24mm,
+          every node/.style={caixa,font=\tiny,minimum height=5mm,inner sep=2pt},
+          edge from parent/.style={draw=azulpetroleo,line width=0.6pt}]
+        \node[caixaescura] {MaterialApp}
+          child {node[caixaescura] {Scaffold}
+            child {node {AppBar} child {node {Text}}}
+            child {node {Column}
+              child {node {Text}}
+              child {node[caixaambar] {FilledButton} child {node {Text}}}}};
+      \end{tikzpicture}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \begin{itemize}
+        \item Toda a interface é uma \textbf{árvore de widgets}: layout, estilo, gestos e até espaçamento são widgets.
+        \item Um widget é uma \textbf{descrição imutável} de parte da tela.
+        \item Quando o estado muda, o Flutter chama \cod{build} de novo e compara a nova descrição com a anterior, redesenhando só o necessário.
+      \end{itemize}
+      \begin{destaque}
+        \textbf{UI = f(estado)}
+      \end{destaque}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}[fragile]{StatelessWidget e StatefulWidget}
+  \begin{columns}[T]
+    \begin{column}{0.5\textwidth}
+\begin{codigo}[title=Sem estado]{Dart}
+class CartaoBancada extends StatelessWidget {
+  const CartaoBancada({
+    super.key,
+    required this.numero,
+    required this.temperatura,
+  });
+
+  final int numero;
+  final double temperatura;
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      child: ListTile(
+        title: Text('Bancada $numero'),
+        subtitle: Text('${temperatura.toStringAsFixed(1)} °C'),
+      ),
+    );
+  }
+}
+\end{codigo}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+\begin{codigo}[title=Com estado (detalhes no Módulo 07)]{Dart}
+class Contador extends StatefulWidget {
+  const Contador({super.key});
+  @override
+  State<Contador> createState() => _ContadorState();
+}
+
+class _ContadorState extends State<Contador> {
+  int cliques = 0;
+  @override
+  Widget build(BuildContext context) => FilledButton(
+    onPressed: () => setState(() => cliques++),
+    child: Text('Cliques: $cliques'),
+  );
+}
+\end{codigo}
+      \begin{dica}
+        \cod{BuildContext} é a posição do widget na árvore; serve para acessar tema, tamanho da tela e navegação.
+      \end{dica}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% =============================================================================
+\section{Widgets básicos}
+
+\begin{frame}[fragile]{Texto, ícones, imagens e botões}
+  \begin{columns}[T]
+    \begin{column}{0.54\textwidth}
+\begin{codigo}[title=Componentes]{Dart}
+Text(
+  'Bancada 3 --- Osciloscópio',
+  style: Theme.of(context).textTheme.titleMedium,
+  maxLines: 1,
+  overflow: TextOverflow.ellipsis,
+),
+const Icon(Icons.thermostat, color: Colors.orange),
+Image.asset('assets/imagens/osciloscopio.png',
+    width: 64, fit: BoxFit.cover),
+Image.network(equipamento.fotoUrl, height: 120),
+
+FilledButton(onPressed: reservar,
+    child: const Text('Reservar')),
+OutlinedButton(onPressed: () {},
+    child: const Text('Cancelar')),
+IconButton(onPressed: abrirMenu,
+    icon: const Icon(Icons.more_vert),
+    tooltip: 'Menu'),
+\end{codigo}
+    \end{column}
+    \begin{column}{0.44\textwidth}
+      \scriptsize
+      \begin{tabular}{@{}l l@{}}
+        \toprule
+        \cabecalho{Widget} & \cabecalho{Uso} \\
+        \midrule
+        \cod{FilledButton} & ação principal \\
+        \cod{OutlinedButton} & ação secundária \\
+        \cod{TextButton} & ação discreta \\
+        \cod{IconButton} & ícone clicável \\
+        \cod{Card}, \cod{ListTile} & itens de lista \\
+        \cod{Chip}, \cod{Badge} & etiquetas e contadores \\
+        \cod{CircularProgressIndicator} & carregamento \\
+        \bottomrule
+      \end{tabular}
+      \begin{atencao}[Acessibilidade]
+        Dê \cod{tooltip} a botões de ícone e \cod{semanticLabel} a imagens informativas.
+      \end{atencao}
+      \begin{dica}
+        \cod{onPressed: null} desabilita o botão.
+      \end{dica}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}[fragile]{Campos de entrada e seleção}
+  \begin{columns}[T]
+    \begin{column}{0.54\textwidth}
+\begin{codigo}[title=Formulário simples]{Dart}
+final _form = GlobalKey<FormState>();
+final _descricao = TextEditingController();
+
+Form(
+  key: _form,
+  child: Column(children: [
+    TextFormField(
+      controller: _descricao,
+      decoration: const InputDecoration(
+        labelText: 'Descrição',
+        border: OutlineInputBorder()),
+      validator: (v) =>
+          (v == null || v.isEmpty) ? 'Obrigatório' : null,
+    ),
+    SwitchListTile(
+      title: const Text('Alimentação'),
+      value: ligado,
+      onChanged: (v) => setState(() => ligado = v)),
+  ]),
+);
+// ao salvar: if (_form.currentState!.validate()) ...
+\end{codigo}
+    \end{column}
+    \begin{column}{0.44\textwidth}
+      \begin{conceito}[\cod{TextEditingController}]
+        Lê e altera o texto do campo. Crie-o no \cod{State} e libere em \cod{dispose()}.
+      \end{conceito}
+      \scriptsize
+      \begin{tabular}{@{}l l@{}}
+        \toprule
+        \cabecalho{Widget} & \cabecalho{Valor} \\
+        \midrule
+        \cod{Switch}, \cod{Checkbox} & booleano \\
+        \cod{Radio}, \cod{SegmentedButton} & uma opção \\
+        \cod{Slider}, \cod{RangeSlider} & número, faixa \\
+        \cod{DropdownMenu} & lista suspensa \\
+        \cod{showDatePicker} & data \\
+        \bottomrule
+      \end{tabular}
+      \begin{dica}
+        \cod{keyboardType: TextInputType.number} abre o teclado numérico.
+      \end{dica}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% =============================================================================
+\section{Layout}
+
+\begin{frame}{Row, Column e Stack}
+  \begin{columns}[T]
+    \begin{column}{0.32\textwidth}
+      \centering
+      \begin{tikzpicture}
+        \draw[azulpetroleo,thick,rounded corners=2pt] (0,0) rectangle (2.4,2.4);
+        \foreach \y/\t in {1.85/A,1.2/B,0.55/C}{\node[caixaescura,minimum width=1.9cm,minimum height=5mm] at (1.2,\y) {\t};}
+        \draw[setaambar] (2.65,2.1) -- (2.65,0.3);
+      \end{tikzpicture}\\[2pt]
+      \textbf{\cod{Column}} --- vertical
+    \end{column}
+    \begin{column}{0.32\textwidth}
+      \centering
+      \begin{tikzpicture}
+        \draw[azulpetroleo,thick,rounded corners=2pt] (0,0) rectangle (2.4,2.4);
+        \foreach \x/\t in {0.42/A,1.2/B,1.98/C}{\node[caixaescura,minimum width=6mm,minimum height=1.9cm] at (\x,1.2) {\t};}
+        \draw[setaambar] (0.2,-0.25) -- (2.2,-0.25);
+      \end{tikzpicture}\\[2pt]
+      \textbf{\cod{Row}} --- horizontal
+    \end{column}
+    \begin{column}{0.32\textwidth}
+      \centering
+      \begin{tikzpicture}
+        \draw[azulpetroleo,thick,rounded corners=2pt] (0,0) rectangle (2.4,2.4);
+        \node[caixa,minimum width=2cm,minimum height=2cm] at (1.2,1.2) {};
+        \node[caixaescura,minimum width=1.2cm,minimum height=1cm] at (1.2,1.2) {B};
+        \node[caixaambarforte,minimum width=5mm,minimum height=5mm] at (2.0,2.0) {C};
+      \end{tikzpicture}\\[2pt]
+      \textbf{\cod{Stack}} --- sobreposição
+    \end{column}
+  \end{columns}
+  \vspace{4pt}
+  \begin{columns}[T]
+    \begin{column}{0.48\textwidth}
+      \begin{conceito}[Eixo principal (\cod{mainAxisAlignment})]
+        \cod{start}, \cod{center}, \cod{end}, \cod{spaceBetween}, \cod{spaceEvenly}; espaço fixo com \cod{spacing: 8}.
+      \end{conceito}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \begin{conceito}[Eixo cruzado (\cod{crossAxisAlignment})]
+        \cod{start}, \cod{center}, \cod{end}, \cod{stretch}. Em \cod{Stack}, posicione filhos com \cod{Positioned} ou \cod{Align}.
+      \end{conceito}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}[fragile]{Compondo um item de lista}
+  \begin{columns}[T]
+    \begin{column}{0.58\textwidth}
+\begin{codigo}[title=item\_equipamento.dart]{Dart}
+class ItemEquipamento extends StatelessWidget {
+  const ItemEquipamento(
+      {super.key, required this.eq, required this.onTap});
+  final Equipamento eq;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) => Card(
+    child: ListTile(
+      onTap: onTap,
+      leading: const Icon(Icons.memory),
+      title: Text(eq.descricao,
+          style: const TextStyle(fontWeight: FontWeight.bold)),
+      subtitle: Text(eq.patrimonio),
+      trailing: Icon(Icons.circle, size: 12,
+          color: eq.disponivel ? Colors.green : Colors.orange),
+    ),
+  );
+}
+\end{codigo}
+    \end{column}
+    \begin{column}{0.4\textwidth}
+      \small
+      \begin{itemize}
+        \item \cod{ListTile}: linha pronta com \cod{leading}, \cod{title}, \cod{subtitle} e \cod{trailing}.
+        \item Para layouts próprios: \cod{Row} + \cod{Expanded} (ocupa o espaço restante) + \cod{Padding}.
+        \item \cod{InkWell} adiciona toque com efeito de onda a qualquer widget.
+      \end{itemize}
+      \begin{dica}[Extraia widgets em classes]
+        Prefira classes \cod{StatelessWidget} a métodos que devolvem widgets: o Flutter consegue reaproveitar e evitar reconstruções.
+      \end{dica}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}[fragile]{Restrições na prática: erros comuns}
+  \begin{columns}[T]
+    \begin{column}{0.5\textwidth}
+\begin{codigo}[title=Lista dentro de coluna]{Dart}
+Column(
+  children: [
+    const CabecalhoResumo(),
+    Expanded(            // ocupa o espaço que sobra
+      child: ListView.builder(
+        itemCount: itens.length,
+        itemBuilder: (_, i) => ItemEquipamento(
+            eq: itens[i], onTap: () => abrir(itens[i])),
+      ),
+    ),
+  ],
+)
+\end{codigo}
+      \begin{dica}
+        O \textbf{Layout Explorer} do DevTools mostra as restrições de cada widget.
+      \end{dica}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \begin{erro}[``Vertical viewport was given unbounded height'']
+        Uma \cod{ListView} dentro de uma \cod{Column} recebe altura ilimitada e não sabe que altura ter. Envolva-a em \cod{Expanded} ou dê uma altura fixa.
+      \end{erro}
+      \begin{erro}[``A RenderFlex overflowed by 40 pixels'']
+        O conteúdo de uma \cod{Row} não coube (faixa amarela e preta). Use \cod{Expanded}/\cod{Flexible}, \cod{Wrap} ou texto com \cod{overflow}.
+      \end{erro}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% =============================================================================
+\section{Listas e grades}
+
+\begin{frame}[fragile]{ListView e GridView}
+  \begin{columns}[T]
+    \begin{column}{0.54\textwidth}
+\begin{codigo}[title=lista\_equipamentos.dart]{Dart}
+ListView.separated(
+  padding: const EdgeInsets.all(16),
+  itemCount: itens.length,
+  separatorBuilder: (_, __) => const SizedBox(height: 8),
+  itemBuilder: (context, i) => ItemEquipamento(
+    key: ValueKey(itens[i].patrimonio),
+    eq: itens[i],
+    onTap: () => abrir(itens[i]),
+  ),
+);
+
+GridView.builder(
+  gridDelegate:
+      const SliverGridDelegateWithMaxCrossAxisExtent(
+          maxCrossAxisExtent: 200, childAspectRatio: 1.2),
+  itemCount: bancadas.length,
+  itemBuilder: (context, i) =>
+      CartaoBancada(numero: bancadas[i].id,
+          temperatura: bancadas[i].temperatura),
+);
+\end{codigo}
+    \end{column}
+    \begin{column}{0.44\textwidth}
+      \begin{conceito}[\cod{.builder} = sob demanda]
+        Constrói só os itens visíveis. Uma \cod{ListView(children: [\ldots])} com mil itens cria todos de uma vez.
+      \end{conceito}
+      \begin{dica}[Keys]
+        \cod{ValueKey} com um identificador estável preserva o estado de cada item quando a lista é reordenada ou filtrada.
+      \end{dica}
+      \begin{dica}
+        \cod{RefreshIndicator}: ``puxar para atualizar''. \cod{CustomScrollView} + \emph{slivers}: cabeçalhos e listas combinados.
+      \end{dica}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% =============================================================================
+\section{Material 3, temas e responsividade}
+
+\begin{frame}[fragile]{Scaffold e tema}
+  \begin{columns}[T]
+    \begin{column}{0.54\textwidth}
+\begin{codigo}[title=app.dart]{Dart}
+MaterialApp(
+  theme: ThemeData(
+    colorScheme: ColorScheme.fromSeed(
+        seedColor: const Color(0xFF0D3052)),
+  ),
+  darkTheme: ThemeData(
+    colorScheme: ColorScheme.fromSeed(
+        seedColor: const Color(0xFF0D3052),
+        brightness: Brightness.dark),
+  ),
+  themeMode: ThemeMode.system,
+  home: Scaffold(
+    appBar: AppBar(title: const Text('LabMonitor')),
+    floatingActionButton: FloatingActionButton(
+        onPressed: novo, child: const Icon(Icons.add)),
+    body: const ListaEquipamentos(),
+  ),
+);
+\end{codigo}
+    \end{column}
+    \begin{column}{0.44\textwidth}
+      \begin{conceito}[Use o tema]
+        \cod{Theme.of(context).colorScheme.primary} e \cod{textTheme.titleLarge} se adaptam ao tema escuro. Cores fixas como \cod{Colors.red} não.
+      \end{conceito}
+      \begin{dica}[Cupertino]
+        Para visual iOS, há os widgets \cod{Cupertino*} e construtores \cod{.adaptive} (ex.: \cod{Switch.adaptive}), que mudam conforme a plataforma.
+      \end{dica}
+      \begin{dica}
+        O pacote \cod{google\_fonts} aplica fontes do Google Fonts ao \cod{textTheme}.
+      \end{dica}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}[fragile]{Telas responsivas}
+  \begin{columns}[T]
+    \begin{column}{0.54\textwidth}
+\begin{codigo}[title=layout\_adaptativo.dart]{Dart}
+LayoutBuilder(builder: (context, c) {
+  if (c.maxWidth >= 840) {          // expandido
+    return Row(children: [
+      const NavigationRail(...),
+      const Expanded(child: ListaEDetalhe()),
+    ]);
+  }
+  return const TelaCompacta();      // celular
+});
+
+final largura = MediaQuery.sizeOf(context).width;
+
+SafeArea(child: conteudo);  // evita entalhe e barras
+\end{codigo}
+      \begin{dica}
+        Unidades no Flutter são \textbf{pixels lógicos} (como o \cod{dp}): o mesmo número tem o mesmo tamanho físico em telas de densidades diferentes.
+      \end{dica}
+    \end{column}
+    \begin{column}{0.44\textwidth}
+      \scriptsize
+      \begin{tabularx}{\linewidth}{@{}l l L@{}}
+        \toprule
+        \cabecalho{Classe} & \cabecalho{Largura} & \cabecalho{Navegação} \\
+        \midrule
+        compacta & < 600 & \cod{NavigationBar} \\
+        média & 600--839 & \cod{NavigationRail} \\
+        expandida & $\geq$ 840 & lista e detalhe lado a lado \\
+        \bottomrule
+      \end{tabularx}
+      \begin{atencao}[Alvo de toque]
+        Elementos clicáveis com pelo menos \textbf{48$\times$48} pixels lógicos.
+      \end{atencao}
+      \begin{atencao}[Fontes grandes]
+        Teste com a fonte do sistema em 200\,\%: textos não podem ser cortados.
+      \end{atencao}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% =============================================================================
+\section{Fechamento}
+
+\begin{frame}{Resumo}
+  \begin{resumo}
+    \begin{itemize}
+      \item A interface é uma árvore de widgets imutáveis; \cod{build} descreve a tela para o estado atual.
+      \item \cod{StatelessWidget} só exibe; \cod{StatefulWidget} guarda estado e chama \cod{setState}.
+      \item \cod{Row}, \cod{Column}, \cod{Stack}, \cod{Expanded} e \cod{Padding} resolvem quase todo layout.
+      \item Restrições descem, tamanhos sobem: listas em colunas precisam de \cod{Expanded}.
+      \item \cod{ListView.builder} e \cod{GridView.builder} para listas grandes, com \cod{ValueKey}.
+      \item \cod{ColorScheme.fromSeed}, tema escuro e \cod{LayoutBuilder} para telas adaptáveis.
+    \end{itemize}
+  \end{resumo}
+\end{frame}
+
+\begin{frame}{Glossário (1/2)}
+  \begin{glossario}
+    UI declarativa & a interface é descrita como função do estado; o framework aplica as mudanças \\
+    Widget & descrição imutável e barata de uma parte da interface \\
+    \cod{Element} & instância do widget na árvore; guarda o estado e o ciclo de vida \\
+    \cod{RenderObject} & objeto que mede, posiciona e pinta \\
+    \cod{BuildContext} & posição do widget na árvore; dá acesso a tema, tela e navegação \\
+    \emph{Rebuild} & nova execução de \cod{build} nos elementos marcados como sujos \\
+    Restrições & limites mínimos e máximos de largura e altura (\cod{BoxConstraints}) \\
+    \cod{Expanded} & filho de \cod{Row}/\cod{Column} que ocupa o espaço que sobra \\
+    Chave (\cod{Key}) & identidade estável entre reconstruções (\cod{ValueKey}, \cod{GlobalKey}) \\
+  \end{glossario}
+\end{frame}
+
+\begin{frame}{Glossário (2/2)}
+  \begin{glossario}
+    \cod{InheritedWidget} & disponibiliza dados para toda uma subárvore (\cod{Theme.of}) \\
+    \emph{Token} de design & decisão visual nomeada pelo papel (\cod{primary}, \cod{titleMedium}) \\
+    \cod{ColorScheme.fromSeed} & gera a paleta Material 3 a partir de uma cor base \\
+    Pixel lógico & unidade independente da densidade (\cod{devicePixelRatio}) \\
+    Classe de tamanho & classe de largura da janela: compacta, média ou expandida \\
+    \emph{Jank} & quadro perdido por exceder o orçamento de tempo \\
+    Árvore de semântica & descrição da tela usada por leitores de tela como o TalkBack \\
+  \end{glossario}
+\end{frame}
+
+\begin{frame}{Questões de revisão}
+  \begin{questoes}
+    \item Qual a diferença entre uma interface imperativa e uma declarativa? Por que a declarativa evita telas inconsistentes?
+    \item Explique a regra ``restrições descem, tamanhos sobem, o pai posiciona'' com um exemplo numérico.
+    \item Que papel têm as árvores de widgets, de elementos e de objetos de renderização?
+    \item O que acontece, passo a passo, depois de uma chamada a \cod{setState}?
+    \item Por que o método \cod{build} não deve iniciar uma requisição de rede?
+    \item Por que uma \cod{ListView} dentro de uma \cod{Column} gera o erro de altura ilimitada? Como resolver?
+    \item Quando é necessário passar uma \cod{Key} aos itens de uma lista?
+    \item Por que usar \cod{Theme.of(context).colorScheme.primary} em vez de uma cor fixa?
+  \end{questoes}
+\end{frame}
+
+\begin{frame}{Exercícios}
+  \begin{exercicio}[Exercício 1 --- Layout]
+    Reproduza um cartão de medidor: título, valor grande, unidade menor ao lado e uma \cod{LinearProgressIndicator} colorida conforme a faixa de temperatura.
+  \end{exercicio}
+  \begin{exercicio}[Exercício 2 --- Erros de layout]
+    Coloque uma \cod{ListView} dentro de uma \cod{Column} e uma \cod{Row} com textos longos. Leia as mensagens de erro, use o Layout Explorer e corrija.
+  \end{exercicio}
+  \begin{exercicio}[Exercício 3 --- Responsivo]
+    Faça a lista de equipamentos virar grade em telas largas e teste no navegador redimensionando a janela.
+  \end{exercicio}
+  \begin{projeto}[LabMonitor --- Etapa 5]
+    Implemente a tela \textbf{Equipamentos} (protótipo do Módulo 04): \cod{Scaffold}, \cod{AppBar}, FAB e \cod{ListView.builder} de \cod{ItemEquipamento}, com o tema azul-petróleo nos modos claro e escuro.
+  \end{projeto}
+\end{frame}
+
+\begin{frame}{Para aprofundar}
+  \small
+  \begin{itemize}
+    \item Introdução aos widgets: \url{https://docs.flutter.dev/ui}
+    \item Catálogo de widgets: \url{https://docs.flutter.dev/ui/widgets}
+    \item Entendendo restrições: \url{https://docs.flutter.dev/ui/layout/constraints}
+    \item Layouts: \url{https://docs.flutter.dev/ui/layout}
+    \item Material 3 no Flutter: \url{https://docs.flutter.dev/ui/design/material}
+    \item Design adaptativo: \url{https://docs.flutter.dev/ui/adaptive-responsive}
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{Respostas das questões de revisão}
+  \begin{respostas}
+    \item No imperativo, o código altera componentes existentes e precisa sincronizá-los a cada evento; no declarativo, descreve-se a tela para cada estado e o framework aplica as diferenças. Há um só caminho do estado à tela, então nada fica esquecido.
+    \item Na tela de 360 pixels lógicos, a \cod{Column} passa ao cartão largura de 0 a 360 e altura livre; o cartão escolhe 360 $\times$ 96; a coluna o põe em $y = 0$ e o próximo em $y = 96$.
+    \item Widgets são descrições baratas, recriadas a cada mudança; elementos são as instâncias duradouras que guardam o \cod{State}; objetos de renderização medem, posicionam e pintam, e são reaproveitados.
+    \item O elemento é marcado como sujo; no quadro seguinte seu \cod{build} roda de novo; filhos de mesmo tipo e chave são reaproveitados e atualizados; depois vêm layout e pintura só do que mudou.
+    \item Porque \cod{build} pode rodar muitas vezes por segundo: a requisição se repetiria a cada reconstrução. Ela pertence ao \cod{initState}, ao gerenciador de estado ou ao repositório (Módulos 07 e 08).
+    \item A \cod{Column} oferece altura ilimitada ao filho e a lista tenta ocupar toda a altura disponível. Envolva a lista em \cod{Expanded} ou dê a ela uma altura definida.
+    \item Quando itens com estado próprio podem ser inseridos, removidos ou reordenados: a \cod{ValueKey(id)} mantém o estado junto do item certo.
+    \item O \emph{token} se adapta ao tema escuro, à cor dinâmica e a mudanças da identidade visual; a cor fixa, não.
+  \end{respostas}
+\end{frame}
+
+\encerramento{Módulo 06 --- Dart assíncrono: Future, async/await, Stream e Isolates.}
+
+\end{document}

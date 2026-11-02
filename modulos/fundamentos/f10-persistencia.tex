@@ -1,0 +1,258 @@
+% =============================================================================
+%  Fundamentos compartilhados --- Módulo 10: persistência, cache e sincronização
+%  Incluído pelas trilhas Kotlin e Flutter com \input{../fundamentos/f10-persistencia}
+%  (modelagem relacional, SQL, transações e índices estão no Módulo 09)
+% =============================================================================
+\section{Fundamentos: persistência, cache e sincronização}
+
+\begin{frame}{Memória e armazenamento: velocidade \emph{versus} permanência}
+  \begin{columns}[c]
+    \begin{column}{0.5\textwidth}
+      \centering
+      \begin{tikzpicture}[every node/.style={font=\tiny}]
+        \foreach \y/\w/\texto/\cor in {3/3.0/{registradores e cache: $\sim$1\,ns}/azulpetroleo,2.25/3.6/{memória RAM: $\sim$100\,ns}/azulpetroleo!80,1.5/4.2/{\emph{flash}: dezenas de µs}/ambar!85,0.75/4.8/{rede móvel: dezenas a centenas de ms}/cinzamedio!70}{
+          \fill[\cor,rounded corners=2pt] (-\w/2,\y) rectangle (\w/2,\y+0.6);
+          \node[text=white,font=\tiny\bfseries] at (0,\y+0.3) {\texto};
+        }
+        \draw[seta] (-2.75,3.55) -- node[rotulo,left,text width=1cm,align=right]{mais rápido e menor} (-2.75,0.8);
+        \node[rotulo] at (0,0.45) {RAM: volátil \quad \emph{flash}: persistente};
+\end{tikzpicture}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \begin{definicao}[Persistência]
+        Guardar dados de forma que sobrevivam ao fim do processo, ao desligar do aparelho e à falta de rede. No celular, isso significa gravar na memória \emph{flash}.
+      \end{definicao}
+      \begin{conceito}[Por que persistir em um app]
+        O sistema encerra apps em segundo plano (Módulo 07), a rede falha e o usuário espera abrir o app e ver seus dados na hora.
+      \end{conceito}
+      \begin{pordentro}[A memória \emph{flash}]
+        Grava em blocos e se desgasta com o uso. Muitas gravações pequenas custam mais que uma grande: agrupe operações em transações (Módulo 09).
+      \end{pordentro}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Onde o sistema guarda os arquivos do app}
+  \scriptsize
+  \begin{tabularx}{\textwidth}{@{}p{2.5cm} p{2.6cm} p{3.4cm} >{\tiny}L@{}}
+    \toprule
+    \cabecalho{Finalidade} & \cabecalho{Android} & \cabecalho{iOS} & \scriptsize\cabecalho{Flutter (\cod{path\_provider})} \\
+    \midrule
+    Dados internos do app & \cod{filesDir}, \cod{databases/} & \cod{Library/Application Support} & \cod{getApplicationSupportDirectory()} \\
+    Documentos do usuário & \cod{filesDir} ou MediaStore & \cod{Documents} & \cod{getApplicationDocumentsDirectory()} \\
+    Cache descartável & \cod{cacheDir} & \cod{Library/Caches} & \cod{getApplicationCacheDirectory()} \\
+    Temporários & \cod{cacheDir} & \cod{tmp} & \cod{getTemporaryDirectory()} \\
+    \bottomrule
+  \end{tabularx}
+  \normalsize
+  \vspace{3pt}
+  \begin{columns}[T]
+    \begin{column}{0.32\textwidth}
+      \begin{definicao}[\emph{Sandbox} de arquivos]
+        Cada app tem pastas privadas que outros apps não leem. Desinstalar o app apaga tudo.
+      \end{definicao}
+    \end{column}
+    \begin{column}{0.32\textwidth}
+      \begin{pordentro}[Cópia de segurança]
+        O Android copia até 25\,MB por app para a conta Google; o iOS inclui \cod{Documents} e \cod{Library}, exceto \cod{Caches}.
+      \end{pordentro}
+    \end{column}
+    \begin{column}{0.32\textwidth}
+      \begin{atencao}[Cache some]
+        O sistema apaga caches quando falta espaço. Nunca guarde ali o que não puder baixar de novo.
+      \end{atencao}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Do objeto à tabela}
+  \begin{columns}[c]
+    \begin{column}{0.46\textwidth}
+      \centering
+      \begin{tikzpicture}[every node/.style={font=\tiny}]
+        \node[caixaescura,font=\tiny,align=left,text width=2.2cm] (o) at (0,0) {\textbf{objeto} \cod{Reserva}\\ \cod{bancada: Bancada}\\ \cod{leituras: List<...>}};
+        \node[caixa,font=\tiny,minimum width=1.7cm] (t1) at (3.3,0.9) {tabela \cod{reserva}};
+        \node[caixa,font=\tiny,minimum width=1.7cm] (t2) at (3.3,0) {tabela \cod{bancada}};
+        \node[caixa,font=\tiny,minimum width=1.7cm] (t3) at (3.3,-0.9) {tabela \cod{leitura}};
+        \draw[setaambar] (o.east) -- (t1.west); \draw[setaambar] (o.east) -- (t2.west); \draw[setaambar] (o.east) -- (t3.west);
+        \node[rotulo,text width=4.6cm] at (1.6,-1.65) {referências viram chaves estrangeiras; listas viram outra tabela};
+      \end{tikzpicture}
+      \begin{definicao}[Descompasso objeto-relacional]
+        Objetos têm referências, listas e herança; tabelas têm linhas, colunas e chaves. Traduzir de um mundo para o outro é o trabalho do mapeamento.
+      \end{definicao}
+    \end{column}
+    \begin{column}{0.52\textwidth}
+      \scriptsize
+      \begin{tabularx}{\linewidth}{@{}l L@{}}
+        \toprule
+        \cabecalho{Abordagem} & \cabecalho{Como é} \\
+        \midrule
+        SQL à mão & você escreve o SQL e converte as linhas (\cod{sqflite}) \\
+        SQL verificado & você escreve o SQL; a ferramenta confere na compilação e gera o código (Room, Drift) \\
+        ORM completo & a biblioteca gera o SQL a partir dos objetos \\
+        Banco de objetos & guarda objetos sem tabelas (ObjectBox, Realm) \\
+        \bottomrule
+      \end{tabularx}
+      \normalsize
+      \begin{dica}
+        Room e Drift ficam no meio-termo: SQL explícito, mas com tipos e erros apontados antes de o app rodar.
+      \end{dica}
+      \begin{atencao}[O problema N+1]
+        Buscar uma lista e depois uma consulta por item gera N+1 idas ao banco. Use \cod{JOIN} ou relações carregadas de uma vez.
+      \end{atencao}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{O esquema também tem versões}
+  \centering
+  \begin{tikzpicture}[node distance=16mm,every node/.style={font=\scriptsize}]
+    \node[caixa,minimum width=1.4cm] (v1) {v1};
+    \node[caixa,minimum width=1.4cm,right=of v1] (v2) {v2};
+    \node[caixa,minimum width=1.4cm,right=of v2] (v3) {v3};
+    \node[caixaescura,minimum width=1.4cm,right=of v3] (v4) {v4 (atual)};
+    \draw[seta] (v1) -- node[rotulo,above]{+ coluna} (v2);
+    \draw[seta] (v2) -- node[rotulo,above]{nova tabela} (v3);
+    \draw[seta] (v3) -- node[rotulo,above]{renomeia} (v4);
+    \draw[setaambar,rounded corners] (v1.south) -- ++(0,-4mm) -| node[rotulo,pos=0.25,below]{usuário que pulou versões: o app aplica 1$\rightarrow$2$\rightarrow$3$\rightarrow$4 em sequência} (v4.south);
+  \end{tikzpicture}
+  \raggedright
+  \begin{columns}[T]
+    \begin{column}{0.49\textwidth}
+      \begin{definicao}[Migração]
+        Programa que leva o banco de uma versão do esquema para a seguinte \textbf{sem perder os dados} do usuário. Cada versão publicada do app pode encontrar qualquer versão anterior do banco.
+      \end{definicao}
+    \end{column}
+    \begin{column}{0.49\textwidth}
+      \begin{conceito}[Regras de ouro]
+        Migrações só andam para a frente e nunca são editadas depois de publicadas; teste a partir de \textbf{cada} versão antiga; apagar e recriar o banco só serve para dados de cache.
+      \end{conceito}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Cache: perto e rápido, mas pode estar velho}
+  \begin{columns}[T]
+    \begin{column}{0.5\textwidth}
+      \begin{definicao}[Cache]
+        Cópia de dados guardada perto de quem usa para evitar buscá-los de novo. \textbf{Acerto}: o dado estava lá. \textbf{Falta}: é preciso ir à fonte.
+      \end{definicao}
+      \scriptsize
+      \begin{tabularx}{\linewidth}{@{}l L@{}}
+        \toprule
+        \cabecalho{Estratégia} & \cabecalho{Como funciona} \\
+        \midrule
+        Cache primeiro & usa o cache; só vai à rede se não houver \\
+        Rede primeiro & tenta a rede; usa o cache se falhar \\
+        Mostra e revalida & mostra o cache já e atualiza em seguida (\emph{stale-while-revalidate}) \\
+        Só rede & dados que não podem estar velhos (saldo, reserva) \\
+        \bottomrule
+      \end{tabularx}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \begin{conceito}[Invalidação]
+        Decidir quando o cache deixou de valer: por tempo (TTL), por evento (o servidor avisou) ou por versão (\emph{ETag}, Módulo 11).
+      \end{conceito}
+      \begin{pordentro}[Quem sai quando enche]
+        A política mais comum é a LRU (\emph{least recently used}): descarta o item usado há mais tempo. Imagens em memória costumam usar esse critério.
+      \end{pordentro}
+      \begin{historia}
+        Phil Karlton brincava que só há duas coisas difíceis na computação: invalidar cache e dar nomes às coisas.
+      \end{historia}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{\emph{Offline-first}: o banco local como fonte da verdade}
+  \begin{columns}[c]
+    \begin{column}{0.5\textwidth}
+      \centering
+      \begin{tikzpicture}[every node/.style={font=\tiny}]
+        \node[caixa,font=\tiny,minimum width=2.4cm] (ui) at (0,0) {interface};
+        \node[caixaescura,font=\tiny,minimum width=2.4cm] (db) at (0,-1.4) {banco local};
+        \node[caixaambar,font=\tiny,minimum width=1.9cm] (fila) at (3.7,-1.4) {fila de envio};
+        \node[caixapetroleo,font=\tiny,minimum width=2.4cm] (sync) at (1.6,-2.8) {sincronizador};
+        \node[caixa,font=\tiny,minimum width=1.6cm] (api) at (5.0,-2.8) {servidor};
+        \draw[seta] ([xshift=-5mm]db.north) -- node[rotulo,left]{observa} ([xshift=-5mm]ui.south);
+        \draw[setaambar] ([xshift=5mm]ui.south) -- node[rotulo,right]{grava} ([xshift=5mm]db.north);
+        \draw[setaambar] (db) -- node[rotulo,above]{mesma transação} (fila);
+        \draw[seta] (fila) -- (sync);
+        \draw[seta] ([yshift=1mm]sync.east) -- node[rotulo,above]{envia} ([yshift=1mm]api.west);
+        \draw[seta] ([yshift=-1mm]api.west) -- node[rotulo,below]{novidades} ([yshift=-1mm]sync.east);
+        \draw[seta] (sync) -- node[rotulo,left]{atualiza} (db);
+\end{tikzpicture}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \begin{definicao}[\emph{Offline-first}]
+        A interface lê e grava \textbf{sempre} no banco local. Um sincronizador troca dados com o servidor quando há rede. Sem rede, o app continua funcionando.
+      \end{definicao}
+      \begin{conceito}[Fila de envio (\emph{outbox})]
+        Cada alteração local vira um registro pendente. O sincronizador envia em ordem, com novas tentativas e espera crescente, mesmo com o app fechado (WorkManager, \cod{workmanager}).
+      \end{conceito}
+      \begin{atencao}
+        Reenvios podem duplicar operações: mande uma chave de idempotência para o servidor reconhecer repetições (Módulo 17).
+      \end{atencao}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Sincronização e conflitos}
+  \begin{columns}[T]
+    \begin{column}{0.52\textwidth}
+      \begin{exemplo}[O conflito]
+        Ana e Bruno, sem internet, reservam a bancada B3 para as 14\,h. Quando a rede volta, as duas reservas chegam ao servidor. Quem fica com a bancada?
+      \end{exemplo}
+      \scriptsize
+      \begin{tabularx}{\linewidth}{@{}l L@{}}
+        \toprule
+        \cabecalho{Estratégia} & \cabecalho{Quando usar} \\
+        \midrule
+        Última gravação vence & dados pessoais pouco disputados; depende de relógios confiáveis \\
+        Regra no servidor & recursos disputados: a segunda reserva é recusada \\
+        Mesclagem por campo & edições em campos diferentes do mesmo registro \\
+        Perguntar ao usuário & textos editados dos dois lados \\
+        CRDT & dados colaborativos que se mesclam sozinhos \\
+        \bottomrule
+      \end{tabularx}
+    \end{column}
+    \begin{column}{0.46\textwidth}
+      \begin{definicao}[Concorrência otimista]
+        Cada registro tem uma versão. Quem grava informa a versão que leu; se outra pessoa gravou antes, o servidor recusa e o app resolve o conflito.
+      \end{definicao}
+      \begin{dica}[Na interface]
+        Mostre o que está pendente de envio e avise com clareza quando uma operação for recusada. Ações que não podem esperar (pagar, reservar) devem exigir rede.
+      \end{dica}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Dados em repouso: criptografia e segredos}
+  \begin{columns}[T]
+    \begin{column}{0.5\textwidth}
+      \begin{definicao}[Criptografia em repouso]
+        Os dados gravados ficam cifrados e só são decifrados com uma chave. Quem copia o armazenamento sem a chave vê apenas bytes sem sentido.
+      \end{definicao}
+      \scriptsize
+      \begin{tabularx}{\linewidth}{@{}l L@{}}
+        \toprule
+        \cabecalho{Camada} & \cabecalho{O que protege} \\
+        \midrule
+        Sistema & todo o armazenamento: criptografia por arquivo (Android) e \emph{Data Protection} (iOS) \\
+        Cofre de chaves & chaves e segredos em hardware: Keystore (Android), Keychain e Secure Enclave (iOS) \\
+        App & banco cifrado (SQLCipher) e campos sensíveis cifrados \\
+        \bottomrule
+      \end{tabularx}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \begin{pordentro}[Por que o hardware importa]
+        Chaves criadas no Keystore ou no Secure Enclave não saem do chip: o app pede ``cifre isto'' e recebe o resultado, sem nunca ver a chave.
+      \end{pordentro}
+      \begin{atencao}[O que nunca fazer]
+        Guardar senhas; guardar \emph{tokens} em preferências comuns; deixar chaves de API fixas no código, que pode ser extraído do pacote publicado.
+      \end{atencao}
+      \begin{dica}
+        Pense no risco: aparelho perdido, aparelho com \emph{root} e cópias de segurança na nuvem.
+      \end{dica}
+    \end{column}
+  \end{columns}
+\end{frame}

@@ -1,0 +1,156 @@
+% =============================================================================
+%  Fundamentos compartilhados --- Módulo 01: ferramentas de desenvolvimento
+%  Incluído pelas trilhas Kotlin e Flutter com \input{../fundamentos/f01-ambiente}
+% =============================================================================
+\section{Fundamentos: ferramentas de desenvolvimento}
+
+\begin{frame}{Do código-fonte ao programa}
+  \centering
+  \begin{tikzpicture}[node distance=5mm,every node/.style={font=\scriptsize,align=center,minimum height=10mm}]
+    \node[caixa,text width=1.9cm] (src) {Código-fonte\\ \tiny texto legível};
+    \node[caixapetroleo,right=of src,text width=1.9cm] (comp) {Compilador\\ \tiny verifica e traduz};
+    \node[caixaambar,right=of comp,text width=2.2cm] (bc) {\emph{Bytecode} ou\\ código de máquina};
+    \node[caixapetroleo,right=of bc,text width=1.9cm] (pk) {Empacotador\\ \tiny junta recursos};
+    \node[caixaescura,right=of pk,text width=1.9cm] (app) {App\\ instalável};
+    \foreach \a/\b in {src/comp,comp/bc,bc/pk,pk/app} \draw[seta] (\a) -- (\b);
+  \end{tikzpicture}
+  \vspace{4pt}
+  \begin{columns}[T]
+    \begin{column}{0.48\textwidth}
+      \begin{definicao}[Compilador e interpretador]
+        O \textbf{compilador} traduz o programa inteiro antes da execução e aponta erros cedo. O \textbf{interpretador} lê e executa o código aos poucos, durante a execução.
+      \end{definicao}
+      \begin{definicao}[Máquina virtual]
+        Programa que executa um \emph{bytecode} intermediário em qualquer processador: a JVM e o ART (Kotlin) e a VM do Dart.
+      \end{definicao}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \begin{definicao}[JIT e AOT]
+        \textbf{JIT}: compila enquanto o programa roda; permite trocar código em execução (\emph{hot reload}).
+        \textbf{AOT}: compila tudo antes de distribuir; inicia rápido e roda com desempenho previsível.
+      \end{definicao}
+      \begin{dica}
+        As duas trilhas usam os dois: JIT para desenvolver com agilidade, AOT para o app que chega ao usuário (Módulo 15).
+      \end{dica}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{SDK, IDE e cadeia de ferramentas}
+  \begin{columns}[T]
+    \begin{column}{0.48\textwidth}
+      \begin{definicao}[SDK --- \emph{Software Development Kit}]
+        Pacote com bibliotecas, compiladores, ferramentas de linha de comando, documentação e imagens de emulador para desenvolver para uma plataforma.
+      \end{definicao}
+      \begin{definicao}[IDE --- ambiente integrado]
+        Editor que reúne escrita de código, compilação, execução, depuração, análise e integração com Git.
+      \end{definicao}
+      \begin{analogia}
+        O SDK é a caixa de ferramentas; a IDE é a bancada organizada onde você trabalha com elas.
+      \end{analogia}
+    \end{column}
+    \begin{column}{0.5\textwidth}
+      \scriptsize
+      \begin{tabularx}{\linewidth}{@{}l L L@{}}
+        \toprule
+        & \cabecalho{Trilha Kotlin} & \cabecalho{Trilha Flutter} \\
+        \midrule
+        Linguagem & Kotlin (sobre o JDK) & Dart (Dart SDK) \\
+        SDK da plataforma & Android SDK & Flutter SDK + Android SDK + Xcode \\
+        IDE & Android Studio & VS Code ou Android Studio \\
+        \emph{Build} & Gradle & \cod{flutter} CLI (usa Gradle e Xcode) \\
+        Aparelho & ADB & ADB e \cod{flutter devices} \\
+        Pacotes & Maven Central, Google Maven & pub.dev \\
+        \bottomrule
+      \end{tabularx}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Sistemas de \emph{build} e dependências}
+  \begin{columns}[c]
+    \begin{column}{0.46\textwidth}
+      \centering
+      \begin{tikzpicture}[node distance=4mm,every node/.style={font=\tiny,minimum width=1.6cm}]
+        \node[caixaescura] (apk) {gerar pacote};
+        \node[caixapetroleo,below left=5mm and -2mm of apk] (comp) {compilar};
+        \node[caixapetroleo,below right=5mm and -2mm of apk] (res) {processar recursos};
+        \node[caixa,below=5mm of comp] (dep) {baixar dependências};
+        \node[caixa,below=5mm of res] (gen) {gerar código};
+        \draw[seta] (comp) -- (apk); \draw[seta] (res) -- (apk);
+        \draw[seta] (dep) -- (comp); \draw[seta] (gen) -- (comp);
+      \end{tikzpicture}\\[2pt]
+      {\tiny Grafo de tarefas: cada uma só roda depois das que ela usa.}
+    \end{column}
+    \begin{column}{0.52\textwidth}
+      \begin{definicao}[Sistema de \emph{build}]
+        Ferramenta que transforma o projeto em app executando \textbf{tarefas} organizadas num grafo de dependências. Só refaz o que mudou (\emph{build} incremental) e guarda resultados em cache.
+      \end{definicao}
+      \begin{definicao}[Dependência transitiva]
+        A biblioteca que você usa depende de outras, que dependem de outras. O gerenciador resolve a árvore inteira e escolhe versões compatíveis.
+      \end{definicao}
+      \begin{atencao}
+        Fixe as versões com arquivos de trava (catálogo de versões, \cod{pubspec.lock}) para que todos na equipe compilem o mesmo app.
+      \end{atencao}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Emuladores, simuladores e aparelhos reais}
+  \begin{columns}[T]
+    \begin{column}{0.5\textwidth}
+      \scriptsize
+      \begin{tabularx}{\linewidth}{@{}l L L@{}}
+        \toprule
+        & \cabecalho{Vantagem} & \cabecalho{Limite} \\
+        \midrule
+        Emulador Android & vários tamanhos e versões, GPS e sensores simulados & sem Bluetooth, NFC e USB reais \\
+        Simulador iOS & rápido, integrado ao Xcode & roda código do Mac; não imita o hardware \\
+        Aparelho real & desempenho e hardware verdadeiros & cada modelo exige um aparelho \\
+        \bottomrule
+      \end{tabularx}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \begin{definicao}[Emulador e simulador]
+        O \textbf{emulador} imita o aparelho, inclusive o processador e o sistema completo. O \textbf{simulador} apenas reproduz o comportamento do sistema, executando o app compilado para o computador.
+      \end{definicao}
+      \begin{pordentro}[Por que o emulador exige virtualização]
+        O emulador Android roda uma imagem completa do sistema numa máquina virtual. Com aceleração por hardware (Intel VT-x, AMD-V, KVM no Linux, Hypervisor no macOS), as instruções rodam direto no processador e o emulador fica rápido.
+      \end{pordentro}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Depuração}
+  \begin{columns}[T]
+    \begin{column}{0.5\textwidth}
+      \begin{definicao}[Depurador]
+        Ferramenta que pausa o programa num ponto escolhido (\emph{breakpoint}) para inspecionar variáveis, a pilha de chamadas e executar passo a passo.
+      \end{definicao}
+      \scriptsize
+      \begin{tabularx}{\linewidth}{@{}l L@{}}
+        \toprule
+        \cabecalho{Comando} & \cabecalho{O que faz} \\
+        \midrule
+        \emph{Step over} & executa a linha e para na próxima \\
+        \emph{Step into} & entra na função chamada \\
+        \emph{Step out} & termina a função atual e volta \\
+        \emph{Resume} & continua até o próximo \emph{breakpoint} \\
+        \bottomrule
+      \end{tabularx}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \begin{conceito}[Método científico da depuração]
+        \begin{enumerate}
+          \item Reproduza o problema de forma confiável.
+          \item Formule uma hipótese sobre a causa.
+          \item Teste a hipótese (\emph{breakpoint}, \emph{log}, teste automatizado).
+          \item Corrija e escreva um teste que impeça a volta do defeito.
+        \end{enumerate}
+      \end{conceito}
+      \begin{dica}
+        Leia a mensagem de erro e a pilha de chamadas inteiras: a primeira linha do \textbf{seu} código costuma apontar a causa.
+      \end{dica}
+    \end{column}
+  \end{columns}
+\end{frame}

@@ -1,0 +1,615 @@
+\documentclass[aspectratio=169,10pt]{beamer}
+\makeatletter\def\input@path{{../../estilo/}{../estilo/}{estilo/}}\makeatother
+\usepackage{devmobile}
+\modulo[Flutter]{14}{Testes e Qualidade}{Testes de unidade, de widget, \emph{golden} e de integração, \emph{mocks}, acessibilidade, análise estática, cobertura e integração contínua}
+
+\begin{document}
+\capa
+
+\begin{frame}{Objetivos do módulo}
+  \begin{conceito}[Ao final deste módulo você será capaz de]
+    \begin{itemize}
+      \item Explicar a pirâmide de testes e o que testar em cada nível.
+      \item Testar view models, repositórios e \emph{streams} com \emph{fakes} e \cod{mocktail}.
+      \item Escrever testes de widget, de acessibilidade e \emph{golden}.
+      \item Automatizar fluxos completos com \cod{integration\_test} e Patrol.
+      \item Configurar análise estática, formatação e cobertura.
+      \item Rodar tudo a cada \emph{push} com GitHub Actions.
+    \end{itemize}
+  \end{conceito}
+\end{frame}
+
+\sumario
+
+\input{../fundamentos/f14-testes}
+
+% =============================================================================
+\section{Testes no Flutter: visão geral}
+
+\begin{frame}{A pirâmide de testes no Flutter}
+  \begin{columns}[c]
+    \begin{column}{0.44\textwidth}
+      \centering
+      \begin{tikzpicture}[scale=0.9,transform shape]
+        \fill[ambar!80] (-1.0,2.6) -- (1.0,2.6) -- (0.45,3.5) -- (-0.45,3.5) -- cycle;
+        \fill[azulprofundo!75] (-1.7,1.4) -- (1.7,1.4) -- (1.0,2.5) -- (-1.0,2.5) -- cycle;
+        \fill[azulpetroleo] (-2.5,0) -- (2.5,0) -- (1.75,1.3) -- (-1.75,1.3) -- cycle;
+        \node[font=\scriptsize\bfseries] at (0,3.05) {Integração};
+        \node[font=\scriptsize\bfseries,text=white] at (0,1.95) {Widget};
+        \node[font=\scriptsize\bfseries,text=white] at (0,0.65) {Unidade};
+        \draw[setaambar] (2.9,0.1) -- node[rotulo,right,align=left]{\tiny mais lento\\ \tiny mais caro\\ \tiny mais realista} (2.9,3.4);
+      \end{tikzpicture}
+    \end{column}
+    \begin{column}{0.54\textwidth}
+      \scriptsize
+      \begin{tabularx}{\linewidth}{@{}l L p{1.75cm}@{}}
+        \toprule
+        \cabecalho{Tipo} & \cabecalho{Testa} & \cabecalho{Roda em} \\
+        \midrule
+        \textbf{Unidade} & uma função, classe, view model ou repositório & VM Dart, ms \\
+        \textbf{Widget} & uma tela ou componente, sem aparelho & ambiente simulado, ms \\
+        \textbf{Golden} & a aparência, pixel a pixel & ambiente simulado \\
+        \textbf{Integração} & o app inteiro em um fluxo real & aparelho ou emulador, s--min \\
+        \bottomrule
+      \end{tabularx}
+      \begin{dica}[Proporção saudável]
+        Muitos testes de unidade, bastantes de widget e poucos de integração, cobrindo os fluxos críticos (login, reserva).
+      \end{dica}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% =============================================================================
+\section{Testes de unidade}
+
+\begin{frame}[fragile]{Estrutura de um teste}
+  \begin{columns}[T]
+    \begin{column}{0.54\textwidth}
+\begin{codigo}[title=test/utils/conversao\_test.dart]{Dart}
+import 'package:flutter_test/flutter_test.dart';
+import 'package:labmonitor/utils/conversao.dart';
+
+void main() {
+  group('celsiusDeBytes', () {
+    test('converte centésimos little-endian', () {
+      expect(celsiusDeBytes([0xB7, 0x09]), 24.87);
+    });
+
+    test('aceita temperatura negativa', () {
+      expect(celsiusDeBytes([0x18, 0xFC]), -10.0);
+    });
+
+    test('rejeita pacote curto', () {
+      expect(() => celsiusDeBytes([0x01]),
+          throwsA(isA<FormatException>()));
+    });
+  });
+}
+\end{codigo}
+    \end{column}
+    \begin{column}{0.44\textwidth}
+\begin{terminal}
+$ flutter test
+00:02 +3: All tests passed!
+$ flutter test test/utils/
+$ flutter test --name "negativa"
+\end{terminal}
+      \begin{conceito}[Padrão AAA]
+        \textbf{Arrange} (preparar), \textbf{Act} (agir), \textbf{Assert} (conferir). Um comportamento por teste, com nome que descreve a regra.
+      \end{conceito}
+      \begin{dica}[\emph{Matchers} úteis]
+        \cod{equals}, \cod{isTrue}, \cod{hasLength}, \cod{contains}, \cod{closeTo(24.9, 0.1)}, \cod{throwsA}, \cod{isA<T>()}.
+      \end{dica}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}[fragile]{Testando o view model com um \emph{fake}}
+  \begin{columns}[T]
+    \begin{column}{0.58\textwidth}
+\begin{codigo}[title=test/ui/painel\_view\_model\_test.dart]{Dart}
+class RepoFake implements BancadaRepository {
+  RepoFake(this.resposta);
+  Result<List<Bancada>> resposta;
+  @override
+  Future<Result<List<Bancada>>> listar() async => resposta;
+}
+void main() {
+  final duas = Ok([bancada('B1'), bancada('B2')]);
+  test('carrega ao criar e filtra pelo nome', () async {
+    final vm = PainelViewModel(repo: RepoFake(duas));
+    await Future<void>.delayed(Duration.zero);   // fim do load
+    vm.filtrar('B2');
+    expect(vm.visiveis.single.nome, 'B2');
+  });
+  test('expõe a falha do repositório', () async {
+    final repo = RepoFake(Falha(Exception('offline')));
+    final vm = PainelViewModel(repo: repo);
+    await Future<void>.delayed(Duration.zero);
+    expect(vm.carregar.falhou, isTrue);
+  });
+}
+\end{codigo}
+    \end{column}
+    \begin{column}{0.4\textwidth}
+      \begin{conceito}[\emph{Fake}]
+        Implementação simples e funcional da interface, escrita por você. Controla exatamente o que o repositório devolve.
+      \end{conceito}
+      \begin{dica}
+        A arquitetura do Módulo 08 se paga aqui: o view model recebe a interface, e o teste dispensa rede, banco e Firebase.
+      \end{dica}
+      \begin{atencao}
+        Teste comportamento observável (estado exposto), não detalhes internos.
+      \end{atencao}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}[fragile]{\emph{Mocks} com \cod{mocktail}}
+  \begin{columns}[T]
+    \begin{column}{0.58\textwidth}
+\begin{codigo}[title=Verificando interações]{Dart}
+import 'package:mocktail/mocktail.dart';
+
+class RepoMock extends Mock implements BancadaRepository {}
+
+void main() {
+  test('tentar de novo chama o repositório outra vez',
+      () async {
+    final repo = RepoMock();
+    when(() => repo.listar()).thenAnswer(
+        (_) async => Falha(Exception('offline')));
+
+    final vm = PainelViewModel(repo: repo);
+    await Future<void>.delayed(Duration.zero);
+    await vm.carregar.execute();
+
+    verify(() => repo.listar()).called(2);
+  });
+}
+\end{codigo}
+    \end{column}
+    \begin{column}{0.4\textwidth}
+      \begin{conceito}[\emph{Fake} ou \emph{mock}?]
+        \textbf{Fake}: quando importa o \emph{resultado}.\\
+        \textbf{Mock}: quando importa a \emph{interação} (foi chamado? quantas vezes? com quais argumentos?).
+      \end{conceito}
+      \begin{dica}
+        \cod{mocktail} não precisa de geração de código. Para argumentos com \cod{any()} de tipos próprios, chame \cod{registerFallbackValue} no \cod{setUpAll}.
+      \end{dica}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}[fragile]{\emph{Streams} e tempo}
+  \begin{columns}[T]
+    \begin{column}{0.5\textwidth}
+\begin{codigo}[title=Streams]{Dart}
+test('converte os pacotes do BLE', () {
+  final pacotes = Stream.fromIterable([
+    [0xB7, 0x09],
+    [0x00, 0x0A],
+  ]);
+  expect(pacotes.map(celsiusDeBytes),
+      emitsInOrder([24.87, 25.6, emitsDone]));
+});
+\end{codigo}
+      \begin{conceito}[\emph{Stream matchers}]
+        \cod{emits}, \cod{emitsInOrder}, \cod{emitsThrough}, \cod{emitsError} e \cod{emitsDone} descrevem a sequência esperada.
+      \end{conceito}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+\begin{codigo}[title=Tempo controlado (fake\_async)]{Dart}
+test('busca espera parar de digitar', () {
+  fakeAsync((tempo) {
+    final repo = RepoContador();
+    final vm = BuscaViewModel(repo: repo);
+    vm.digitar('B');
+    vm.digitar('B7');
+    tempo.elapse(
+        const Duration(milliseconds: 299));
+    expect(repo.buscas, 0);
+    tempo.elapse(
+        const Duration(milliseconds: 1));
+    expect(repo.buscas, 1);
+  });
+});
+\end{codigo}
+      \begin{dica}
+        Nada de \cod{sleep}: o tempo avança na hora, e o teste fica rápido e determinístico.
+      \end{dica}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% =============================================================================
+\section{Testes de widget}
+
+\begin{frame}[fragile]{Testando uma tela}
+  \begin{columns}[T]
+    \begin{column}{0.58\textwidth}
+\begin{codigo}[title=test/ui/painel\_screen\_test.dart]{Dart}
+testWidgets('mostra o erro e tenta de novo', (tester) async {
+  final repo = RepoFake(Falha(Exception('offline')));
+  final vm = PainelViewModel(repo: repo);
+
+  await tester.pumpWidget(
+      MaterialApp(home: PainelScreen(vm: vm)));
+  await tester.pump();                  // conclui o load
+  expect(find.text('Tentar de novo'), findsOneWidget);
+
+  repo.resposta = Ok([bancada('B1')]);
+  await tester.tap(find.text('Tentar de novo'));
+  await tester.pump();
+
+  expect(find.text('B1'), findsOneWidget);
+  expect(find.text('Tentar de novo'), findsNothing);
+});
+\end{codigo}
+    \end{column}
+    \begin{column}{0.4\textwidth}
+      \begin{conceito}[\cod{WidgetTester}]
+        Monta a árvore de widgets sem aparelho. \cod{pump} desenha um quadro; \cod{pumpAndSettle} desenha até as animações terminarem.
+      \end{conceito}
+      \begin{atencao}
+        O tempo é simulado: \cod{Future}s e \cod{Timer}s só avançam com \cod{pump}. Esquecer o \cod{pump} é a causa mais comum de teste falhando.
+      \end{atencao}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}[fragile]{Encontrar, agir e conferir}
+  \begin{columns}[T]
+    \begin{column}{0.5\textwidth}
+      \scriptsize
+      \begin{tabularx}{\linewidth}{@{}l L@{}}
+        \toprule
+        \cabecalho{Uso} & \cabecalho{API} \\
+        \midrule
+        Encontrar & \cod{find.text}, \cod{find.byType}, \cod{find.byKey}, \cod{find.byIcon}, \cod{find.bySemanticsLabel} \\
+        Agir & \cod{tap}, \cod{longPress}, \cod{enterText}, \cod{drag}, \cod{scrollUntilVisible} \\
+        Conferir & \cod{findsOneWidget}, \cod{findsNothing}, \cod{findsNWidgets(3)}, \cod{findsAtLeast(1)} \\
+        \bottomrule
+      \end{tabularx}
+      \begin{dica}
+        Dê \cod{Key}s estáveis aos campos importantes (\cod{Key('email')}): o teste não quebra quando o texto muda.
+      \end{dica}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+\begin{codigo}[title=Acessibilidade automática]{Dart}
+testWidgets('painel acessível', (tester) async {
+  final h = tester.ensureSemantics();
+  await tester.pumpWidget(appDeTeste());
+  await expectLater(tester,
+      meetsGuideline(androidTapTargetGuideline));
+  await expectLater(tester,
+      meetsGuideline(labeledTapTargetGuideline));
+  await expectLater(tester,
+      meetsGuideline(textContrastGuideline));
+  h.dispose();
+});
+\end{codigo}
+      \begin{conceito}[O que é verificado]
+        Alvos de toque com 48\,dp, botões com rótulo para leitores de tela e contraste de texto.
+      \end{conceito}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% =============================================================================
+\section{Testes \emph{golden}}
+
+\begin{frame}[fragile]{Comparando imagens}
+  \begin{columns}[T]
+    \begin{column}{0.56\textwidth}
+\begin{codigo}[title=test/ui/cartao\_bancada\_golden\_test.dart]{Dart}
+testWidgets('cartão de bancada ocupada', (tester) async {
+  await tester.pumpWidget(MaterialApp(
+    theme: temaLab,
+    home: Center(child: CartaoBancada(
+        bancada: bancada('B7', livre: false))),
+  ));
+  await expectLater(find.byType(CartaoBancada),
+      matchesGoldenFile('goldens/cartao_ocupada.png'));
+});
+\end{codigo}
+\begin{terminal}
+$ flutter test --update-goldens   # gera/atualiza
+$ flutter test                    # compara
+\end{terminal}
+    \end{column}
+    \begin{column}{0.42\textwidth}
+      \begin{conceito}[\emph{Golden test}]
+        Renderiza o widget, salva uma imagem de referência e, nas execuções seguintes, falha se algum pixel mudar. Pega regressões visuais que nenhum \cod{expect} pegaria.
+      \end{conceito}
+      \begin{atencao}
+        Fontes e antialiasing variam entre sistemas: gere e compare os \emph{goldens} no mesmo ambiente (de preferência no CI).
+      \end{atencao}
+      \begin{dica}
+        Teste os estados: claro e escuro, texto grande, carregando, erro.
+      \end{dica}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% =============================================================================
+\section{Testes de integração}
+
+\begin{frame}[fragile]{O app inteiro no aparelho}
+  \begin{columns}[T]
+    \begin{column}{0.58\textwidth}
+\begin{codigo}[title=integration\_test/reserva\_test.dart]{Dart}
+import 'package:integration_test/integration_test.dart';
+import 'package:labmonitor/main.dart' as app;
+
+void main() {
+  IntegrationTestWidgetsFlutterBinding.ensureInitialized();
+
+  testWidgets('aluno reserva uma bancada', (tester) async {
+    app.main();                 // aponta para os emuladores
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byKey(const Key('email')),
+        'aluno@teste.dev');
+    await tester.enterText(find.byKey(const Key('senha')),
+        'segredo123');
+    await tester.tap(find.text('Entrar'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('B7'));
+    await tester.tap(find.text('Reservar'));
+    await tester.pumpAndSettle();
+    expect(find.text('Reserva confirmada'), findsOneWidget);
+  });
+}
+\end{codigo}
+    \end{column}
+    \begin{column}{0.4\textwidth}
+\begin{terminal}
+$ flutter test integration_test
+\end{terminal}
+      \begin{conceito}[Mesmo jeito de escrever]
+        A API é a do teste de widget, mas roda no aparelho real ou emulador, com plugins, rede e banco de verdade.
+      \end{conceito}
+      \begin{atencao}[Dados de teste]
+        Nunca use o backend de produção. Use o Emulator Suite (Módulo 12) ou uma API de homologação.
+      \end{atencao}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}[fragile]{Além do Flutter: Patrol e nuvem de aparelhos}
+  \begin{columns}[T]
+    \begin{column}{0.52\textwidth}
+\begin{codigo}[title=Patrol: interagindo com o sistema]{Dart}
+patrolTest('lê QR code após permitir a câmera',
+    ($) async {
+  await $.pumpWidgetAndSettle(const LabMonitorApp());
+  await $('Ler QR code').tap();
+  // diálogo nativo do Android/iOS
+  if (await $.platform.mobile
+      .isPermissionDialogVisible()) {
+    await $.platform.mobile.grantPermissionWhenInUse();
+  }
+  await $(MobileScanner).waitUntilVisible();
+});
+\end{codigo}
+    \end{column}
+    \begin{column}{0.46\textwidth}
+      \begin{conceito}[Limite do \cod{integration\_test}]
+        Ele só enxerga widgets Flutter. Diálogos de permissão, notificações e configurações do sistema ficam de fora.
+      \end{conceito}
+      \begin{dica}[Patrol]
+        Estende os testes com interação nativa e uma sintaxe mais curta de \emph{finders}.
+      \end{dica}
+      \begin{dica}[Firebase Test Lab]
+        Roda os testes de integração em dezenas de modelos reais de Android e iOS na nuvem.
+      \end{dica}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% =============================================================================
+\section{Qualidade contínua}
+
+\begin{frame}[fragile]{Análise estática, formatação e cobertura}
+  \begin{columns}[T]
+    \begin{column}{0.48\textwidth}
+\begin{codigo}[title=analysis\_options.yaml]{YAML}
+include: package:flutter_lints/flutter.yaml
+
+analyzer:
+  language:
+    strict-casts: true
+    strict-raw-types: true
+  errors:
+    unawaited_futures: error
+
+linter:
+  rules:
+    - prefer_final_locals
+    - avoid_print
+    - unawaited_futures
+\end{codigo}
+    \end{column}
+    \begin{column}{0.5\textwidth}
+\begin{terminal}
+$ dart format .
+$ flutter analyze
+No issues found!
+$ flutter test --coverage
+$ genhtml coverage/lcov.info -o coverage/html
+\end{terminal}
+      \begin{conceito}[Três guardas]
+        \textbf{Formatador}: estilo único, sem discussão.\\
+        \textbf{Analisador}: erros e más práticas antes de rodar.\\
+        \textbf{Cobertura}: quais linhas os testes executam.
+      \end{conceito}
+      \begin{atencao}
+        Cobertura alta não garante bons testes. Use-a para achar código \textbf{sem} teste, não como meta.
+      \end{atencao}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}[fragile]{Integração contínua com GitHub Actions}
+  \begin{columns}[T]
+    \begin{column}{0.52\textwidth}
+\begin{codigo}[title=.github/workflows/qualidade.yml]{YAML}
+name: qualidade
+on: [push, pull_request]
+
+jobs:
+  testes:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - run: flutter pub get
+      - run: dart format --set-exit-if-changed .
+      - run: flutter analyze
+      - run: flutter test --coverage
+\end{codigo}
+    \end{column}
+    \begin{column}{0.46\textwidth}
+      \begin{conceito}[Integração contínua]
+        A cada \emph{push} e \emph{pull request}, um servidor limpo baixa o código, formata, analisa e testa. Se algo falha, o PR fica vermelho e não deve ser integrado.
+      \end{conceito}
+      \begin{dica}
+        Proteja o \emph{branch} \cod{main}: exija o \emph{check} verde para aceitar o PR (Módulo 03).
+      \end{dica}
+      \begin{dica}
+        O Módulo 18 estende o pipeline com \emph{build} e publicação automática.
+      \end{dica}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Estratégia: o que testar primeiro}
+  \begin{columns}[T]
+    \begin{column}{0.5\textwidth}
+      \begin{conceito}[Onde investir primeiro]
+        Comece pelo que mais dói quando quebra e é mais barato de testar: regras de negócio e conversões de dados. Telas e fluxos completos vêm depois, cobrindo os caminhos críticos.
+      \end{conceito}
+      \begin{dica}[Bug corrigido = teste novo]
+        Antes de corrigir um bug, escreva o teste que o reproduz. Ele nunca mais volta.
+      \end{dica}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \scriptsize
+      \begin{tabularx}{\linewidth}{@{}l L@{}}
+        \toprule
+        \cabecalho{Prioridade} & \cabecalho{Exemplos no LabMonitor} \\
+        \midrule
+        Regras de negócio & conflito de reserva, limite de alerta \\
+        Conversões & bytes do BLE, JSON da API \\
+        View models & carregando, erro, vazio, filtro \\
+        Telas críticas & login, reserva, alertas \\
+        Fluxos ponta a ponta & entrar $\rightarrow$ reservar $\rightarrow$ cancelar \\
+        \bottomrule
+      \end{tabularx}
+      \begin{atencao}
+        Não teste o framework (se o \cod{Text} mostra texto) nem pacotes de terceiros.
+      \end{atencao}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% =============================================================================
+\section{Fechamento}
+
+\begin{frame}{Resumo}
+  \begin{resumo}
+    \begin{itemize}
+      \item Pirâmide: muitos testes de unidade, bastantes de widget, poucos de integração.
+      \item \emph{Fakes} para controlar resultados; \cod{mocktail} para verificar interações.
+      \item \cod{WidgetTester} monta telas sem aparelho; \emph{goldens} protegem a aparência.
+      \item \cod{integration\_test} e Patrol exercitam o app real; Test Lab multiplica aparelhos.
+      \item Formatador, analisador, cobertura e CI mantêm a qualidade a cada \emph{push}.
+    \end{itemize}
+  \end{resumo}
+\end{frame}
+
+\begin{frame}{Glossário (1/2)}
+  \begin{glossario}
+    Teste de unidade & verifica uma unidade isolada (função, classe, view model), sem dependências reais \\
+    Teste de widget & monta um widget ou tela em ambiente simulado e interage com ele \\
+    Teste \emph{golden} & compara a renderização com uma imagem de referência salva \\
+    Teste de integração & executa o app completo em aparelho ou emulador \\
+    Teste de regressão & reexecução dos testes após mudanças para garantir que nada quebrou \\
+    Dublê de teste & substituto de uma dependência real: \emph{dummy}, \emph{stub}, \emph{spy}, \emph{mock} ou \emph{fake} \\
+    \emph{Fake} & implementação simplificada e funcional (repositório em memória) \\
+    \emph{Mock} & dublê que verifica as interações esperadas (chamadas e argumentos) \\
+  \end{glossario}
+\end{frame}
+
+\begin{frame}{Glossário (2/2)}
+  \begin{glossario}
+    \emph{Matcher} & objeto que descreve o valor esperado em um \cod{expect} (\cod{equals}, \cod{throwsA}) \\
+    \emph{Finder} & localiza widgets na árvore durante o teste (\cod{find.text}, \cod{find.byKey}) \\
+    \cod{WidgetTester} & controla o teste de widget: monta, desenha quadros e simula toques \\
+    \cod{pump} / \cod{pumpAndSettle} & avança um quadro / avança até não haver animações pendentes \\
+    Cobertura & proporção do código executada pelos testes (comandos, decisões, condições) \\
+    Análise estática & inspeção do código sem executá-lo (\cod{flutter analyze}, \emph{lints}) \\
+    Teste instável (\emph{flaky}) & teste que passa ou falha sem mudança no código \\
+    CI & integração contínua: compilar e testar automaticamente a cada \emph{push} \\
+  \end{glossario}
+\end{frame}
+
+\begin{frame}{Questões de revisão}
+  \begin{questoes}
+    \item Diferencie erro, defeito e falha usando um exemplo do LabMonitor.
+    \item Por que testes não provam a ausência de defeitos? Que técnicas reduzem o número de casos sem perder poder de detecção?
+    \item A regra é ``alerta quando a temperatura for maior ou igual a 30\,°C''. Quais valores você testaria e por quê?
+    \item Mostre um exemplo em que 100\% de cobertura de comandos não implica 100\% de cobertura de decisões.
+    \item Quando usar um \emph{fake} e quando usar um \emph{mock}?
+    \item O que um teste de widget não consegue verificar e que exige um teste de integração?
+    \item Que cuidado os testes \emph{golden} exigem no CI?
+    \item Cite três causas de testes instáveis e como evitá-las.
+  \end{questoes}
+\end{frame}
+
+\begin{frame}{Exercícios}
+  \begin{exercicio}[Exercício 1 --- Unidade]
+    Escreva testes para a regra ``uma bancada não pode ter duas reservas sobrepostas'', incluindo os limites de horário.
+  \end{exercicio}
+  \begin{exercicio}[Exercício 2 --- Widget e golden]
+    Teste os estados carregando, vazio, erro e lista do painel e crie \emph{goldens} nos temas claro e escuro.
+  \end{exercicio}
+  \begin{exercicio}[Exercício 3 --- CI]
+    Crie o \emph{workflow} do GitHub Actions e torne-o obrigatório para \emph{pull requests}.
+  \end{exercicio}
+  \begin{projeto}[LabMonitor --- Etapa 14]
+    Testes dos view models e conversões, testes de widget das telas principais, um \emph{golden} por componente e um teste de integração do fluxo de reserva no CI.
+  \end{projeto}
+\end{frame}
+
+\begin{frame}{Para aprofundar}
+  \small
+  \begin{itemize}
+    \item Testes no Flutter: \url{https://docs.flutter.dev/testing/overview}
+    \item Testes de integração: \url{https://docs.flutter.dev/testing/integration-tests}
+    \item mocktail: \url{https://pub.dev/packages/mocktail}
+    \item Patrol: \url{https://patrol.leancode.co}
+    \item Regras do analisador: \url{https://dart.dev/tools/linter-rules}
+    \item Firebase Test Lab: \url{https://firebase.google.com/docs/test-lab}
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{Respostas das questões de revisão}
+  \begin{respostas}
+    \item \textbf{Erro}: o dev escreve \texttt{>} em vez de \texttt{>=}. \textbf{Defeito}: a regra de alerta fica errada no código. \textbf{Falha}: a exatamente 30\,°C o alerta não aparece.
+    \item O espaço de entradas é grande demais para testar tudo; um teste só mostra o comportamento nos casos executados. Partição de equivalência e valores-limite escolhem casos representativos.
+    \item 29,9 (logo abaixo, sem alerta), 30,0 (no limite, com alerta) e 30,1 (acima), além de um valor típico de cada classe e entradas inválidas (sem leitura).
+    \item \texttt{se cond: x()} seguido de \texttt{y()}: um teste com \texttt{cond} verdadeira executa todas as linhas, mas o lado falso da decisão nunca é exercitado.
+    \item \emph{Fake} quando importa o resultado (dados devolvidos); \emph{mock} quando importa a interação (se e como uma dependência foi chamada).
+    \item Plugins nativos, permissões, rede e banco reais, desempenho no aparelho e o fluxo entre telas com o app inteiro.
+    \item Gerar e comparar as imagens no mesmo ambiente (sistema, fontes, versão do Flutter), de preferência no próprio CI, para evitar diferenças de renderização.
+    \item Relógio real, rede real e esperas fixas; ordem de execução e estado compartilhado. Evite com \emph{fakes}, tempo simulado (\cod{fakeAsync}, \cod{pump}) e \cod{setUp} que recria o estado a cada teste.
+  \end{respostas}
+\end{frame}
+
+\encerramento{Módulo 15 --- Publicação: Google Play e App Store.}
+
+\end{document}

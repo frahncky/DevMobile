@@ -1,0 +1,587 @@
+\documentclass[aspectratio=169,10pt]{beamer}
+\makeatletter\def\input@path{{../../estilo/}{../estilo/}{estilo/}}\makeatother
+\usepackage{devmobile}
+\modulo[Flutter]{12}{Firebase com FlutterFire}{Configuração, Authentication, Cloud Firestore, regras de segurança, Storage, Cloud Functions, mensagens push, Crashlytics e Emulator Suite}
+
+\begin{document}
+\capa
+
+\begin{frame}{Objetivos do módulo}
+  \begin{conceito}[Ao final deste módulo você será capaz de]
+    \begin{itemize}
+      \item Conectar um app Flutter ao Firebase com o FlutterFire CLI.
+      \item Autenticar usuários por e-mail e senha e com Google.
+      \item Modelar, ler e gravar dados no Cloud Firestore em tempo real.
+      \item Proteger os dados com regras de segurança.
+      \item Enviar arquivos ao Storage, chamar Cloud Functions e receber notificações push.
+      \item Monitorar falhas com Crashlytics e desenvolver com o Emulator Suite.
+    \end{itemize}
+  \end{conceito}
+\end{frame}
+
+\sumario
+
+\input{../fundamentos/f12-identidade-nuvem}
+
+% =============================================================================
+\section{Visão geral}
+
+\begin{frame}{FlutterFire: os plugins do Firebase}
+  \begin{columns}[T]
+    \begin{column}{0.56\textwidth}
+      \scriptsize
+      \begin{tabularx}{\linewidth}{@{}p{3.1cm} L@{}}
+        \toprule
+        \cabecalho{Pacote} & \cabecalho{Serviço} \\
+        \midrule
+        \cod{firebase\_core} & inicialização (obrigatório) \\
+        \cod{firebase\_auth} & autenticação \\
+        \cod{cloud\_firestore} & banco NoSQL em tempo real \\
+        \cod{firebase\_storage} & arquivos (fotos, PDFs) \\
+        \cod{cloud\_functions} & código no servidor \\
+        \cod{firebase\_messaging} & notificações push (FCM) \\
+        \cod{firebase\_crashlytics} & relatórios de falhas \\
+        \cod{firebase\_analytics} & eventos de uso \\
+        \cod{firebase\_remote\_config} & configuração remota \\
+        \cod{firebase\_app\_check} & só o seu app acessa o backend \\
+        \cod{firebase\_ai} & modelos Gemini (Módulo 20) \\
+        \bottomrule
+      \end{tabularx}
+    \end{column}
+    \begin{column}{0.42\textwidth}
+      \begin{conceito}[Planos]
+        \textbf{Spark}: gratuito, sem cartão; ao atingir a cota, o serviço para.\\
+        \textbf{Blaze}: pague pelo uso, mantendo as cotas gratuitas.
+      \end{conceito}
+      \begin{atencao}[Cloud Storage exige Blaze]
+        Desde \textbf{03/02/2026}, o Storage só funciona no plano Blaze. Configure um \textbf{alerta de orçamento}.
+      \end{atencao}
+      \begin{dica}
+        O Módulo 16 compara o Firebase a outros BaaS.
+      \end{dica}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% =============================================================================
+\section{Configuração}
+
+\begin{frame}[fragile]{FlutterFire CLI}
+  \begin{columns}[T]
+    \begin{column}{0.5\textwidth}
+\begin{terminal}
+$ npm install -g firebase-tools
+$ firebase login
+$ dart pub global activate flutterfire_cli
+$ flutterfire configure
+$ flutter pub add firebase_core firebase_auth \
+    cloud_firestore
+\end{terminal}
+      \begin{conceito}[O que o \cod{configure} faz]
+        Cria ou escolhe o projeto no console, registra os apps Android, iOS, web e macOS e gera \cod{lib/firebase\_options.dart} com as chaves de cada plataforma.
+      \end{conceito}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+\begin{codigo}[title=main.dart]{Dart}
+import 'package:firebase_core/firebase_core.dart';
+import 'firebase_options.dart';
+
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await Firebase.initializeApp(
+    options: DefaultFirebaseOptions.currentPlatform,
+  );
+  runApp(const LabMonitorApp());
+}
+\end{codigo}
+      \begin{dica}
+        Rode \cod{flutterfire configure} de novo sempre que adicionar uma plataforma ou um plugin que exija configuração nativa.
+      \end{dica}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% =============================================================================
+\section{Authentication}
+
+\begin{frame}[fragile]{E-mail e senha no repositório}
+  \begin{columns}[T]
+    \begin{column}{0.58\textwidth}
+\begin{codigo}[title=data/repositories/auth\_repository.dart]{Dart}
+class AuthRepository extends ChangeNotifier {
+  AuthRepository() {
+    _auth.authStateChanges().listen((_) => notifyListeners());
+  }
+  final _auth = FirebaseAuth.instance;
+  User? get usuario => _auth.currentUser;
+  bool get logado => usuario != null;
+
+  Future<Result<void>> entrar(String email, String senha) async {
+    try {
+      await _auth.signInWithEmailAndPassword(
+          email: email, password: senha);
+      return const Ok(null);
+    } on FirebaseAuthException catch (e) {
+      return Falha(Exception(switch (e.code) {
+        'invalid-credential' => 'E-mail ou senha incorretos.',
+        _ => 'Falha no login (${e.code}).',
+      }));
+    }
+  }
+}
+\end{codigo}
+    \end{column}
+    \begin{column}{0.4\textwidth}
+      \begin{conceito}[Estado da sessão]
+        \cod{authStateChanges()} emite o usuário ao entrar, ao sair e ao abrir o app (a sessão fica salva). O repositório vira a fonte da verdade do login.
+      \end{conceito}
+      \begin{dica}[Outras operações]
+        \cod{createUserWithEmailAndPassword}, \cod{sendPasswordResetEmail} e \cod{signOut()}.
+      \end{dica}
+      \begin{atencao}
+        Com a proteção contra enumeração de e-mails, usuário ou senha errados viram \cod{invalid-credential}.
+      \end{atencao}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}[fragile]{Login com Google e proteção de rotas}
+  \begin{columns}[T]
+    \begin{column}{0.54\textwidth}
+\begin{codigo}[title=Google (google\_sign\_in 7)]{Dart}
+Future<UserCredential> entrarComGoogle() async {
+  if (kIsWeb) {
+    return FirebaseAuth.instance
+        .signInWithPopup(GoogleAuthProvider());
+  }
+  await GoogleSignIn.instance.initialize();
+  final conta = await GoogleSignIn.instance.authenticate();
+  final cred = GoogleAuthProvider.credential(
+      idToken: conta.authentication.idToken);
+  return FirebaseAuth.instance.signInWithCredential(cred);
+}
+\end{codigo}
+      \begin{atencao}
+        Android: cadastre as impressões SHA-1 e SHA-256 da chave no console. iOS: adicione o esquema de URL do cliente no \cod{Info.plist}.
+      \end{atencao}
+    \end{column}
+    \begin{column}{0.44\textwidth}
+\begin{codigo}[title=go\_router (Módulo 07)]{Dart}
+GoRouter(
+  refreshListenable: auth,
+  redirect: (ctx, state) {
+    final noLogin =
+        state.matchedLocation == '/login';
+    if (!auth.logado) {
+      return noLogin ? null : '/login';
+    }
+    return noLogin ? '/painel' : null;
+  },
+  routes: [ ... ],
+);
+\end{codigo}
+      \begin{dica}[App Store]
+        Quem oferece login social de terceiros precisa oferecer também uma opção equivalente focada em privacidade, como \textbf{Sign in with Apple}.
+      \end{dica}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% =============================================================================
+\section{Cloud Firestore}
+
+\begin{frame}{Modelo de dados: coleções e documentos}
+  \begin{columns}[c]
+    \begin{column}{0.55\textwidth}
+      \centering
+      \begin{tikzpicture}[node distance=2.5mm]
+        \node[caixapetroleo,minimum width=2.8cm] (c1) {\cod{laboratorios}};
+        \node[caixa,below=of c1,minimum width=2.8cm,align=left,font=\scriptsize] (d1) {\textbf{lab-3}\\ nome: "Eletrônica"\\ bloco: "B"};
+        \node[caixapetroleo,below left=4mm and -8mm of d1,minimum width=2.3cm] (c2) {\cod{bancadas}};
+        \node[caixapetroleo,below right=4mm and -8mm of d1,minimum width=2.3cm] (c3) {\cod{leituras}};
+        \node[caixa,below=of c2,minimum width=2.3cm,align=left,font=\scriptsize] (d2) {\textbf{b-07}\\ nome: "B7"\\ livre: false};
+        \node[caixa,below=of c3,minimum width=2.3cm,align=left,font=\scriptsize] (d3) {\textbf{auto-id}\\ sensor: "temp"\\ valor: 23.5};
+        \draw[seta] (c1) -- (d1); \draw[seta] (d1) -- (c2); \draw[seta] (d1) -- (c3);
+        \draw[seta] (c2) -- (d2); \draw[seta] (c3) -- (d3);
+      \end{tikzpicture}
+    \end{column}
+    \begin{column}{0.43\textwidth}
+      \begin{conceito}[Estrutura]
+        \textbf{Coleções} guardam \textbf{documentos}; documentos guardam campos e podem ter \textbf{subcoleções}. Cada documento tem até 1\,MiB.
+      \end{conceito}
+      \begin{dica}[Modele pelas telas]
+        Sem \cod{JOIN}: guarde junto o que é lido junto. Duplicar um campo (como o nome do laboratório na reserva) é normal e intencional.
+      \end{dica}
+      \begin{atencao}
+        Cobrança por leitura de documento: uma lista de 1\,000 itens custa 1\,000 leituras. Use \cod{limit} e paginação.
+      \end{atencao}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}[fragile]{Lendo e gravando com \cod{withConverter}}
+  \begin{columns}[T]
+    \begin{column}{0.6\textwidth}
+\begin{codigo}[title=data/repositories/bancada\_repository\_firestore.dart]{Dart}
+class BancadaRepositoryFirestore {
+  BancadaRepositoryFirestore(this.labId);
+  final String labId;
+  late final _col = FirebaseFirestore.instance
+      .collection('laboratorios/$labId/bancadas')
+      .withConverter<Bancada>(
+        fromFirestore: (s, _) => Bancada.deMapa(s.id, s.data()!),
+        toFirestore: (b, _) => b.paraMapa(),
+      );
+
+  Stream<List<Bancada>> observarLivres() => _col
+      .where('livre', isEqualTo: true)
+      .orderBy('nome').limit(50)
+      .snapshots()
+      .map((q) => q.docs.map((d) => d.data()).toList());
+
+  Future<void> criar(Bancada b) => _col.add(b);
+  Future<void> renomear(String id, String nome) =>
+      _col.doc(id).update({'nome': nome});
+  // remover: _col.doc(id).delete()
+}
+\end{codigo}
+    \end{column}
+    \begin{column}{0.38\textwidth}
+      \begin{conceito}[\cod{snapshots()}]
+        \cod{Stream} que emite a lista sempre que um documento muda, em qualquer aparelho.
+      \end{conceito}
+      \begin{conceito}[Offline]
+        Android e iOS mantêm cache local: lê sem rede e envia as gravações quando ela volta.
+      \end{conceito}
+      \begin{dica}
+        Filtro e ordenação em campos diferentes pedem um \textbf{índice composto}.
+      \end{dica}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}[fragile]{Transações, lotes e paginação}
+  \begin{columns}[T]
+    \begin{column}{0.56\textwidth}
+\begin{codigo}[title=Reserva sem conflito]{Dart}
+Future<void> reservar(String id, String uid) =>
+    FirebaseFirestore.instance.runTransaction((tx) async {
+      final ref = _col.doc(id);
+      final snap = await tx.get(ref);
+      if (snap.data()?.livre != true) {
+        throw StateError('Bancada já reservada');
+      }
+      tx.update(ref, {
+        'livre': false,
+        'reservadaPor': uid,
+        'reservadaEm': FieldValue.serverTimestamp(),
+      });
+    });
+\end{codigo}
+\begin{codigo}[title=Próxima página]{Dart}
+final pagina = await _col.orderBy('nome')
+    .startAfterDocument(ultimo).limit(20).get();
+\end{codigo}
+    \end{column}
+    \begin{column}{0.42\textwidth}
+      \begin{conceito}[Transação]
+        Lê e grava de forma atômica. Se outro aparelho alterar a bancada no meio, o Firestore repete a função. Dois alunos nunca reservam a mesma bancada.
+      \end{conceito}
+      \begin{conceito}[Lote (\cod{batch})]
+        Várias gravações tudo-ou-nada, sem leitura: \cod{batch()}, \cod{set}, \cod{update}, \cod{delete} e \cod{commit()}.
+      \end{conceito}
+      \begin{dica}
+        \cod{FieldValue.serverTimestamp()} usa o relógio do servidor, não o do celular.
+      \end{dica}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% =============================================================================
+\section{Regras de segurança}
+
+\begin{frame}[fragile]{Regras do Firestore}
+  \begin{columns}[T]
+    \begin{column}{0.58\textwidth}
+\begin{codigo}[title=firestore.rules]{JSON}
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function logado() { return request.auth != null; }
+
+    match /laboratorios/{lab}/bancadas/{id} {
+      allow read: if logado();
+      allow update: if logado() && request.resource.data
+        .diff(resource.data).affectedKeys()
+        .hasOnly(['livre', 'reservadaPor', 'reservadaEm']);
+      allow create, delete:
+        if request.auth.token.admin == true;
+    }
+    match /laboratorios/{lab}/leituras/{id} {
+      allow read: if logado();
+      allow create: if logado()
+        && request.resource.data.valor is number;
+    }
+  }
+}
+\end{codigo}
+    \end{column}
+    \begin{column}{0.4\textwidth}
+      \begin{erro}[O erro mais grave]
+        Publicar com \cod{allow read, write: if true;} (``modo de teste''). Qualquer pessoa lê e apaga todo o banco.
+      \end{erro}
+      \begin{conceito}[Como pensar]
+        O app \textbf{não é confiável}: qualquer um pode chamar a API com o seu \cod{firebase\_options}. As regras, no servidor, são a barreira real.
+      \end{conceito}
+      \begin{dica}
+        \cod{admin} é uma \emph{custom claim} definida por uma Cloud Function ou pelo Admin SDK.
+      \end{dica}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% =============================================================================
+\section{Storage, Functions e mensagens}
+
+\begin{frame}[fragile]{Storage e Cloud Functions}
+  \begin{columns}[T]
+    \begin{column}{0.52\textwidth}
+\begin{codigo}[title=Foto do equipamento]{Dart}
+Future<String> enviarFoto(String id, File foto) async {
+  final ref = FirebaseStorage.instance
+      .ref('equipamentos/$id.jpg');
+  final tarefa = ref.putFile(foto,
+      SettableMetadata(contentType: 'image/jpeg'));
+  tarefa.snapshotEvents.listen((s) => progresso.value =
+      s.bytesTransferred / s.totalBytes);
+  await tarefa;
+  return ref.getDownloadURL();
+}
+\end{codigo}
+      \begin{dica}
+        O Storage tem regras próprias (\cod{storage.rules}): limite tamanho e tipo do arquivo.
+      \end{dica}
+    \end{column}
+    \begin{column}{0.46\textwidth}
+\begin{codigo}[title=Chamando uma função]{Dart}
+final gerar = FirebaseFunctions.instance
+    .httpsCallable('gerarRelatorio');
+final r = await gerar.call({'lab': 'lab-3',
+    'mes': '2026-10'});
+final url = r.data['url'] as String;
+\end{codigo}
+      \begin{conceito}[Cloud Functions]
+        Código em Node.js ou Python que roda no servidor: lógica que não pode ficar no app, envio de push, integração com outros serviços. Exige plano Blaze.
+      \end{conceito}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}[fragile]{Notificações push com FCM}
+  \begin{columns}[T]
+    \begin{column}{0.58\textwidth}
+\begin{codigo}[title=Configurando o Firebase Cloud Messaging]{Dart}
+@pragma('vm:entry-point')
+Future<void> _emSegundoPlano(RemoteMessage m) async {
+  await Firebase.initializeApp(
+      options: DefaultFirebaseOptions.currentPlatform);
+  // gravar no banco local, atualizar contador...
+}
+
+Future<void> configurarPush() async {
+  FirebaseMessaging.onBackgroundMessage(_emSegundoPlano);
+  final fcm = FirebaseMessaging.instance;
+  await fcm.requestPermission();        // iOS e Android 13+
+  final token = await fcm.getToken();   // enviar ao backend
+  fcm.onTokenRefresh.listen(salvarToken);
+  FirebaseMessaging.onMessage.listen(mostrarLocal);
+  FirebaseMessaging.onMessageOpenedApp.listen(
+      (m) => router.go('/alertas/${m.data['id']}'));
+}
+\end{codigo}
+    \end{column}
+    \begin{column}{0.4\textwidth}
+      \begin{conceito}[Três situações]
+        \textbf{Primeiro plano}: \cod{onMessage}; você exibe.\\
+        \textbf{Fundo ou fechado}: o sistema exibe; o \emph{handler} roda isolado.\\
+        \textbf{Toque}: \cod{onMessageOpenedApp} abre a tela.
+      \end{conceito}
+      \begin{atencao}
+        iOS exige a chave APNs no console e a capacidade \emph{Push Notifications} no Xcode.
+      \end{atencao}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% =============================================================================
+\section{Monitoramento e desenvolvimento}
+
+\begin{frame}[fragile]{Crashlytics, Analytics e Remote Config}
+  \begin{columns}[T]
+    \begin{column}{0.56\textwidth}
+\begin{codigo}[title=main.dart: capturando falhas]{Dart}
+FlutterError.onError =
+    FirebaseCrashlytics.instance.recordFlutterFatalError;
+
+PlatformDispatcher.instance.onError = (erro, pilha) {
+  FirebaseCrashlytics.instance
+      .recordError(erro, pilha, fatal: true);
+  return true;
+};
+\end{codigo}
+\begin{codigo}[title=Evento e configuração remota]{Dart}
+await FirebaseAnalytics.instance.logEvent(
+    name: 'reserva_criada', parameters: {'lab': 'lab-3'});
+
+final rc = FirebaseRemoteConfig.instance;
+await rc.fetchAndActivate();
+final intervalo = rc.getInt('intervalo_leitura_s');
+\end{codigo}
+    \end{column}
+    \begin{column}{0.42\textwidth}
+      \begin{conceito}[Para quê]
+        \textbf{Crashlytics}: falhas com pilha e dispositivo.\\
+        \textbf{Analytics}: o que os usuários fazem.\\
+        \textbf{Remote Config}: mudar valores e ligar recursos sem nova versão na loja.\\
+        \textbf{App Check}: recusa chamadas que não vêm do seu app.
+      \end{conceito}
+      \begin{atencao}[LGPD]
+        Informe na política de privacidade os dados coletados e não envie dados pessoais em eventos.
+      \end{atencao}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}[fragile]{Emulator Suite}
+  \begin{columns}[T]
+    \begin{column}{0.5\textwidth}
+\begin{terminal}
+$ firebase init emulators
+$ firebase emulators:start
+  Auth      localhost:9099
+  Firestore localhost:8080
+  Storage   localhost:9199
+  UI        localhost:4000
+\end{terminal}
+\begin{codigo}[title=Apontando o app para o emulador]{Dart}
+if (kDebugMode) {
+  final host = defaultTargetPlatform ==
+      TargetPlatform.android ? '10.0.2.2' : 'localhost';
+  await FirebaseAuth.instance.useAuthEmulator(host, 9099);
+  FirebaseFirestore.instance
+      .useFirestoreEmulator(host, 8080);
+}
+\end{codigo}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \begin{conceito}[Vantagens]
+        Sem custo, sem tocar nos dados reais; testa as regras antes de publicar e serve aos testes de integração (Módulo 14).
+      \end{conceito}
+      \begin{dica}
+        No emulador Android, \cod{10.0.2.2} é o \cod{localhost} do computador.
+      \end{dica}
+      \begin{atencao}
+        Não use o Firebase direto nos widgets: encapsule em repositórios (Módulo 08).
+      \end{atencao}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% =============================================================================
+\section{Fechamento}
+
+\begin{frame}{Resumo}
+  \begin{resumo}
+    \begin{itemize}
+      \item \cod{flutterfire configure} gera as opções; \cod{Firebase.initializeApp} inicia tudo.
+      \item Authentication com e-mail, Google e Apple; \cod{authStateChanges} protege as rotas.
+      \item Firestore: coleções, documentos, \cod{snapshots()} em tempo real, transações e cache offline.
+      \item Regras de segurança são a única proteção real dos dados.
+      \item Storage (Blaze), Functions, FCM, Crashlytics e Remote Config completam o backend.
+    \end{itemize}
+  \end{resumo}
+\end{frame}
+
+\begin{frame}{Glossário (1/2)}
+  \begin{glossario}
+    BaaS & \emph{backend} pronto oferecido como serviço: contas, banco, arquivos \\
+    FlutterFire & plugins oficiais do Firebase para Flutter \\
+    OAuth 2.0 & delegação de autorização por \emph{tokens}, sem expor a senha \\
+    OpenID Connect & camada de identidade sobre o OAuth (ID \emph{token}) \\
+    PKCE & segredo por login que impede o uso de um código interceptado \\
+    ID \emph{token} & JWT que diz quem é o usuário; vale 1 hora no Firebase \\
+    \emph{Custom claims} & papéis gravados no \emph{token} pelo servidor \\
+    \emph{Passkey} & credencial de par de chaves, resistente a \emph{phishing} \\
+    \cod{flutterfire configure} & gera o \cod{firebase\_options.dart} de cada plataforma \\
+  \end{glossario}
+\end{frame}
+
+\begin{frame}{Glossário (2/2)}
+  \begin{glossario}
+    Cloud Firestore & banco de documentos com sincronização em tempo real \\
+    \cod{snapshots()} & fluxo com o resultado de uma consulta e cada mudança \\
+    Compensação de latência & a gravação aparece antes da confirmação do servidor \\
+    Regras de segurança & autorização declarativa avaliada no servidor a cada requisição \\
+    FCM & serviço de mensagens \emph{push} do Firebase \\
+    \emph{Token} de registro & endereço do app em um aparelho, para receber \emph{push} \\
+    Idempotência & processar o mesmo evento duas vezes dá o mesmo resultado \\
+    Emulator Suite & emuladores locais de Auth, Firestore, Functions e Storage \\
+  \end{glossario}
+\end{frame}
+
+\begin{frame}{Questões de revisão}
+  \begin{questoes}
+    \item Diferencie OAuth 2.0 de OpenID Connect. Qual deles o ``Entrar com Google'' usa?
+    \item Por que apps nativos devem fazer login no navegador do sistema, com PKCE?
+    \item Para que servem o ID \emph{token}, o \emph{token} de acesso e o \emph{token} de renovação?
+    \item Por que \emph{passkeys} resistem a \emph{phishing} e senhas não?
+    \item O que é compensação de latência? Como a tela sabe que um documento ainda está pendente?
+    \item Por que as regras do Firestore são a verdadeira proteção dos dados? O que significa ``regras não são filtros''?
+    \item Descreva o caminho de um alerta \emph{push} da função até um iPhone e até um Android.
+    \item Por que uma função acionada por evento precisa ser idempotente?
+  \end{questoes}
+\end{frame}
+
+\begin{frame}{Exercícios}
+  \begin{exercicio}[Exercício 1 --- Autenticação]
+    Implemente cadastro, login, recuperação de senha e saída, com mensagens de erro em português.
+  \end{exercicio}
+  \begin{exercicio}[Exercício 2 --- Regras]
+    Escreva regras em que só o autor pode cancelar a própria reserva e teste-as no Emulator Suite.
+  \end{exercicio}
+  \begin{exercicio}[Exercício 3 --- Push]
+    Envie uma notificação pelo console e faça o toque abrir a tela de alertas.
+  \end{exercicio}
+  \begin{projeto}[LabMonitor --- Etapa 12]
+    Login com e-mail e Google, bancadas e reservas no Firestore com transação, fotos no Storage e Crashlytics ativo.
+  \end{projeto}
+\end{frame}
+
+\begin{frame}{Para aprofundar}
+  \small
+  \begin{itemize}
+    \item FlutterFire: \url{https://firebase.flutter.dev}
+    \item Firebase para Flutter: \url{https://firebase.google.com/docs/flutter/setup}
+    \item Authentication: \url{https://firebase.google.com/docs/auth/flutter/start}
+    \item Cloud Firestore: \url{https://firebase.google.com/docs/firestore}
+    \item Regras de segurança: \url{https://firebase.google.com/docs/rules}
+    \item Emulator Suite: \url{https://firebase.google.com/docs/emulator-suite}
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{Respostas das questões de revisão}
+  \begin{respostas}
+    \item O OAuth 2.0 delega autorização (\emph{token} de acesso); o OpenID Connect acrescenta identidade (ID \emph{token}). O login com Google usa OpenID Connect: o app recebe um ID \emph{token} e o troca por uma credencial do Firebase.
+    \item O navegador do sistema mantém a senha longe do app e reaproveita a sessão já aberta; o PKCE impede que um código interceptado seja trocado por \emph{tokens}.
+    \item ID \emph{token}: quem é o usuário. Acesso: autoriza chamadas a uma API. Renovação: obtém novos \emph{tokens} sem novo login.
+    \item A \emph{passkey} só funciona no domínio para o qual foi criada e assina um desafio sem enviar segredo. A senha pode ser digitada num site falso e reutilizada.
+    \item A gravação aparece na hora, antes da confirmação do servidor; se ele recusar, o SDK desfaz a mudança. Enquanto isso, \cod{metadata.hasPendingWrites} é verdadeiro.
+    \item O app fala direto com o banco e qualquer um pode usar as chaves públicas: só as regras, avaliadas no servidor, barram o acesso. Uma consulta que \textbf{possa} trazer documentos proibidos falha inteira; ela precisa ter os mesmos filtros da regra.
+    \item A função chama o FCM pela API HTTP v1 com o \emph{token} do aparelho. No Android, o FCM entrega pelo Google Play services; no iPhone, repassa ao APNs, que entrega pela conexão do sistema.
+    \item O provedor garante pelo menos uma execução por evento e às vezes repete; sem idempotência, o mesmo alerta seria enviado duas vezes.
+  \end{respostas}
+\end{frame}
+
+\encerramento{Módulo 13 --- Recursos do dispositivo: câmera, GPS, sensores, Bluetooth, NFC, notificações e IoT.}
+
+\end{document}

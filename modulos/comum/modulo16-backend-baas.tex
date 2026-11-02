@@ -1,0 +1,666 @@
+\documentclass[aspectratio=169,10pt]{beamer}
+\makeatletter\def\input@path{{../../estilo/}{../estilo/}{estilo/}}\makeatother
+\usepackage{devmobile}
+\modulo{16}{Backend Terceirizado (BaaS)}{Computação em nuvem, modelos de serviço, \emph{serverless}, panorama de Firebase, Supabase, AWS Amplify, Appwrite, PocketBase e Parse, prática com Supabase e critérios de escolha}
+
+\begin{document}
+\capa
+
+\begin{frame}{Objetivos do módulo}
+  \begin{conceito}[Ao final deste módulo você será capaz de]
+    \begin{itemize}
+      \item Explicar o papel do backend e os modelos de serviço em nuvem (IaaS, PaaS, SaaS, BaaS, FaaS).
+      \item Comparar os principais BaaS do mercado quanto a dados, preço, licença e aprisionamento.
+      \item Construir o backend do LabMonitor no Supabase: tabelas, RLS, tempo real, arquivos e funções.
+      \item Consumir o Supabase em Kotlin e em Dart.
+      \item Escolher um provedor com critérios técnicos, de custo e de LGPD.
+    \end{itemize}
+  \end{conceito}
+\end{frame}
+
+\sumario
+
+% =============================================================================
+\section{Fundamentos: backend e nuvem}
+
+\begin{frame}{Por que o app precisa de um backend}
+  \begin{columns}[c]
+    \begin{column}{0.46\textwidth}
+      \centering
+      \begin{tikzpicture}[node distance=5mm,every node/.style={font=\scriptsize,align=center}]
+        \node[caixa,minimum width=1.5cm] (a1) {App\\ Ana};
+        \node[caixa,minimum width=1.5cm,below=of a1] (a2) {App\\ Bruno};
+        \node[caixa,minimum width=1.5cm,below=of a2] (a3) {Painel\\ web};
+        \node[caixapetroleo,minimum width=1.9cm,minimum height=2.6cm,right=9mm of a2] (be) {\textbf{Backend}\\ \tiny regras, dados\\ \tiny compartilhados,\\ \tiny segredos};
+        \node[caixaescura,right=4mm of be,minimum width=1.1cm] (db) {Banco};
+        \draw[seta,<->] (a1) -- (be); \draw[seta,<->] (a2) -- (be); \draw[seta,<->] (a3) -- (be); \draw[seta,<->] (be) -- (db);
+      \end{tikzpicture}
+    \end{column}
+    \begin{column}{0.52\textwidth}
+      \begin{definicao}[Backend]
+        Parte do sistema que roda em servidores: guarda os dados compartilhados, autentica usuários, aplica regras de negócio, integra serviços e envia notificações.
+      \end{definicao}
+      \begin{conceito}[O que o app sozinho não resolve]
+        \begin{itemize}
+          \item \textbf{Compartilhar}: a reserva da Ana precisa aparecer para o Bruno.
+          \item \textbf{Confiar}: o app pode ser modificado; regras importantes ficam no servidor.
+          \item \textbf{Guardar segredos}: chaves de APIs pagas e credenciais.
+          \item \textbf{Trabalhar com o app fechado}: alertas e relatórios agendados.
+        \end{itemize}
+      \end{conceito}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Modelos de serviço em nuvem}
+  \begin{columns}[c]
+    \begin{column}{0.56\textwidth}
+      \centering
+      \begin{tikzpicture}[x=1.15cm,y=0.42cm]
+        \foreach \i/\t in {0/Hardware,1/Rede e virtualização,2/Sistema operacional,3/Runtime e escala,
+                           4/{Banco, login, arquivos},5/Lógica do servidor,6/App}{
+          \node[font=\tiny,anchor=east] at (-0.1,\i) {\t};}
+        \foreach \c/\n/\k in {0/IaaS/2,1/PaaS/4,2/BaaS/5,3/SaaS/7}{
+          \node[font=\tiny\bfseries,text=azulpetroleo] at (\c+0.5,7.1) {\n};
+          \foreach \i in {0,...,6}{
+            \pgfmathtruncatemacro{\prov}{\i<\k ? 1 : 0}
+            \ifnum\prov=1 \fill[azulpetroleo!75] (\c+0.06,\i-0.42) rectangle (\c+0.94,\i+0.42);
+            \else \fill[ambar] (\c+0.06,\i-0.42) rectangle (\c+0.94,\i+0.42); \fi}}
+        \fill[azulpetroleo!75] (0.06,-1.5) rectangle ++(0.3,0.5); \node[font=\tiny,anchor=west] at (0.4,-1.25) {provedor cuida};
+        \fill[ambar] (2.1,-1.5) rectangle ++(0.3,0.5); \node[font=\tiny,anchor=west] at (2.44,-1.25) {você cuida};
+      \end{tikzpicture}
+    \end{column}
+    \begin{column}{0.42\textwidth}
+      \scriptsize
+      \begin{tabularx}{\linewidth}{@{}l L@{}}
+        \toprule
+        \cabecalho{Modelo} & \cabecalho{Você recebe} \\
+        \midrule
+        IaaS & máquinas virtuais (EC2, Compute Engine) \\
+        PaaS & plataforma para rodar seu código (Cloud Run, Heroku) \\
+        FaaS & funções que rodam por evento (Lambda, Cloud Functions) \\
+        BaaS & backend pronto: banco, login, arquivos, tempo real \\
+        SaaS & software pronto para usar (Gmail, Notion) \\
+        \bottomrule
+      \end{tabularx}
+      \begin{analogia}
+        Pizza: fazer em casa (servidor próprio), comprar congelada (IaaS), pedir entrega (BaaS) ou comer no restaurante (SaaS).
+      \end{analogia}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{\emph{Serverless} e o modelo de custo}
+  \begin{columns}[T]
+    \begin{column}{0.5\textwidth}
+      \begin{definicao}[\emph{Serverless}]
+        Modelo em que o provedor aloca, escala e desliga os servidores automaticamente; você paga pelo \textbf{uso} (requisições, tempo de execução, leituras) e não por máquinas ligadas.
+      \end{definicao}
+      \begin{pordentro}[Partida a frio]
+        Sem tráfego, a função ``dorme''. A primeira chamada depois disso precisa iniciar o ambiente, o que leva de centenas de milissegundos a alguns segundos.
+      \end{pordentro}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \scriptsize
+      \begin{tabularx}{\linewidth}{@{}l L@{}}
+        \toprule
+        \cabecalho{Cobrança por} & \cabecalho{Exemplo de armadilha} \\
+        \midrule
+        leituras de documentos & tela que escuta uma coleção inteira em tempo real \\
+        tráfego de saída & fotos grandes baixadas a cada abertura \\
+        usuários ativos (MAU) & contas de teste esquecidas \\
+        invocações de função & laço que chama a função a cada segundo \\
+        \bottomrule
+      \end{tabularx}
+      \begin{atencao}
+        Configure \textbf{alertas de orçamento} e limites antes de abrir o app ao público. Um defeito pode virar uma conta alta em horas.
+      \end{atencao}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Aprisionamento tecnológico (\emph{vendor lock-in})}
+  \begin{columns}[T]
+    \begin{column}{0.5\textwidth}
+      \begin{definicao}[\emph{Lock-in}]
+        Dependência de um fornecedor tão grande que trocar de serviço fica caro: dados em formato proprietário, APIs exclusivas, regras espalhadas pelo app.
+      \end{definicao}
+      \centering
+      \begin{tikzpicture}
+        \draw[setaambar,<->] (0,0) -- (5.6,0);
+        \node[font=\tiny,align=center,above] at (0.6,0.1) {Firestore\\ proprietário};
+        \node[font=\tiny,align=center,above] at (2.8,0.1) {Supabase, Appwrite\\ código aberto};
+        \node[font=\tiny,align=center,above] at (5.0,0.1) {backend\\ próprio};
+        \node[font=\tiny,below] at (0.6,-0.1) {mais \emph{lock-in}};
+        \node[font=\tiny,below] at (5.0,-0.1) {mais trabalho};
+      \end{tikzpicture}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \begin{conceito}[Como reduzir o risco]
+        \begin{itemize}
+          \item Esconder o provedor atrás de \textbf{repositórios} (Módulo 08): só a camada de dados conhece o SDK.
+          \item Preferir padrões abertos: SQL, REST, JWT, S3.
+          \item Exportar os dados periodicamente.
+          \item Saber se é possível \textbf{auto-hospedar} o serviço.
+        \end{itemize}
+      \end{conceito}
+      \begin{dica}
+        \emph{Lock-in} não é sempre ruim: é o preço de ganhar velocidade. O problema é aceitá-lo sem perceber.
+      \end{dica}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{LGPD e serviços de terceiros}
+  \begin{columns}[T]
+    \begin{column}{0.5\textwidth}
+      \begin{definicao}[Controlador e operador (LGPD)]
+        O \textbf{controlador} decide por que e como os dados pessoais são tratados (a instituição dona do app). O \textbf{operador} trata os dados em nome do controlador (o provedor de BaaS).
+      \end{definicao}
+      \begin{conceito}[Transferência internacional]
+        Se os servidores ficam fora do Brasil, há transferência internacional de dados, que a LGPD só permite em hipóteses previstas (como cláusulas contratuais adequadas).
+      \end{conceito}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \begin{conceito}[Antes de escolher]
+        \begin{itemize}
+          \item Há região de dados no Brasil (São Paulo)?
+          \item Existe contrato de tratamento de dados?
+          \item Como exportar e apagar os dados de um usuário?
+          \item Onde ficam logs e cópias de segurança?
+        \end{itemize}
+      \end{conceito}
+      \begin{atencao}
+        Não é assessoria jurídica: em projetos institucionais, envolva o encarregado de dados (DPO).
+      \end{atencao}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% =============================================================================
+\section{Panorama dos principais BaaS}
+
+\begin{frame}{Os principais provedores}
+  \scriptsize
+  \begin{tabularx}{\textwidth}{@{}l L l l L@{}}
+    \toprule
+    \cabecalho{Serviço} & \cabecalho{Dados} & \cabecalho{Código} & \cabecalho{Auto-hospedar} & \cabecalho{Destaque} \\
+    \midrule
+    \textbf{Firebase} & Firestore (documentos), Realtime Database; Data Connect (PostgreSQL) & proprietário & não & integração com Google, FCM, Crashlytics, offline nativo \\
+    \textbf{Supabase} & PostgreSQL & aberto & sim (Docker) & SQL, RLS, API REST automática, tempo real, Edge Functions \\
+    \textbf{AWS Amplify} & DynamoDB via GraphQL (AppSync) & proprietário & não & backend definido em TypeScript, ecossistema AWS \\
+    \textbf{Appwrite} & tabelas com permissões por linha & aberto & sim (Docker) & funções em várias linguagens, mensagens, painel completo \\
+    \textbf{PocketBase} & SQLite num único executável & aberto & só auto-hospedado & simplíssimo; roda até num Raspberry Pi \\
+    \textbf{Parse} (Back4App) & MongoDB ou PostgreSQL & aberto & sim & veterano; Back4App oferece a versão hospedada \\
+    \bottomrule
+  \end{tabularx}
+  \vspace{4pt}
+  \begin{historia}
+    O Parse foi comprado pelo Facebook em 2013, teve o código aberto e o serviço encerrado em 2017; a comunidade o mantém. Todos os serviços da tabela têm SDKs para Kotlin e Flutter.
+  \end{historia}
+\end{frame}
+
+\begin{frame}{Documentos ou tabelas?}
+  \begin{columns}[T]
+    \begin{column}{0.5\textwidth}
+      \scriptsize
+      \begin{tabularx}{\linewidth}{@{}l L L@{}}
+        \toprule
+        & \cabecalho{Documentos (Firestore)} & \cabecalho{Relacional (Postgres)} \\
+        \midrule
+        Estrutura & flexível, aninhada & tabelas com esquema \\
+        Relações & duplicação de dados & chaves estrangeiras e \cod{JOIN} \\
+        Consultas & por índice, simples & SQL completo, agregações \\
+        Integridade & regras no app e nas \emph{rules} & restrições no banco \\
+        Escala & horizontal automática & vertical, réplicas \\
+        Offline & embutido no SDK & feito no app (Módulo 10) \\
+        \bottomrule
+      \end{tabularx}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \begin{conceito}[Como decidir]
+        Dados muito relacionados (reservas, usuários, bancadas, relatórios) favorecem o relacional. Dados que variam muito de forma, lidos em blocos, favorecem documentos.
+      \end{conceito}
+      \begin{dica}[Teorema CAP]
+        Com falha de rede num sistema distribuído, escolhe-se entre \textbf{consistência} (todos veem o mesmo dado) e \textbf{disponibilidade} (todos recebem resposta).
+      \end{dica}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% =============================================================================
+\section{Supabase na prática}
+
+\begin{frame}{Arquitetura do Supabase}
+  \begin{columns}[c]
+    \begin{column}{0.54\textwidth}
+      \centering
+      \begin{tikzpicture}[node distance=2mm,every node/.style={font=\scriptsize,align=center}]
+        \node[caixaescura,minimum width=5.6cm,minimum height=9mm] (pg) {\textbf{PostgreSQL}\\ \tiny tabelas, RLS, funções, extensões};
+        \node[caixapetroleo,above=4mm of pg.north west,anchor=south west,minimum width=1.75cm] (rest) {REST\\ \tiny PostgREST};
+        \node[caixapetroleo,above=4mm of pg.north,minimum width=1.75cm] (auth) {Auth\\ \tiny JWT};
+        \node[caixapetroleo,above=4mm of pg.north east,anchor=south east,minimum width=1.75cm] (rt) {Realtime\\ \tiny WebSocket};
+        \node[caixa,below=4mm of pg.south west,anchor=north west,minimum width=2.7cm] (st) {Storage\\ \tiny arquivos (S3)};
+        \node[caixa,below=4mm of pg.south east,anchor=north east,minimum width=2.7cm] (fn) {Edge Functions\\ \tiny TypeScript (Deno)};
+        \node[caixaambar,above=5mm of auth,minimum width=5.6cm] (gw) {\emph{API gateway}: uma URL e uma chave pública};
+        \node[caixa,above=4mm of gw,minimum width=2.6cm] (app) {App Kotlin ou Flutter};
+        \draw[seta] (app) -- (gw);
+        \foreach \n in {rest,auth,rt} \draw[seta] (gw.south -| \n) -- (\n);
+        \foreach \n in {rest,auth,rt} \draw[seta] (\n) -- (pg.north -| \n);
+        \draw[seta] (pg.south -| st) -- (st); \draw[seta] (pg.south -| fn) -- (fn);
+      \end{tikzpicture}
+    \end{column}
+    \begin{column}{0.44\textwidth}
+      \begin{conceito}[A ideia central]
+        Tudo gira em torno de um PostgreSQL de verdade. A API REST é gerada a partir das tabelas; a autenticação gera JWTs; a segurança é feita \textbf{no banco}, com RLS.
+      \end{conceito}
+      \begin{dica}
+        Ambiente local completo com a CLI: \cod{supabase start} sobe tudo em Docker, e \cod{supabase db diff} gera migrações.
+      \end{dica}
+      \begin{atencao}[Chaves]
+        A chave \textbf{pública} (\emph{publishable}, antiga \emph{anon}) vai no app. A chave \textbf{secreta} (\emph{secret}, antiga \emph{service\_role}) ignora o RLS e nunca sai do servidor.
+      \end{atencao}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}[fragile]{Tabelas e integridade no banco}
+  \begin{columns}[T]
+    \begin{column}{0.56\textwidth}
+\begin{codigo}[title=supabase/migrations/001\_reservas.sql]{SQL}
+create table public.bancadas (
+  id bigint generated always as identity primary key,
+  codigo text not null unique,
+  laboratorio text not null,
+  livre boolean not null default true
+);
+create table public.reservas (
+  id bigint generated always as identity primary key,
+  bancada_id bigint not null references public.bancadas(id),
+  usuario_id uuid not null default auth.uid()
+             references auth.users(id),
+  inicio timestamptz not null,
+  fim    timestamptz not null,
+  check (fim > inicio)
+);
+create extension if not exists btree_gist;
+alter table public.reservas add constraint sem_sobreposicao
+  exclude using gist (bancada_id with =,
+                      tstzrange(inicio, fim) with &&);
+\end{codigo}
+    \end{column}
+    \begin{column}{0.42\textwidth}
+      \begin{conceito}[Regra de negócio no lugar certo]
+        A restrição de exclusão impede que duas reservas da mesma bancada se \textbf{sobreponham} no tempo (\cod{\&\&} é o operador de sobreposição de intervalos). Nenhum app, nem com defeito, consegue violá-la.
+      \end{conceito}
+      \begin{dica}
+        No Firestore (Módulo 12), a mesma regra exigiu uma transação no app. Migrações SQL versionadas entram no Git.
+      \end{dica}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}[fragile]{Segurança em nível de linha (RLS)}
+  \begin{columns}[T]
+    \begin{column}{0.56\textwidth}
+\begin{codigo}[title=supabase/migrations/002\_politicas.sql]{SQL}
+alter table public.reservas enable row level security;
+
+create policy "todos logados veem as reservas"
+  on public.reservas for select to authenticated
+  using (true);
+
+create policy "cada um cria a sua"
+  on public.reservas for insert to authenticated
+  with check (usuario_id = (select auth.uid()));
+
+create policy "cada um cancela a sua"
+  on public.reservas for delete to authenticated
+  using (usuario_id = (select auth.uid()));
+\end{codigo}
+    \end{column}
+    \begin{column}{0.42\textwidth}
+      \begin{definicao}[RLS --- \emph{Row Level Security}]
+        O PostgreSQL acrescenta a cada consulta uma condição por linha baseada no usuário. \cod{using} filtra as linhas visíveis; \cod{with check} valida as gravadas.
+      \end{definicao}
+      \begin{pordentro}[Como o banco sabe quem é]
+        O app envia o JWT do login; o usuário chega ao SQL por \cod{auth.uid()}.
+      \end{pordentro}
+      \begin{erro}[O erro mais grave]
+        Tabela exposta \textbf{sem} RLS: qualquer pessoa com a chave pública lê e altera tudo.
+      \end{erro}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}[fragile]{Cliente Dart (Flutter)}
+  \begin{columns}[T]
+    \begin{column}{0.6\textwidth}
+\begin{codigo}[title=supabase\_flutter]{Dart}
+await Supabase.initialize(url: supabaseUrl,
+    anonKey: chavePublica);          // chave publishable
+final db = Supabase.instance.client;
+
+await db.auth.signInWithPassword(email: email, password: senha);
+
+final livres = await db.from('bancadas')
+    .select('id, codigo, laboratorio')
+    .eq('livre', true)
+    .order('codigo');
+
+try {
+  await db.from('reservas').insert({
+    'bancada_id': 7,
+    'inicio': inicio.toUtc().toIso8601String(),
+    'fim': fim.toUtc().toIso8601String(),
+  });
+} on PostgrestException catch (e) {
+  if (e.code == '23P01') mostrar('Horário indisponível');
+}
+\end{codigo}
+    \end{column}
+    \begin{column}{0.38\textwidth}
+      \begin{conceito}[Construtor de consultas]
+        \cod{select}, \cod{eq}, \cod{order} viram uma requisição REST que o PostgREST traduz em SQL. O RLS é aplicado em todas.
+      \end{conceito}
+      \begin{pordentro}[Código 23P01]
+        Código do PostgreSQL para violação de restrição de exclusão: a sobreposição foi barrada pelo banco e vira mensagem amigável no app.
+      \end{pordentro}
+      \begin{dica}
+        Coloque essas chamadas num \cod{ReservaRepositorySupabase} (Módulo 08).
+      \end{dica}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}[fragile]{Cliente Kotlin (Android)}
+  \begin{columns}[T]
+    \begin{column}{0.6\textwidth}
+\begin{codigo}[title=supabase-kt]{Kotlin}
+val db = createSupabaseClient(supabaseUrl, chavePublica) {
+  install(Auth)
+  install(Postgrest)
+  install(Realtime)
+}
+
+db.auth.signInWith(Email) {
+  email = emailDigitado
+  password = senhaDigitada
+}
+
+val livres = db.from("bancadas").select(
+    columns = Columns.list("id", "codigo", "laboratorio")
+) {
+  filter { eq("livre", true) }
+  order("codigo", Order.ASCENDING)
+}.decodeList<Bancada>()
+
+db.from("reservas").insert(NovaReserva(7, inicio, fim))
+\end{codigo}
+    \end{column}
+    \begin{column}{0.38\textwidth}
+      \begin{conceito}[Mesmo modelo mental]
+        O SDK Kotlin usa \emph{plugins} instalados no cliente e \emph{kotlinx.serialization} para converter as linhas em classes \cod{@Serializable}.
+      \end{conceito}
+      \begin{dica}
+        As chamadas são funções \cod{suspend}: rode-as no \cod{viewModelScope} (Módulo 06).
+      \end{dica}
+      \begin{atencao}
+        Nunca coloque a chave secreta no \cod{BuildConfig}: o APK pode ser descompactado.
+      \end{atencao}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}[fragile]{Tempo real}
+  \begin{columns}[T]
+    \begin{column}{0.5\textwidth}
+\begin{codigo}[title=Dart: lista sempre atualizada]{Dart}
+final reservasDaB7 = db
+    .from('reservas')
+    .stream(primaryKey: ['id'])
+    .eq('bancada_id', 7)
+    .order('inicio');
+// StreamBuilder ou view model
+\end{codigo}
+\begin{codigo}[title=Habilitar a tabela no Realtime]{SQL}
+alter publication supabase_realtime
+  add table public.reservas;
+\end{codigo}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+\begin{codigo}[title=Kotlin: mudanças como Flow]{Kotlin}
+val canal = db.channel("reservas")
+val mudancas = canal
+  .postgresChangeFlow<PostgresAction>(
+      schema = "public") {
+    table = "reservas"
+  }
+canal.subscribe()
+mudancas.collect { acao -> atualizar(acao) }
+\end{codigo}
+      \begin{pordentro}[Como funciona]
+        O serviço Realtime acompanha o registro de alterações do PostgreSQL (replicação lógica) e envia as mudanças por WebSocket, respeitando o RLS.
+      \end{pordentro}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}[fragile]{Arquivos e Edge Functions}
+  \begin{columns}[T]
+    \begin{column}{0.5\textwidth}
+\begin{codigo}[title=Foto do equipamento (Dart)]{Dart}
+await db.storage.from('equipamentos').upload(
+    'eq-42.jpg', File(foto.path));
+final url = db.storage.from('equipamentos')
+    .getPublicUrl('eq-42.jpg');
+\end{codigo}
+\begin{codigo}[title=Kotlin]{Kotlin}
+db.storage.from("equipamentos")
+  .upload("eq-42.jpg", bytes) { upsert = true }
+\end{codigo}
+      \begin{dica}
+        \emph{Buckets} têm políticas RLS como as tabelas (\cod{storage.objects}).
+      \end{dica}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+\begin{codigo}[title=supabase/functions/relatorio/index.ts]{TypeScript}
+Deno.serve(async (req) => {
+  const { laboratorio, mes } = await req.json();
+  // usa a chave secreta, que fica no servidor
+  const pdf = await gerarRelatorio(laboratorio, mes);
+  return new Response(JSON.stringify({ url: pdf }),
+    { headers: { "Content-Type": "application/json" } });
+});
+\end{codigo}
+\begin{codigo}[title=Chamando do app (Dart)]{Dart}
+final r = await db.functions.invoke('relatorio',
+    body: {'laboratorio': 'lab-3', 'mes': '2026-10'});
+\end{codigo}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% =============================================================================
+\section{Outros provedores}
+
+\begin{frame}[fragile]{PocketBase e Appwrite}
+  \begin{columns}[T]
+    \begin{column}{0.5\textwidth}
+\begin{terminal}[title=PocketBase num Raspberry Pi]
+$ ./pocketbase serve --http=0.0.0.0:8090
+# painel em http://ip-do-pi:8090/_/
+\end{terminal}
+\begin{codigo}[title=API REST gerada (HTTP)]{bash}
+GET  /api/collections/bancadas/records
+     ?filter=(livre=true)
+POST /api/collections/reservas/records
+POST /api/collections/users/
+     auth-with-password
+\end{codigo}
+      \begin{conceito}[PocketBase]
+        Um executável em Go com SQLite, login, regras, arquivos, tempo real e painel. Ótimo para protótipos e redes locais.
+      \end{conceito}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \begin{conceito}[Appwrite]
+        Plataforma aberta e auto-hospedável (ou na nuvem Appwrite) com banco, autenticação, arquivos, funções em várias linguagens, mensagens e tempo real. Permissões definidas por linha e por papel.
+      \end{conceito}
+      \begin{conceito}[AWS Amplify]
+        O backend é descrito em TypeScript (Amplify Gen 2) e vira serviços da AWS: Cognito (login), AppSync (GraphQL), DynamoDB e S3. Indicado para quem já está na AWS.
+      \end{conceito}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% =============================================================================
+\section{Escolhendo e arquitetando}
+
+\begin{frame}{Matriz de decisão para o LabMonitor}
+  \begin{columns}[T]
+    \begin{column}{0.6\textwidth}
+      \scriptsize
+      \setlength{\tabcolsep}{4pt}
+      \begin{tabular}{@{}l c c c c@{}}
+        \toprule
+        \cabecalho{Critério} & \cabecalho{Peso} & \cabecalho{Firebase} & \cabecalho{Supabase} & \cabecalho{PocketBase} \\
+        \midrule
+        Dados relacionais e relatórios & 3 & 2 & 5 & 3 \\
+        Regras de integridade no banco & 3 & 2 & 5 & 3 \\
+        Tempo real e offline & 2 & 5 & 4 & 3 \\
+        Push, crash e analytics prontos & 2 & 5 & 2 & 1 \\
+        Auto-hospedar no IFMA & 2 & 1 & 4 & 5 \\
+        Custo para a turma & 1 & 4 & 4 & 5 \\
+        \midrule
+        \textbf{Total ponderado} & & 38 & \textbf{54} & 41 \\
+        \bottomrule
+      \end{tabular}\\[2pt]
+      {\tiny Notas ilustrativas de 1 a 5; refaça com os pesos do seu projeto.}
+    \end{column}
+    \begin{column}{0.38\textwidth}
+      \begin{conceito}[Leitura do resultado]
+        Para reservas e relatórios, o modelo relacional pesa mais. Uma combinação também é válida: \textbf{Supabase} para dados e \textbf{Firebase} só para push (FCM) e Crashlytics.
+      \end{conceito}
+      \begin{atencao}
+        Discuta os pesos antes das notas, para não ajustar a matriz ao resultado desejado.
+      \end{atencao}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Arquitetura que sobrevive à troca de provedor}
+  \begin{columns}[c]
+    \begin{column}{0.5\textwidth}
+      \centering
+      \begin{tikzpicture}[node distance=3mm,every node/.style={font=\scriptsize,minimum width=4.2cm}]
+        \node[caixa] (ui) {UI e view models};
+        \node[caixapetroleo,below=of ui] (rep) {\cod{ReservaRepository} (interface)};
+        \node[caixaambar,below=6mm of rep.south west,anchor=north west,minimum width=2.0cm,font=\tiny] (s) {\ldots Supabase};
+        \node[caixaambar,below=6mm of rep.south east,anchor=north east,minimum width=2.0cm,font=\tiny] (f) {\ldots Firestore};
+        \node[caixa,below=13mm of rep,minimum width=4.2cm,font=\tiny] (p) {\ldots API própria (Módulo 17)};
+        \draw[seta] (ui) -- (rep);
+        \draw[seta] (rep.south -| s) -- (s); \draw[seta] (rep.south -| f) -- (f);
+        \draw[seta,dashed] (rep) -- (p);
+      \end{tikzpicture}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \begin{conceito}[Regras]
+        \begin{itemize}
+          \item Tipos do SDK (\cod{PostgrestException}, \cod{DocumentSnapshot}) não passam da camada de dados.
+          \item O domínio usa modelos próprios (\cod{Reserva}, \cod{Bancada}).
+          \item Erros do provedor viram \cod{Result} com erros do domínio.
+        \end{itemize}
+      \end{conceito}
+      \begin{dica}
+        Com isso, migrar do BaaS para o backend próprio do Módulo 17 muda uma classe por repositório, não o app inteiro.
+      \end{dica}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% =============================================================================
+\section{Fechamento}
+
+\begin{frame}{Resumo}
+  \begin{resumo}
+    \begin{itemize}
+      \item O backend compartilha dados, aplica regras confiáveis e guarda segredos.
+      \item IaaS, PaaS, FaaS, BaaS e SaaS diferem em quanto o provedor cuida por você.
+      \item \emph{Serverless} cobra por uso: alertas de orçamento são obrigatórios.
+      \item Firebase, Supabase, Amplify, Appwrite, PocketBase e Parse têm modelos de dados, licenças e preços diferentes.
+      \item No Supabase, o PostgreSQL com RLS e restrições é o centro da segurança e da integridade.
+      \item Repositórios isolam o provedor e reduzem o \emph{lock-in}; a LGPD guia a escolha da região e do contrato.
+    \end{itemize}
+  \end{resumo}
+\end{frame}
+
+\begin{frame}{Glossário}
+  \begin{glossario}
+    Backend & parte do sistema nos servidores: dados, regras, autenticação, integrações \\
+    BaaS & \emph{Backend as a Service}: backend pronto, acessado por SDK e API \\
+    \emph{Serverless} & modelo em que o provedor gerencia e escala servidores; paga-se por uso \\
+    Partida a frio & atraso da primeira execução de uma função inativa \\
+    \emph{Lock-in} & dependência que torna cara a troca de fornecedor \\
+    RLS & segurança em nível de linha do PostgreSQL, por usuário \\
+    JWT & \emph{token} assinado que carrega a identidade do usuário \\
+    Restrição de exclusão & regra do PostgreSQL que impede linhas conflitantes (intervalos sobrepostos) \\
+    Controlador / operador & quem decide sobre os dados pessoais / quem os trata em seu nome (LGPD) \\
+  \end{glossario}
+\end{frame}
+
+\begin{frame}{Questões de revisão}
+  \begin{questoes}
+    \item Cite três coisas que o backend faz e que o app sozinho não consegue fazer com segurança.
+    \item Diferencie PaaS, FaaS e BaaS com um exemplo de cada.
+    \item O que é partida a frio e quando ela incomoda o usuário?
+    \item Por que a chave pública do Supabase pode ir no app e a secreta não?
+    \item Explique o que \cod{using} e \cod{with check} fazem numa política RLS.
+    \item Como a restrição de exclusão evita reservas sobrepostas? Compare com a solução do Firestore.
+    \item Que práticas reduzem o \emph{lock-in}?
+    \item Que perguntas de LGPD você faria antes de contratar um BaaS?
+  \end{questoes}
+\end{frame}
+
+\begin{frame}{Exercícios}
+  \begin{exercicio}[Exercício 1 --- Modelagem e RLS]
+    Crie as tabelas \cod{laboratorios}, \cod{bancadas} e \cod{reservas} no Supabase, com RLS em que só técnicos (papel guardado em \cod{perfis}) cadastram bancadas.
+  \end{exercicio}
+  \begin{exercicio}[Exercício 2 --- Tempo real]
+    Mostre no app, em tempo real, as reservas do dia de uma bancada, testando com dois aparelhos.
+  \end{exercicio}
+  \begin{exercicio}[Exercício 3 --- Comparação]
+    Implemente a mesma listagem de bancadas no PocketBase e compare esforço, recursos e desempenho com o Supabase.
+  \end{exercicio}
+  \begin{projeto}[LabMonitor --- Etapa 16]
+    Reservas no Supabase com RLS e restrição de exclusão, atualização em tempo real e fotos no Storage, tudo atrás de \cod{ReservaRepository}.
+  \end{projeto}
+\end{frame}
+
+\begin{frame}{Para aprofundar}
+  \small
+  \begin{itemize}
+    \item Supabase: \url{https://supabase.com/docs}
+    \item RLS no Supabase: \url{https://supabase.com/docs/guides/database/postgres/row-level-security}
+    \item Appwrite: \url{https://appwrite.io/docs} \quad PocketBase: \url{https://pocketbase.io/docs}
+    \item AWS Amplify: \url{https://docs.amplify.aws}
+    \item Parse Platform: \url{https://parseplatform.org}
+    \item LGPD (Lei 13.709/2018): \url{https://www.planalto.gov.br/ccivil_03/_ato2015-2018/2018/lei/l13709.htm}
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{Respostas das questões de revisão}
+  \begin{respostas}
+    \item Compartilhar dados entre usuários, aplicar regras que não podem ser burladas e guardar segredos (também: tarefas com o app fechado).
+    \item PaaS roda sua aplicação (Cloud Run); FaaS roda funções por evento (Cloud Functions); BaaS entrega banco, login e arquivos prontos (Supabase).
+    \item É o tempo para iniciar uma função inativa; incomoda em ações interativas raras, como o primeiro toque em ``gerar relatório''.
+    \item A pública só permite o que o RLS autoriza para aquele usuário; a secreta ignora o RLS e daria acesso total a quem extraísse o app.
+    \item \cod{using} define quais linhas existentes o usuário pode ver, alterar ou apagar; \cod{with check} valida as linhas novas ou alteradas.
+    \item O banco recusa duas linhas com a mesma bancada e intervalos que se sobrepõem, para qualquer cliente. No Firestore, a regra dependia de uma transação feita pelo app.
+    \item Repositórios que escondem o SDK, modelos de domínio próprios, padrões abertos (SQL, REST, JWT), exportação de dados e possibilidade de auto-hospedagem.
+    \item Onde ficam os dados (região), se há contrato de operador, como exportar e excluir dados de um usuário, onde ficam logs e cópias.
+  \end{respostas}
+\end{frame}
+
+\encerramento{Módulo 17 (comum) --- Backend próprio: API REST com Dart (Shelf) e Kotlin (Ktor), PostgreSQL, JWT, Docker e implantação.}
+
+\end{document}

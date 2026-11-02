@@ -1,0 +1,301 @@
+% =============================================================================
+%  Fundamentos compartilhados --- Módulo 05: interfaces declarativas
+%  Incluído pelas trilhas Kotlin e Flutter com \input{../fundamentos/f05-ui-declarativa}
+% =============================================================================
+\section{Fundamentos: interfaces declarativas}
+
+\begin{frame}{Interfaces imperativas e declarativas}
+  \begin{columns}[T]
+    \begin{column}{0.49\textwidth}
+      \begin{definicao}[Interface imperativa]
+        O programa cria os componentes uma vez e depois os \textbf{altera} passo a passo (\cod{setText}, \cod{setVisibility}). Basta esquecer um deles para a tela mostrar dados errados.
+      \end{definicao}
+    \end{column}
+    \begin{column}{0.49\textwidth}
+      \begin{definicao}[Interface declarativa]
+        O programa \textbf{descreve} como a tela deve ser para cada estado. Quando o estado muda, o framework gera a nova descrição e aplica apenas as diferenças.
+      \end{definicao}
+    \end{column}
+  \end{columns}
+  \vspace{2pt}
+  \centering
+  \begin{tikzpicture}[node distance=2mm and 6mm,every node/.style={font=\scriptsize}]
+    \node[rotulo,anchor=east,text width=1.6cm,align=right] (li) at (0,0) {\textbf{imperativo}};
+    \node[caixa,right=3mm of li,minimum width=1.6cm] (e1) {estado muda};
+    \node[caixaambar,right=of e1,minimum width=3.2cm] (c1) {seu código acha e altera\\ cada componente afetado};
+    \node[caixa,right=of c1,minimum width=2.2cm] (t1) {tela (mutável)};
+    \draw[seta] (e1) -- (c1); \draw[seta] (c1) -- (t1);
+    \node[rotulo,anchor=east,text width=1.6cm,align=right] (ld) at (0,-1.05) {\textbf{declarativo}};
+    \node[caixa,right=3mm of ld,minimum width=1.6cm] (e2) {estado muda};
+    \node[caixapetroleo,right=of e2,minimum width=2.1cm] (f2) {UI = f(estado)};
+    \node[caixa,right=of f2,minimum width=2.1cm] (d2) {nova descrição};
+    \node[caixapetroleo,right=of d2,minimum width=2.6cm] (a2) {framework compara\\ e aplica diferenças};
+    \draw[seta] (e2) -- (f2); \draw[seta] (f2) -- (d2); \draw[seta] (d2) -- (a2);
+  \end{tikzpicture}
+  \raggedright
+  \begin{historia}
+    Views do Android e UIKit do iOS (2008) são imperativos. O React (2013) popularizou a UI declarativa, depois adotada pelo Flutter (2018), SwiftUI (2019) e Jetpack Compose (2021).
+  \end{historia}
+\end{frame}
+
+\begin{frame}{Composição: a tela como uma árvore}
+  \begin{columns}[c]
+    \begin{column}{0.52\textwidth}
+      \centering
+      \begin{tikzpicture}[level distance=10mm,
+          every node/.style={caixa,font=\tiny,minimum height=5mm,inner sep=2pt},
+          edge from parent/.style={draw=azulpetroleo,line width=0.6pt},
+          level 1/.style={sibling distance=30mm},
+          level 2/.style={sibling distance=21mm},
+          level 3/.style={sibling distance=10mm}]
+        \node[caixaescura,font=\tiny] (raiz) {TelaEquipamentos}
+          child {node {BarraSuperior}}
+          child {node {ListaEquipamentos}
+            child {node[caixaambar,font=\tiny] {CartaoBancada}
+              child {node {Ícone}}
+              child {node {Textos}}
+              child {node {Barra}}}
+            child {node[caixaambar,font=\tiny] {CartaoBancada}}};
+        \draw[seta] (-2.6,0.2) -- (-2.6,-3.2);
+        \draw[setaambar] (-2.2,-3.2) -- (-2.2,0.2);
+        \node[rotulo,anchor=north west,text width=6cm,align=left] at (-2.75,-3.45) {\textcolor{azulpetroleo}{$\downarrow$} dados descem por parâmetros\quad \textcolor{ambar}{$\uparrow$} eventos sobem por \emph{callbacks}};
+      \end{tikzpicture}
+    \end{column}
+    \begin{column}{0.46\textwidth}
+      \begin{definicao}[Composição]
+        Construir interfaces complexas \textbf{combinando} componentes pequenos e independentes, em vez de herdar de componentes grandes. Cada componente recebe dados e devolve uma descrição de UI.
+      \end{definicao}
+      \begin{analogia}
+        Como peças de montar: o cartão é feito de ícone, textos e indicador; a lista, de vários cartões. Trocar uma peça não obriga a refazer as outras.
+      \end{analogia}
+      \begin{dica}[Um bom componente]
+        Faz uma coisa só, recebe tudo por parâmetro, não sabe de onde vêm os dados e pode ser visto isoladamente em uma \emph{preview}.
+      \end{dica}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Layout por restrições}
+  \begin{columns}[c]
+    \begin{column}{0.47\textwidth}
+      \centering
+      \begin{tikzpicture}[node distance=11mm]
+        \node[caixaescura,minimum width=3.4cm] (t) {Tela \quad 360 $\times$ 800};
+        \node[caixa,minimum width=3.4cm,below=of t] (c) {Coluna};
+        \node[caixaambar,minimum width=3.4cm,below=of c] (k) {Cartão};
+        \draw[seta] ([xshift=-10mm]t.south) -- node[rotulo,left,text width=2.1cm,align=right]{largura 0--360\\ altura 0--800} ([xshift=-10mm]c.north);
+        \draw[seta] ([xshift=-10mm]c.south) -- node[rotulo,left,text width=2.1cm,align=right]{largura 0--360\\ altura livre ($\infty$)} ([xshift=-10mm]k.north);
+        \draw[setaambar] ([xshift=10mm]k.north) -- node[rotulo,right,text width=1.6cm,align=left]{``tenho\\ 360 $\times$ 96''} ([xshift=10mm]c.south);
+        \node[rotulo,below=1.5mm of k,text width=4cm] {a coluna põe o cartão em $y = 0$\\ e o próximo em $y = 96$};
+      \end{tikzpicture}
+    \end{column}
+    \begin{column}{0.51\textwidth}
+      \begin{definicao}[Restrições (\emph{constraints})]
+        Intervalo de tamanhos que o pai aceita para o filho: largura e altura mínimas e máximas. \textbf{Justa} quando mínimo = máximo; \textbf{frouxa} quando o mínimo é zero.
+      \end{definicao}
+      \begin{conceito}[O algoritmo em três frases]
+        \textbf{Restrições descem}: o pai diz os limites. \textbf{Tamanhos sobem}: o filho escolhe um tamanho dentro deles. \textbf{O pai posiciona}: o filho não sabe onde está.
+      \end{conceito}
+      \begin{pordentro}[Uma passada só]
+        Cada nó é medido uma única vez por quadro, o que mantém o layout rápido mesmo com milhares de nós. No Compose, cada \cod{Modifier} ajusta as restrições antes de repassá-las; no Flutter, \cod{Padding} e \cod{SizedBox} fazem esse papel.
+      \end{pordentro}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Do estado aos pixels: o caminho de um quadro}
+  \centering
+  \begin{tikzpicture}[node distance=5mm,every node/.style={font=\scriptsize}]
+    \node[caixaambar,minimum width=2cm,minimum height=11mm] (s) {estado\\ muda};
+    \node[caixapetroleo,right=of s,minimum width=2.3cm,minimum height=11mm] (c) {\textbf{composição}\\ \tiny o que mostrar};
+    \node[caixapetroleo,right=of c,minimum width=2.3cm,minimum height=11mm] (l) {\textbf{layout}\\ \tiny tamanho e posição};
+    \node[caixapetroleo,right=of l,minimum width=2.3cm,minimum height=11mm] (d) {\textbf{desenho}\\ \tiny cores, textos, formas};
+    \node[caixaescura,right=of d,minimum width=2.3cm,minimum height=11mm] (r) {\textbf{rasterização}\\ \tiny GPU gera os pixels};
+    \draw[seta] (s) -- (c); \draw[seta] (c) -- (l); \draw[seta] (l) -- (d); \draw[seta] (d) -- (r);
+    \node[rotulo,below=1mm of c] {Compose: \emph{Composition}\\ Flutter: \emph{build}};
+    \node[rotulo,below=1mm of l] {\emph{Layout}\\ \emph{layout}};
+    \node[rotulo,below=1mm of d] {\emph{Drawing}\\ \emph{paint} e \emph{composite}};
+    \node[rotulo,below=1mm of r] {motor gráfico\\ (Skia, Impeller)};
+  \end{tikzpicture}
+  \raggedright
+  \begin{columns}[T]
+    \begin{column}{0.49\textwidth}
+      \begin{definicao}[Quadro e orçamento de tempo]
+        A tela é redesenhada no ritmo do sinal vertical do display (VSync): a 60\,Hz cada quadro tem \textbf{16,7\,ms}; a 120\,Hz, só \textbf{8,3\,ms}. Se o trabalho não couber, o quadro se perde e a animação engasga (\emph{jank}).
+      \end{definicao}
+    \end{column}
+    \begin{column}{0.49\textwidth}
+      \begin{pordentro}[Pular fases economiza tempo]
+        Uma cor que anima só precisa de desenho; uma posição que muda, de layout e desenho. Ler o estado na fase mais tardia possível evita repetir as anteriores.
+      \end{pordentro}
+      \begin{dica}
+        O \emph{Performance} do Flutter DevTools e o \emph{Layout Inspector} do Android Studio mostram onde o tempo do quadro foi gasto.
+      \end{dica}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Por dentro: descrição, instância e renderização}
+  \begin{columns}[T]
+    \begin{column}{0.56\textwidth}
+      \scriptsize
+      \begin{tabularx}{\linewidth}{@{}L l l@{}}
+        \toprule
+        \cabecalho{Papel} & \cabecalho{Flutter} & \cabecalho{Compose} \\
+        \midrule
+        Descrição leve, recriada a cada mudança & \cod{Widget} & chamada \cod{@Composable} \\
+        Instância duradoura, guarda o estado & \cod{Element} + \cod{State} & composição (\cod{remember}) \\
+        Mede, posiciona e desenha & \cod{RenderObject} & \cod{LayoutNode} \\
+        Informa leitores de tela & árvore de semântica & árvore de semântica \\
+        \bottomrule
+      \end{tabularx}
+      \normalsize
+      \begin{analogia}
+        O widget é a planta do arquiteto: barata de redesenhar. O elemento é o apartamento construído, onde mora o estado. O objeto de renderização é a estrutura medida e pintada. Mudar a planta não obriga a demolir o prédio.
+      \end{analogia}
+    \end{column}
+    \begin{column}{0.42\textwidth}
+      \begin{conceito}[Por que separar]
+        Descrições são criadas aos milhares por segundo, então precisam ser baratas. Medir e desenhar é caro, então os objetos de renderização são \textbf{reaproveitados} enquanto possível.
+      \end{conceito}
+      \begin{pordentro}[Semântica e acessibilidade]
+        Em paralelo, o framework monta uma árvore de semântica (rótulos, papéis, ações) que o TalkBack e o VoiceOver leem. Ícone sem rótulo fica mudo para quem não enxerga (Módulo 04).
+      \end{pordentro}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Atualizar sem refazer tudo}
+  \begin{columns}[c]
+    \begin{column}{0.42\textwidth}
+      \centering
+      \begin{tikzpicture}[level distance=10mm,
+          every node/.style={caixa,font=\tiny,minimum height=5mm,minimum width=9mm,inner sep=2pt},
+          edge from parent/.style={draw=azulpetroleo,line width=0.6pt},
+          level 1/.style={sibling distance=22mm},
+          level 2/.style={sibling distance=11mm}]
+        \node {Tela}
+          child {node {Barra} child {node {Título}}}
+          child {node[caixaambarforte] (m) {Medidor}
+            child {node[caixaambar] {Valor}}
+            child {node[caixaambar] {Barra}}};
+        \node[rotulo,below=11mm of m,text width=3.4cm] {o estado \cod{temperatura} mudou: só o \textbf{Medidor} e seus filhos são reconstruídos};
+      \end{tikzpicture}
+    \end{column}
+    \begin{column}{0.56\textwidth}
+      \begin{conceito}[Flutter: \emph{rebuild} e reconciliação]
+        \cod{setState} marca o elemento como sujo; no próximo quadro, só ele executa \cod{build}. Filhos de mesmo tipo e chave são reaproveitados e só atualizados.
+      \end{conceito}
+      \begin{conceito}[Compose: recomposição inteligente]
+        O Compose sabe quais funções leram cada estado e só executa essas de novo; as que recebem parâmetros iguais aos anteriores são puladas (\emph{skipping}).
+      \end{conceito}
+      \begin{atencao}[Consequência importante]
+        Funções de interface podem rodar muitas vezes, em qualquer ordem: devem ser \textbf{rápidas e sem efeitos colaterais}. Rede e banco ficam em APIs de efeito (Módulo 07).
+      \end{atencao}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}[fragile]{Identidade e chaves}
+  \begin{columns}[T]
+    \begin{column}{0.47\textwidth}
+      \centering
+      \begin{tikzpicture}[baseline=(current bounding box.north),every node/.style={font=\tiny}]
+        \tikzset{item/.style={caixa,minimum width=1.5cm,minimum height=5mm,inner sep=1pt}}
+        \node[rotulo] at (0.75,0.55) {antes};
+        \node[item,caixaambar] (a) at (0.75,0) {A \quad expandido};
+        \node[item] at (0.75,-0.6) {B};
+        \node[item] at (0.75,-1.2) {C};
+        \node[rotulo,text width=2cm] at (2.95,0.55) {remove A, \textbf{sem} chave};
+        \node[item,caixaambar,draw=vermelhoerro] at (2.95,0) {B \quad expandido};
+        \node[item] at (2.95,-0.6) {C};
+        \node[rotulo,text width=2cm] at (5.15,0.55) {remove A, \textbf{com} chave};
+        \node[item] at (5.15,0) {B};
+        \node[item] at (5.15,-0.6) {C};
+        \node[rotulo,text width=2cm,text=vermelhoerro] at (2.95,-1.25) {o estado ficou na posição 1};
+        \node[rotulo,text width=2cm,text=verdeok] at (5.15,-1.25) {o estado saiu junto com A};
+      \end{tikzpicture}
+\begin{codigo}[title=Compose]{Kotlin}
+items(itens, key = { it.id }) { eq ->
+  ItemEquipamento(eq)
+}
+\end{codigo}
+\begin{codigo}[title=Flutter]{Dart}
+ItemEquipamento(
+    key: ValueKey(eq.id), eq: eq, onTap: abrir)
+\end{codigo}
+    \end{column}
+    \begin{column}{0.51\textwidth}
+      \begin{definicao}[Chave (\emph{key})]
+        Identificador estável que diz ao framework qual item é qual entre duas versões da árvore. Sem chave, a correspondência é feita pela \textbf{posição}.
+      \end{definicao}
+      \begin{conceito}[Quando importa]
+        Em listas cujos itens têm estado próprio (expandido, campo digitado, animação) e podem ser inseridos, removidos ou reordenados.
+      \end{conceito}
+      \begin{dica}
+        Use um identificador do domínio, como o \cod{id} do equipamento. Nunca o índice da lista nem um valor aleatório criado a cada reconstrução.
+      \end{dica}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Temas, \emph{tokens} e contexto implícito}
+  \begin{columns}[c]
+    \begin{column}{0.42\textwidth}
+      \centering
+      \begin{tikzpicture}[node distance=7mm and 3mm,every node/.style={font=\tiny}]
+        \node[caixaambarforte,minimum width=2.4cm,font=\tiny\bfseries] (t) {Tema};
+        \node[caixa,below=of t,minimum width=1.6cm,font=\tiny] (s) {Tela};
+        \node[caixa,below left=of s,minimum width=1.3cm,font=\tiny] (l) {Lista};
+        \node[caixa,below right=of s,minimum width=1.3cm,font=\tiny] (b) {Botão};
+        \node[caixa,below=of l,minimum width=1.3cm,font=\tiny] (c) {Cartão};
+        \draw[seta] (t) -- (s); \draw[seta] (s) -- (l); \draw[seta] (s) -- (b); \draw[seta] (l) -- (c);
+        \draw[setaambar,dashed] (t.east) -| (b.north);
+        \draw[setaambar,dashed] (t.west) -| ([xshift=-3mm]c.west) -- (c.west);
+        \node[rotulo,text width=4cm,below=2mm of c.south east] {tracejado: componentes leem o tema direto do contexto, sem receber parâmetros};
+      \end{tikzpicture}
+    \end{column}
+    \begin{column}{0.56\textwidth}
+      \begin{definicao}[\emph{Tokens} de design]
+        Decisões visuais nomeadas pelo \textbf{papel}, não pelo valor: \cod{primary}, \cod{surface}, \cod{titleMedium}. O componente pede ``a cor primária''; o tema decide qual é.
+      \end{definicao}
+      \begin{pordentro}[Contexto implícito]
+        Tema, idioma e tamanho da tela ficam disponíveis para toda uma subárvore: \cod{InheritedWidget} no Flutter (\cod{Theme.of(context)}), \cod{CompositionLocal} no Compose. Quem lê é atualizado quando o valor muda.
+      \end{pordentro}
+      \begin{dica}
+        Com \emph{tokens}, tema escuro e cor dinâmica (Android 12+) funcionam sem mexer nos componentes.
+      \end{dica}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Pixels, densidade e telas de todos os tamanhos}
+  \begin{columns}[T]
+    \begin{column}{0.49\textwidth}
+      \centering
+      \begin{tikzpicture}[baseline=(current bounding box.north)]
+        \draw[cinzamedio,step=0.2] (0,0) grid (1.2,1.2);
+        \fill[ambar,opacity=0.7] (0.2,0.2) rectangle (1.0,1.0);
+        \node[rotulo] at (0.6,-0.25) {160 dpi: 48\,dp = 48\,px};
+        \draw[cinzamedio,step=0.0667] (2.6,0) grid (3.8,1.2);
+        \fill[ambar,opacity=0.7] (2.8,0.2) rectangle (3.6,1.0);
+        \node[rotulo] at (3.2,-0.25) {480 dpi: 48\,dp = 144\,px};
+      \end{tikzpicture}
+      \raggedright
+      \begin{definicao}[Pixel independente de densidade]
+        \cod{px = dp} $\times$ \cod{(dpi} $\div$ \cod{160)}: um botão de 48\,dp tem o mesmo tamanho físico em qualquer tela. No Flutter, é o pixel lógico (fator em \cod{devicePixelRatio}).
+      \end{definicao}
+      \begin{dica}[Texto]
+        Fontes também seguem a escala escolhida pelo usuário: \cod{sp} no Android, \cod{TextScaler} no Flutter.
+      \end{dica}
+    \end{column}
+    \begin{column}{0.49\textwidth}
+      \begin{conceito}[Responsivo $\times$ adaptativo]
+        \textbf{Responsivo}: o mesmo layout se estica ou reorganiza. \textbf{Adaptativo}: um layout por classe de tamanho de janela (barra inferior no celular, trilho lateral no tablet). Pense em \textbf{espaço disponível}, não em modelo de aparelho.
+      \end{conceito}
+      \begin{atencao}[Android 16 e telas grandes]
+        Com \cod{targetSdk} 36 (exigido pela Play desde agosto de 2026), telas com largura mínima $\geq$ 600\,dp ignoram travas de orientação e de redimensionamento; no API 37 não haverá exceção.
+      \end{atencao}
+    \end{column}
+  \end{columns}
+\end{frame}

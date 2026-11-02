@@ -7,9 +7,9 @@
 %    * capa, páginas de seção e encerramento em azul-petróleo sólido;
 %    * caixas caixadestaque, caixaambar e caixatitulo.
 %  Uso (no preâmbulo de cada módulo, após \documentclass{beamer}):
-%      \makeatletter\def\input@path{{../estilo/}{estilo/}}\makeatother
+%      \makeatletter\def\input@path{{../../estilo/}{../estilo/}{estilo/}}\makeatother
 %      \usepackage{devmobile}
-%      \modulo{03}{Título do módulo}{Subtítulo}
+%      \modulo[Flutter]{05}{Título do módulo}{Subtítulo}   (sem [..] = módulo comum)
 % =============================================================================
 \NeedsTeXFormat{LaTeX2e}
 \ProvidesPackage{devmobile}[2026/11/01 Estilo dos slides DevMobile (modelo da casa)]
@@ -29,7 +29,7 @@
 \RequirePackage{multicol}
 \RequirePackage{ifthen}
 \RequirePackage{tikz}
-\usetikzlibrary{arrows.meta,positioning,shapes.geometric,shapes.misc,calc,fit,backgrounds,
+\usetikzlibrary{arrows.meta,positioning,shapes.geometric,shapes.misc,shapes.multipart,calc,fit,backgrounds,
   shadows,decorations.pathmorphing,decorations.pathreplacing}
 \RequirePackage[most]{tcolorbox}
 \tcbuselibrary{listings}
@@ -52,17 +52,33 @@
 \definecolor{vermelhoerro}{HTML}{A33B20}
 
 % ------------------------------------------------------- metadados do curso --
-\newcommand{\nomecurso}{Desenvolvimento de Aplicativos Mobile}
+\newcommand{\nomecurso}{Desenvolvimento Mobile}
 \newcommand{\autorcurso}{Prof. Dr. Francisco dos Santos Viana}
 \newcommand{\localcurso}{São Luís -- Maranhão -- Brasil}
 \newcommand{\anocurso}{\the\year}
 \newcommand{\nummodulo}{00}
+\newcommand{\nivelmodulo}{Iniciante}
 
-% \modulo{número}{título}{subtítulo}
-\newcommand{\modulo}[3]{%
-  \renewcommand{\nummodulo}{#1}%
-  \title[Módulo #1 · #2]{#2}%
-  \subtitle{#3}%
+\newcommand{\trilhamodulo}{}
+\newcommand{\rotulotrilha}{COMUM ÀS TRILHAS}
+
+% \modulo[trilha]{número}{título}{subtítulo}
+%   trilha: Kotlin, Flutter ou vazio (módulo comum às duas trilhas)
+%   nível pelo número: 00--07 Iniciante, 08--15 Intermediário, 16--20 Avançado
+\newcommand{\modulo}[4][]{%
+  \renewcommand{\nummodulo}{#2}%
+  \def\trilhamodulo{#1}%
+  \ifx\trilhamodulo\@empty
+    \renewcommand{\rotulotrilha}{COMUM ÀS TRILHAS}%
+    \title[Módulo #2 · #3]{#3}%
+  \else
+    \renewcommand{\rotulotrilha}{TRILHA \MakeUppercase{#1}}%
+    \title[#1 · Módulo #2 · #3]{#3}%
+  \fi
+  \ifnum#2<8\relax\renewcommand{\nivelmodulo}{Iniciante}%
+  \else\ifnum#2<16\relax\renewcommand{\nivelmodulo}{Intermediário}%
+  \else\renewcommand{\nivelmodulo}{Avançado}\fi\fi
+  \subtitle{#4}%
   \author{\autorcurso}%
   \date{\localcurso\quad$\cdot$\quad\anocurso}%
 }
@@ -128,7 +144,7 @@
     \fill[ambar] (current page.north west) rectangle ([xshift=0.22cm]current page.south west);
     \node[anchor=south west,font=\footnotesize\bfseries,text=ambarclaro]
       at ([xshift=1.45cm,yshift=2.75cm]current page.west)
-      {\MakeUppercase{\nomecurso}\quad$\cdot$\quad MÓDULO \nummodulo};
+      {\MakeUppercase{\nomecurso}\quad$\cdot$\quad MÓDULO \nummodulo\quad$\cdot$\quad \rotulotrilha\quad$\cdot$\quad NÍVEL \MakeUppercase{\nivelmodulo}};
     \node[anchor=north west,text width=0.78\paperwidth,align=left]
       at ([xshift=1.4cm,yshift=2.6cm]current page.west)
       {\color{white}\LARGE\bfseries\inserttitle};
@@ -149,9 +165,9 @@
 \begin{frame}[plain,noframenumbering]
   \begin{tikzpicture}[remember picture,overlay]
     \fill[azulpetroleo] (current page.north west) rectangle (current page.south east);
-    \node[anchor=west,text width=0.8\paperwidth] at ([xshift=1.2cm,yshift=0.3cm]current page.west)
-      {\color{white}\Huge\bfseries\insertsectionhead};
-    \draw[ambar,line width=2.5pt] ([xshift=1.2cm,yshift=-0.9cm]current page.west) -- ++(3.2,0);
+    \node[anchor=south west,text width=0.85\paperwidth,inner sep=0pt] (titulosecao) at ([xshift=1.2cm,yshift=-0.2cm]current page.west)
+      {\color{white}\Huge\bfseries\raggedright\hyphenpenalty=10000\exhyphenpenalty=10000 \insertsectionhead\par};
+    \draw[ambar,line width=2.5pt] ([yshift=-0.55cm]titulosecao.south west) -- ++(3.2,0);
   \end{tikzpicture}
 \end{frame}}
 
@@ -220,6 +236,30 @@
   before upper={{\bfseries\color{azulpetroleo}#1}\par\vspace{2pt}}}
 \newtcolorbox{erro}[1][Erro comum]{casafaixa, colback=vermelhoerro!6, colframe=vermelhoerro,
   before upper={{\bfseries\color{vermelhoerro}#1}\par\vspace{2pt}}}
+% ------------------------------------------------- caixas didáticas ----
+% definição formal de um termo
+\newtcolorbox{definicao}[1][Definição]{casatitulo, colframe=azulprofundo, colbacktitle=azulprofundo, title={#1}}
+% como a tecnologia funciona por baixo dos panos
+\newtcolorbox{pordentro}[1][Por dentro]{casatitulo, colframe=cinzamedio, colbacktitle=cinzamedio, title={#1}}
+% analogia com o dia a dia
+\newtcolorbox{analogia}[1][Analogia]{casafaixa, colback=verdeok!7, colframe=verdeok,
+  before upper={{\bfseries\color{verdeok}#1}\par\vspace{2pt}}}
+% contexto histórico
+\newtcolorbox{historia}[1][Um pouco de história]{casafaixa, colback=cinzaclaro!55, colframe=cinzamedio,
+  before upper={{\bfseries\color{cinzatexto}#1}\par\vspace{2pt}}}
+
+% glossário do módulo:  \begin{glossario} Termo & significado \\ ... \end{glossario}
+% (argumento opcional: largura da coluna de termos)
+\newenvironment{glossario}[1][3.1cm]{%
+  \footnotesize\renewcommand{\arraystretch}{1.2}%
+  \tabularx{\textwidth}{@{}>{\leavevmode\bfseries\color{azulpetroleo}\raggedright\arraybackslash}p{#1} L@{}}%
+  \toprule \cabecalho{Termo} & \cabecalho{Significado} \\ \midrule}%
+  {\bottomrule\endtabularx}
+
+% questões de revisão e respostas comentadas
+\newenvironment{questoes}{\begin{enumerate}\small\setlength{\itemsep}{4pt}}{\end{enumerate}}
+\newenvironment{respostas}{\begin{enumerate}\scriptsize\setlength{\itemsep}{3pt}}{\end{enumerate}}
+
 % frase de efeito centralizada (estilo caixaambar)
 \newtcolorbox{destaque}[1][]{casafaixa, colback=ambarclaro!35, colframe=ambar, halign=center,
   top=5pt, bottom=5pt, #1}
@@ -247,19 +287,47 @@
 }
 \lstdefinelanguage{Dart}{
   alsoletter={@},
-  morekeywords={import,class,extends,implements,with,mixin,abstract,final,const,var,void,
-    if,else,for,while,do,return,switch,case,default,break,continue,new,this,super,null,true,
-    false,async,await,yield,try,catch,finally,throw,static,late,required,enum,dynamic,is,as,
-    in,get,set,sealed,base,interface,record},
-  morekeywords=[2]{String,int,double,bool,num,List,Map,Set,Future,Stream,Widget,
-    StatelessWidget,StatefulWidget,State,BuildContext,Text,Column,Row,Scaffold,MaterialApp,
-    Center,ElevatedButton,AppBar,ListView,Padding,EdgeInsets},
-  morekeywords=[3]{@override,@required,@immutable},
+  morekeywords={import,export,library,part,show,hide,as,class,extends,implements,with,mixin,
+    abstract,final,const,var,void,if,else,for,while,do,return,switch,case,default,break,
+    continue,new,this,super,null,true,false,async,await,yield,try,catch,on,finally,throw,
+    rethrow,static,late,required,enum,dynamic,is,in,get,set,sealed,base,interface,typedef,
+    factory,operator,extension,external,assert,covariant,deferred,when,Function},
+  morekeywords=[2]{String,int,double,bool,num,List,Map,Set,Iterable,Future,FutureOr,Stream,
+    StreamController,StreamSubscription,Duration,DateTime,Object,Never,Record,Uint8List,
+    ByteData,Endian,Widget,StatelessWidget,StatefulWidget,State,BuildContext,Text,Column,Row,
+    Stack,Container,Scaffold,MaterialApp,AppBar,Center,Padding,EdgeInsets,ElevatedButton,
+    FilledButton,OutlinedButton,TextButton,IconButton,ListView,GridView,Icon,Icons,Card,
+    ListTile,Expanded,Flexible,SizedBox,Colors,Color,ThemeData,ColorScheme,TextStyle,
+    ChangeNotifier,ValueNotifier,ListenableBuilder,ValueListenableBuilder,StreamBuilder,
+    FutureBuilder,Navigator,GoRouter,GoRoute,Isolate,Completer,Timer,Response,Request,Router,
+    Pipeline,Key,Theme,MediaQuery,LayoutBuilder,TextField,TextEditingController,Switch,
+    Checkbox,Slider,Image,FloatingActionButton,NavigationBar,NavigationDestination,
+    SafeArea,Align,Positioned,Wrap,Divider,CircularProgressIndicator,SnackBar},
+  morekeywords=[3]{@override,@required,@immutable,@pragma,@JsonSerializable,@JsonKey,
+    @DriftDatabase,@riverpod,@freezed,@visibleForTesting,@protected},
   sensitive=true,
   morecomment=[l]{//},
   morecomment=[s]{/*}{*/},
   morestring=[b]",
   morestring=[b]',
+}
+\lstdefinelanguage{YAML}{
+  morekeywords={true,false,null},
+  sensitive=true,
+  morecomment=[l]{\#},
+  morestring=[b]",
+  morestring=[b]',
+}
+\lstdefinelanguage{Swift}{
+  morekeywords={import,func,let,var,guard,else,return,class,struct,enum,protocol,extension,
+    if,in,for,while,switch,case,default,self,true,false,nil,override,init,private,public,
+    static,async,await,throws,try,as,is},
+  morekeywords=[2]{FlutterMethodChannel,FlutterBinaryMessenger,FlutterMethodNotImplemented,
+    FlutterError,UIDevice,Int,Double,String,Bool},
+  sensitive=true,
+  morecomment=[l]{//},
+  morecomment=[s]{/*}{*/},
+  morestring=[b]",
 }
 \lstdefinelanguage{TypeScript}{
   morekeywords={import,from,export,default,const,let,var,function,return,if,else,for,while,
@@ -326,7 +394,7 @@
   toptitle=0.5pt,bottomtitle=0.5pt,#1}
 
 % código em linha (sem caracteres especiais de TeX: use \_ \# \{ \})
-\newcommand{\cod}[1]{{\ttfamily\ifcodclaro\else\color{azulprofundo}\fi#1}}
+\newcommand{\cod}[1]{\leavevmode{\ttfamily\ifcodclaro\else\color{azulprofundo}\fi#1}}
 \newcommand{\arq}[1]{{\ttfamily\color{ambar!70!black}#1}}
 \newcommand{\termo}[1]{\textbf{\textcolor{azulpetroleo}{#1}}}
 

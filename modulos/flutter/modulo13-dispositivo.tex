@@ -1,0 +1,1145 @@
+\documentclass[aspectratio=169,10pt]{beamer}
+\makeatletter\def\input@path{{../../estilo/}{../estilo/}{estilo/}}\makeatother
+\usepackage{devmobile}
+\modulo[Flutter]{13}{Recursos do Dispositivo e IoT}{Permissões, câmera, QR code, GPS e mapas, sensores, biometria, NFC, notificações, segundo plano, arquivos, áudio, Bluetooth LE com ESP32, serial USB com Arduino e MQTT}
+
+\begin{document}
+\capa
+
+\begin{frame}{Objetivos do módulo}
+  \begin{conceito}[Ao final deste módulo você será capaz de]
+    \begin{itemize}
+      \item Pedir permissões corretamente no Android e no iOS.
+      \item Usar câmera, galeria, leitor de QR code, GPS, mapas e sensores.
+      \item Proteger ações com biometria e ler etiquetas NFC.
+      \item Exibir notificações locais e executar tarefas em segundo plano.
+      \item Compartilhar arquivos, abrir links, tocar e gravar áudio.
+      \item Comunicar-se com placas ESP32 e Arduino por Bluetooth LE, USB serial e MQTT.
+    \end{itemize}
+  \end{conceito}
+\end{frame}
+
+\sumario
+
+\input{../fundamentos/f13-dispositivo}
+
+% =============================================================================
+\section{Como o Flutter acessa o hardware}
+
+\begin{frame}{Plugins: Dart por cima, nativo por baixo}
+  \begin{columns}[c]
+    \begin{column}{0.46\textwidth}
+      \centering
+      \begin{tikzpicture}[node distance=3mm]
+        \node[caixa,minimum width=4.6cm] (d) {Seu código Dart};
+        \node[caixapetroleo,minimum width=4.6cm,below=of d] (p) {Plugin (\cod{geolocator}, \cod{camera}\ldots)};
+        \node[caixa,minimum width=2.2cm,below=5mm of p.south west,anchor=north west] (a) {Android\\ \tiny Kotlin/Java};
+        \node[caixa,minimum width=2.2cm,below=5mm of p.south east,anchor=north east] (i) {iOS\\ \tiny Swift/ObjC};
+        \node[caixaescura,minimum width=4.6cm,below=10mm of p] (h) {Hardware e sistema};
+        \draw[seta] (d) -- (p);
+        \draw[seta] (p.south -| a) -- node[rotulo,left]{\tiny canal} (a);
+        \draw[seta] (p.south -| i) -- node[rotulo,right]{\tiny canal} (i);
+        \draw[seta] (a) -- (a |- h.north); \draw[seta] (i) -- (i |- h.north);
+      \end{tikzpicture}
+    \end{column}
+    \begin{column}{0.52\textwidth}
+      \begin{conceito}[Plugin]
+        Pacote com uma API em Dart e implementações nativas para cada plataforma, ligadas por \textbf{canais de plataforma} (Módulo 19 mostra como criar o seu).
+      \end{conceito}
+      \begin{dica}[Escolhendo um plugin no pub.dev]
+        Prefira selo \textbf{Flutter Favorite} ou publicador verificado (\cod{flutter.dev}, \cod{fluttercommunity.dev}); confira plataformas suportadas, data da última versão, \emph{issues} abertas e licença.
+      \end{dica}
+      \begin{atencao}
+        Recurso de hardware se testa em \textbf{aparelho real}. Emuladores simulam GPS e sensores, mas não Bluetooth, NFC ou USB.
+      \end{atencao}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% =============================================================================
+\section{Permissões}
+
+\begin{frame}[fragile]{Declarar nas duas plataformas}
+  \begin{columns}[T]
+    \begin{column}{0.5\textwidth}
+\begin{codigo}[title=android/app/src/main/AndroidManifest.xml]{XML}
+<uses-permission
+    android:name="android.permission.CAMERA" />
+<uses-permission android:name=
+    "android.permission.ACCESS_FINE_LOCATION" />
+<uses-permission android:name=
+    "android.permission.POST_NOTIFICATIONS" />
+\end{codigo}
+\begin{codigo}[title=ios/Runner/Info.plist]{XML}
+<key>NSCameraUsageDescription</key>
+<string>Fotografar equipamentos e ler QR codes.</string>
+<key>NSLocationWhenInUseUsageDescription</key>
+<string>Confirmar presença no laboratório.</string>
+\end{codigo}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \begin{conceito}[Duas etapas]
+        \textbf{Declarar}: manifesto (Android) e \cod{Info.plist} (iOS).\\
+        \textbf{Pedir}: em tempo de execução, no momento em que o recurso é usado.
+      \end{conceito}
+      \begin{erro}[Rejeição na App Store]
+        Falta de texto de uso no \cod{Info.plist} derruba o app no iOS; texto vago (``para funcionar'') reprova na revisão. Explique o benefício ao usuário.
+      \end{erro}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}[fragile]{Pedindo com \cod{permission\_handler}}
+  \begin{columns}[T]
+    \begin{column}{0.58\textwidth}
+\begin{codigo}[title=utils/permissoes.dart]{Dart}
+Future<bool> garantir(Permission p,
+    Future<bool> Function() explicar) async {
+  var status = await p.status;
+  if (status.isGranted || status.isLimited) return true;
+
+  if (await p.shouldShowRequestRationale &&
+      !await explicar()) return false;     // diálogo seu
+
+  status = await p.request();
+  if (status.isPermanentlyDenied) {
+    await openAppSettings();               // só o usuário
+    return false;
+  }
+  return status.isGranted || status.isLimited;
+}
+
+// várias de uma vez
+final r = await [Permission.bluetoothScan,
+    Permission.bluetoothConnect].request();
+\end{codigo}
+    \end{column}
+    \begin{column}{0.4\textwidth}
+      \begin{conceito}[Estados]
+        \cod{granted}, \cod{denied}, \cod{permanentlyDenied}, \cod{limited} (acesso parcial, como só algumas fotos) e \cod{restricted} (controle parental).
+      \end{conceito}
+      \begin{atencao}[iOS]
+        O \cod{permission\_handler} exige ativar cada permissão no \cod{ios/Podfile} (macros \cod{PERMISSION\_CAMERA=1} etc.).
+      \end{atencao}
+      \begin{dica}
+        Peça no contexto: ao tocar em ``Ler QR code'', não na abertura do app.
+      \end{dica}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% =============================================================================
+\section{Câmera, galeria e QR code}
+
+\begin{frame}[fragile]{Foto rápida com \cod{image\_picker}}
+  \begin{columns}[T]
+    \begin{column}{0.54\textwidth}
+\begin{codigo}[title=Foto do equipamento]{Dart}
+final _picker = ImagePicker();
+
+Future<XFile?> fotografar() => _picker.pickImage(
+      source: ImageSource.camera,
+      maxWidth: 1600,          // reduz o arquivo
+      imageQuality: 80,
+    );
+
+Future<List<XFile>> escolherDaGaleria() =>
+    _picker.pickMultiImage(limit: 5);
+
+// Android: o sistema pode encerrar o app
+// enquanto a câmera está aberta
+Future<void> recuperarPerdidos() async {
+  final r = await _picker.retrieveLostData();
+  if (!r.isEmpty) salvar(r.files!);
+}
+\end{codigo}
+    \end{column}
+    \begin{column}{0.44\textwidth}
+      \begin{conceito}[Quando usar]
+        Para tirar uma foto ou escolher imagens usando o app de câmera e o seletor do próprio sistema. Também grava vídeo com \cod{pickVideo}.
+      \end{conceito}
+      \begin{dica}[Galeria sem permissão]
+        No Android, o \textbf{Photo Picker} do sistema dispensa permissão de armazenamento: o usuário escolhe e o app recebe só aquelas fotos.
+      \end{dica}
+      \begin{dica}
+        \cod{XFile} vem do pacote \cod{cross\_file}: funciona também na web.
+      \end{dica}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}[fragile]{Câmera dentro do app com \cod{camera}}
+  \begin{columns}[T]
+    \begin{column}{0.58\textwidth}
+\begin{codigo}[title=Tela de captura (trechos do State)]{Dart}
+CameraController? _ctrl;
+
+Future<void> _iniciar() async {
+  final cams = await availableCameras();
+  final traseira = cams.firstWhere(
+      (c) => c.lensDirection == CameraLensDirection.back);
+  final ctrl = CameraController(traseira,
+      ResolutionPreset.high, enableAudio: false);
+  await ctrl.initialize();
+  if (mounted) setState(() => _ctrl = ctrl);
+}
+
+@override
+void didChangeAppLifecycleState(AppLifecycleState s) {
+  if (s == AppLifecycleState.inactive) _ctrl?.dispose();
+  if (s == AppLifecycleState.resumed) _iniciar();
+}
+
+// State com o mixin WidgetsBindingObserver
+// build: CameraPreview(_ctrl!)
+// botão: final foto = await _ctrl!.takePicture();
+\end{codigo}
+    \end{column}
+    \begin{column}{0.4\textwidth}
+      \begin{conceito}[Quando usar]
+        Câmera como parte da interface: moldura sobre a imagem, fotos em sequência, quadros para visão computacional (\cod{startImageStream}).
+      \end{conceito}
+      \begin{atencao}[Ciclo de vida]
+        Libere a câmera quando o app sai de cena e reabra ao voltar; outro app pode precisar dela.
+      \end{atencao}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}[fragile]{QR code e código de barras}
+  \begin{columns}[T]
+    \begin{column}{0.56\textwidth}
+\begin{codigo}[title=Lendo a etiqueta do equipamento]{Dart}
+final _scanner = MobileScannerController(
+    formats: const [BarcodeFormat.qrCode]);
+
+@override
+Widget build(BuildContext context) => MobileScanner(
+  controller: _scanner,
+  onDetect: (captura) {
+    final valor = captura.barcodes.first.rawValue;
+    if (valor == null) return;
+    final uri = Uri.tryParse(valor);
+    if (uri?.scheme == 'labmonitor') {
+      _scanner.stop();
+      context.go('/equipamentos/${uri!.pathSegments.last}');
+    }
+  },
+);
+\end{codigo}
+\begin{codigo}[title=Gerando a etiqueta (qr\_flutter)]{Dart}
+QrImageView(data: 'labmonitor://eq/42', size: 180)
+\end{codigo}
+    \end{column}
+    \begin{column}{0.42\textwidth}
+      \begin{conceito}[\cod{mobile\_scanner}]
+        Lê QR code, EAN, Code 128 e outros formatos usando ML Kit (Android) e Vision (iOS), sem internet.
+      \end{conceito}
+      \begin{atencao}
+        Valide o conteúdo lido: um QR code pode conter qualquer texto. Aceite só o seu esquema e IDs válidos.
+      \end{atencao}
+      \begin{dica}
+        Pare o leitor depois da primeira leitura válida para não navegar várias vezes.
+      \end{dica}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% =============================================================================
+\section{Localização e mapas}
+
+\begin{frame}[fragile]{GPS com \cod{geolocator}}
+  \begin{columns}[T]
+    \begin{column}{0.58\textwidth}
+\begin{codigo}[title=data/services/localizacao\_service.dart]{Dart}
+Future<Position> posicaoAtual() async {
+  if (!await Geolocator.isLocationServiceEnabled()) {
+    throw const LocalizacaoDesligada();
+  }
+  var p = await Geolocator.checkPermission();
+  if (p == LocationPermission.denied) {
+    p = await Geolocator.requestPermission();
+  }
+  if (p == LocationPermission.deniedForever) {
+    throw const PermissaoNegada();   // openAppSettings()
+  }
+  return Geolocator.getCurrentPosition();
+}
+
+Stream<Position> acompanhar() =>
+    Geolocator.getPositionStream(locationSettings:
+        const LocationSettings(distanceFilter: 10));
+
+bool noLab(Position p, Lab l) => Geolocator.distanceBetween(
+    p.latitude, p.longitude, l.lat, l.lng) < 50;
+\end{codigo}
+    \end{column}
+    \begin{column}{0.4\textwidth}
+      \begin{conceito}[Precisão e bateria]
+        \cod{LocationSettings} define a precisão (\cod{high} usa GPS e gasta mais) e o \cod{distanceFilter} (emitir só após andar N metros).
+      \end{conceito}
+      \begin{dica}[Check-in]
+        \cod{noLab} é uma cerca virtual (\emph{geofence}) simples: presença só a menos de 50\,m.
+      \end{dica}
+      \begin{atencao}
+        Localização em segundo plano exige permissão extra e justificativa nas lojas.
+      \end{atencao}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}[fragile]{Mapas}
+  \begin{columns}[T]
+    \begin{column}{0.5\textwidth}
+\begin{codigo}[title=google\_maps\_flutter]{Dart}
+GoogleMap(
+  initialCameraPosition: const CameraPosition(
+      target: LatLng(-2.5560, -44.3080), zoom: 17),
+  myLocationEnabled: true,
+  markers: {
+    const Marker(
+      markerId: MarkerId('lab-3'),
+      position: LatLng(-2.5560, -44.3080),
+      infoWindow: InfoWindow(title: 'Lab. 3'),
+    ),
+  },
+)
+\end{codigo}
+      \begin{atencao}
+        Exige chave da Google Maps Platform, restrita ao seu app.
+      \end{atencao}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+\begin{codigo}[title=flutter\_map + OpenStreetMap]{Dart}
+FlutterMap(
+  options: const MapOptions(
+      initialCenter: LatLng(-2.5560, -44.3080),
+      initialZoom: 17),
+  children: [
+    TileLayer(
+      urlTemplate: 'https://tile.openstreetmap'
+          '.org/{z}/{x}/{y}.png',
+      userAgentPackageName: 'br.edu.labmonitor'),
+    const MarkerLayer(markers: [Marker(
+      point: LatLng(-2.5560, -44.3080),
+      child: Icon(Icons.science))]),
+  ],
+)
+\end{codigo}
+      \begin{dica}
+        Sem chave; mostre a atribuição do OSM e, com muito tráfego, use outro provedor.
+      \end{dica}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% =============================================================================
+\section{Sensores e dados do aparelho}
+
+\begin{frame}[fragile]{Sensores de movimento com \cod{sensors\_plus}}
+  \begin{columns}[T]
+    \begin{column}{0.56\textwidth}
+\begin{codigo}[title=Agitar para atualizar]{Dart}
+StreamSubscription<UserAccelerometerEvent>? _sub;
+DateTime _ultimo = DateTime(0);
+
+void detectarAgitar(VoidCallback aoAgitar) {
+  _sub = userAccelerometerEventStream(
+    samplingPeriod: SensorInterval.gameInterval,
+  ).listen((e) {
+    final a = sqrt(e.x * e.x + e.y * e.y + e.z * e.z);
+    final agora = DateTime.now();
+    if (a > 15 && agora.difference(_ultimo).inSeconds > 1) {
+      _ultimo = agora;
+      aoAgitar();
+    }
+  });
+}
+
+void parar() => _sub?.cancel();
+\end{codigo}
+    \end{column}
+    \begin{column}{0.42\textwidth}
+      \scriptsize
+      \begin{tabularx}{\linewidth}{@{}l L@{}}
+        \toprule
+        \cabecalho{Stream} & \cabecalho{Mede} \\
+        \midrule
+        \cod{accelerometer\ldots} & aceleração com gravidade (m/s\textsuperscript{2}) \\
+        \cod{userAccelerometer\ldots} & aceleração sem gravidade \\
+        \cod{gyroscope\ldots} & rotação (rad/s) \\
+        \cod{magnetometer\ldots} & campo magnético ($\mu$T) \\
+        \cod{barometer\ldots} & pressão (hPa) \\
+        \bottomrule
+      \end{tabularx}
+      \begin{atencao}
+        Sensores gastam bateria: cancele a assinatura quando a tela sai e use a menor frequência que resolve.
+      \end{atencao}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}[fragile]{Bateria, rede e dados do aparelho}
+  \begin{columns}[T]
+    \begin{column}{0.56\textwidth}
+\begin{codigo}[title=Pacotes ``plus'' da comunidade]{Dart}
+// battery_plus
+final bateria = Battery();
+final nivel = await bateria.batteryLevel;          // 0..100
+bateria.onBatteryStateChanged.listen((s) =>
+    carregando = s == BatteryState.charging);
+
+// connectivity_plus
+Connectivity().onConnectivityChanged.listen((tipos) =>
+    offline = tipos.contains(ConnectivityResult.none));
+
+// device_info_plus e package_info_plus
+final info = await DeviceInfoPlugin().androidInfo;
+log('${info.model} - Android SDK ${info.version.sdkInt}');
+final app = await PackageInfo.fromPlatform();
+log('LabMonitor ${app.version}+${app.buildNumber}');
+
+// wakelock_plus: tela sempre ligada no modo painel
+WakelockPlus.enable();
+\end{codigo}
+    \end{column}
+    \begin{column}{0.42\textwidth}
+      \begin{conceito}[Usos no LabMonitor]
+        \begin{itemize}
+          \item Reduzir a frequência de leitura com bateria baixa.
+          \item Mostrar a faixa ``sem conexão''.
+          \item Enviar modelo, sistema e versão do app nos relatórios de erro.
+          \item Manter o tablet do laboratório com a tela acesa.
+        \end{itemize}
+      \end{conceito}
+      \begin{dica}
+        Estes pacotes são mantidos pela \textbf{Flutter Community} (\cod{plus\_plugins}).
+      \end{dica}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% =============================================================================
+\section{Biometria e NFC}
+
+\begin{frame}[fragile]{Biometria com \cod{local\_auth}}
+  \begin{columns}[T]
+    \begin{column}{0.56\textwidth}
+\begin{codigo}[title=Confirmar uma ação sensível (local\_auth 3)]{Dart}
+final _auth = LocalAuthentication();
+
+Future<bool> confirmarIdentidade() async {
+  final pode = await _auth.canCheckBiometrics ||
+      await _auth.isDeviceSupported();
+  if (!pode) return false;
+  try {
+    return await _auth.authenticate(
+      localizedReason: 'Confirme para liberar a bancada',
+      biometricOnly: false,       // aceita PIN/padrão
+      persistAcrossBackgrounding: true,
+    );
+  } on LocalAuthException {
+    return false;                 // cancelado, bloqueado...
+  }
+}
+\end{codigo}
+    \end{column}
+    \begin{column}{0.42\textwidth}
+      \begin{atencao}[Configuração]
+        Android: a \cod{MainActivity} deve estender \cod{FlutterFragmentActivity}. iOS: \cod{NSFaceIDUsageDescription} no \cod{Info.plist}.
+      \end{atencao}
+      \begin{conceito}[O que a biometria prova]
+        Só que o dono do aparelho está presente. Ela \textbf{desbloqueia} um segredo local (Módulo 10); não substitui o login no servidor.
+      \end{conceito}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}[fragile]{NFC: etiquetas nas bancadas}
+  \begin{columns}[T]
+    \begin{column}{0.56\textwidth}
+\begin{codigo}[title=Check-in por aproximação (flutter\_nfc\_kit)]{Dart}
+Future<String?> lerEtiqueta() async {
+  final disp = await FlutterNfcKit.nfcAvailability;
+  if (disp != NFCAvailability.available) return null;
+  try {
+    final tag = await FlutterNfcKit.poll(
+      timeout: const Duration(seconds: 15),
+      iosAlertMessage: 'Aproxime da etiqueta da bancada',
+    );
+    return tag.id;            // identificador único da tag
+  } finally {
+    await FlutterNfcKit.finish(iosAlertMessage: 'Pronto!');
+  }
+}
+\end{codigo}
+      \begin{dica}
+        Para ler ou gravar dados na tag (uma URL, um texto), use \cod{readNDEFRecords} e \cod{writeNDEFRecords}.
+      \end{dica}
+    \end{column}
+    \begin{column}{0.42\textwidth}
+      \begin{conceito}[NFC]
+        Comunicação a poucos centímetros. Etiquetas NTAG custam centavos e não precisam de bateria: ótimas para identificar bancadas e equipamentos.
+      \end{conceito}
+      \begin{atencao}[Configuração]
+        Android: permissão \cod{android.permission.NFC}. iOS: capacidade \emph{NFC Tag Reading} no Xcode e \cod{NFCReaderUsageDescription}; o iOS mostra uma folha de leitura própria.
+      \end{atencao}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% =============================================================================
+\section{Notificações e segundo plano}
+
+\begin{frame}[fragile]{Notificações locais}
+  \begin{columns}[T]
+    \begin{column}{0.58\textwidth}
+\begin{codigo}[title=flutter\_local\_notifications (versão 20+)]{Dart}
+final _notif = FlutterLocalNotificationsPlugin();
+const _android = AndroidInitializationSettings('@mipmap/ic_launcher');
+Future<void> iniciar() async {
+  await _notif.initialize(
+    settings: const InitializationSettings(android: _android,
+        iOS: DarwinInitializationSettings()),
+    onDidReceiveNotificationResponse: (r) =>
+        router.go(r.payload ?? '/'));
+  await _notif.resolvePlatformSpecificImplementation<
+          AndroidFlutterLocalNotificationsPlugin>()
+      ?.requestNotificationsPermission();   // Android 13+
+}
+
+const _alertas = NotificationDetails(
+  android: AndroidNotificationDetails('alertas', 'Alertas',
+      importance: Importance.high, priority: Priority.high));
+Future<void> alertar(int b, double t) => _notif.show(
+    id: b, title: 'Bancada $b', body: 'Temperatura: $t °C',
+    notificationDetails: _alertas, payload: '/bancadas/$b');
+\end{codigo}
+    \end{column}
+    \begin{column}{0.4\textwidth}
+      \begin{conceito}[Canais (Android 8+)]
+        Cada notificação pertence a um canal (\cod{'alertas'}); o usuário pode silenciar um canal sem perder os outros.
+      \end{conceito}
+      \begin{dica}
+        \cod{zonedSchedule} agenda lembretes (pacote \cod{timezone}).
+      \end{dica}
+      \begin{atencao}
+        Desde a versão 20 os parâmetros são nomeados; exemplos antigos não compilam.
+      \end{atencao}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}[fragile]{Trabalho em segundo plano}
+  \begin{columns}[T]
+    \begin{column}{0.54\textwidth}
+\begin{codigo}[title=Sincronização periódica (workmanager)]{Dart}
+@pragma('vm:entry-point')
+void despachante() {
+  Workmanager().executeTask((tarefa, dados) async {
+    WidgetsFlutterBinding.ensureInitialized();
+    await sincronizarLeituras();        // Módulo 11
+    return true;                        // sucesso
+  });
+}
+
+Future<void> agendar() async {
+  await Workmanager().initialize(despachante);
+  await Workmanager().registerPeriodicTask(
+    'sync-leituras', 'sincronizar',
+    frequency: const Duration(minutes: 15),
+    constraints: Constraints(
+        networkType: NetworkType.connected),
+  );
+}
+\end{codigo}
+    \end{column}
+    \begin{column}{0.44\textwidth}
+      \scriptsize
+      \begin{tabularx}{\linewidth}{@{}l L@{}}
+        \toprule
+        \cabecalho{Necessidade} & \cabecalho{Solução} \\
+        \midrule
+        tarefa adiável & WorkManager (Android, mín. 15\,min); BGTaskScheduler (iOS, quando o sistema quiser) \\
+        tarefa contínua & \emph{foreground service} com notificação fixa (\cod{flutter\_foreground\_task}) \\
+        BLE em segundo plano & iOS: modo \cod{bluetooth-central} \\
+        aviso do servidor & push com FCM (Módulo 12) \\
+        \bottomrule
+      \end{tabularx}
+      \begin{atencao}
+        O sistema decide quando rodar e encerra apps que gastam bateria. No Android 14+, todo \emph{foreground service} declara um tipo (\cod{connectedDevice}, \cod{location}\ldots).
+      \end{atencao}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% =============================================================================
+\section{Arquivos, links e áudio}
+
+\begin{frame}[fragile]{Compartilhar, escolher arquivos e abrir links}
+  \begin{columns}[T]
+    \begin{column}{0.56\textwidth}
+\begin{codigo}[title={share\_plus, file\_picker e url\_launcher}]{Dart}
+// enviar o relatório por qualquer app instalado
+await SharePlus.instance.share(ShareParams(
+  text: 'Relatório do Lab. 3 - outubro',
+  files: [XFile(caminhoCsv)],
+));
+
+// importar uma planilha de equipamentos
+final r = await FilePicker.platform.pickFiles(
+    type: FileType.custom, allowedExtensions: ['csv']);
+final arquivo = r?.files.single.path;
+
+// telefone, e-mail, mapa e navegador
+await launchUrl(Uri.parse('tel:+559832180000'));
+await launchUrl(Uri.parse('mailto:lab3@ifma.edu.br'));
+await launchUrl(Uri.parse('https://labmonitor.dev'),
+    mode: LaunchMode.externalApplication);
+\end{codigo}
+    \end{column}
+    \begin{column}{0.42\textwidth}
+      \begin{conceito}[\emph{Deep links}]
+        O \cod{go\_router} abre a rota certa quando o app é aberto por um link. Com \textbf{App Links} (Android) e \textbf{Universal Links} (iOS), \cod{https://labmonitor.dev/eq/42} abre o app em vez do navegador.
+      \end{conceito}
+      \begin{atencao}
+        Android 11+: declare em \cod{<queries>} os esquemas (\cod{tel}, \cod{mailto}, \cod{https}) usados com \cod{canLaunchUrl}.
+      \end{atencao}
+      \begin{dica}
+        A API antiga \cod{Share.shareXFiles} foi substituída por \cod{SharePlus.instance.share}.
+      \end{dica}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}[fragile]{Vibração, som, voz e microfone}
+  \begin{columns}[T]
+    \begin{column}{0.56\textwidth}
+\begin{codigo}[title=Alarme de temperatura]{Dart}
+HapticFeedback.heavyImpact();        // já vem no Flutter
+
+final player = AudioPlayer();        // just_audio
+await player.setAsset('assets/sons/alarme.mp3');
+await player.setLoopMode(LoopMode.one);
+player.play();
+
+final tts = FlutterTts();            // flutter_tts
+await tts.setLanguage('pt-BR');
+await tts.speak('Temperatura alta na bancada três');
+
+final gravador = AudioRecorder();    // record
+if (await gravador.hasPermission()) {
+  await gravador.start(const RecordConfig(), path: destino);
+}
+final arquivo = await gravador.stop();
+\end{codigo}
+    \end{column}
+    \begin{column}{0.42\textwidth}
+      \scriptsize
+      \begin{tabularx}{\linewidth}{@{}l L@{}}
+        \toprule
+        \cabecalho{Pacote} & \cabecalho{Para quê} \\
+        \midrule
+        \cod{HapticFeedback} & toque tátil curto \\
+        \cod{vibration} & padrões longos de vibração \\
+        \cod{just\_audio} & tocar áudio local ou remoto \\
+        \cod{flutter\_tts} & texto em fala \\
+        \cod{speech\_to\_text} & fala em texto \\
+        \cod{record} & gravar do microfone \\
+        \bottomrule
+      \end{tabularx}
+      \begin{atencao}
+        O microfone exige permissão nas duas plataformas (\cod{RECORD\_AUDIO} no Android).
+      \end{atencao}
+      \begin{dica}
+        Alertas importantes: som, vibração \textbf{e} texto.
+      \end{dica}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% =============================================================================
+\section{Bluetooth Low Energy com ESP32}
+
+\begin{frame}{Conceitos de BLE}
+  \begin{columns}[c]
+    \begin{column}{0.5\textwidth}
+      \centering
+      \begin{tikzpicture}[node distance=3mm]
+        \node[caixa,minimum width=2.4cm] (app) {App\\ \tiny \textbf{central}};
+        \node[caixaescura,minimum width=2.6cm,right=12mm of app] (dev) {ESP32\\ \tiny \textbf{periférico}};
+        \draw[setaambar,<->] (app) -- node[rotulo,above]{\tiny GATT} (dev);
+        \node[caixapetroleo,minimum width=5cm,below=6mm of $(app)!0.5!(dev)$] (svc) {\textbf{Serviço} \tiny UUID 4fafc201-\ldots{} (Ambiente)};
+        \node[caixaambar,minimum width=4.4cm,below=of svc] (c1) {\textbf{Característica} Temperatura\\ \tiny UUID beb5483e-\ldots{} \quad READ $\cdot$ NOTIFY};
+        \node[caixaambar,minimum width=4.4cm,below=of c1] (c2) {\textbf{Característica} Comando\\ \tiny WRITE};
+      \end{tikzpicture}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \begin{itemize}
+        \item \termo{Central} procura e conecta; \termo{periférico} anuncia (\emph{advertising}) e serve dados.
+        \item \termo{GATT}: dados organizados em \textbf{serviços} e \textbf{características}, cada um com um UUID.
+        \item Operações: \textbf{read}, \textbf{write} e \textbf{notify} (o periférico envia quando o valor muda).
+        \item \termo{MTU}: tamanho máximo de cada pacote (23 a 512 bytes).
+      \end{itemize}
+      \begin{atencao}
+        BLE é diferente do Bluetooth clássico: módulos HC-05/HC-06 do Arduino \textbf{não} são BLE. Use ESP32, HM-10 ou nRF52.
+      \end{atencao}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}[fragile]{Firmware do ESP32 (Arduino)}
+  \begin{columns}[T]
+    \begin{column}{0.56\textwidth}
+\begin{codigo}[title=labmonitor\_ble.ino --- configuração]{CPP}
+#include <BLEDevice.h>
+#include <BLE2902.h>
+#define SVC_UUID  "4fafc201-1fb5-459e-8fcc-c5c9c331914b"
+#define TEMP_UUID "beb5483e-36e1-4688-b7f5-ea07361b26a8"
+BLECharacteristic *temp;
+void setup() {
+  BLEDevice::init("LabMonitor-B3");
+  BLEServer *srv = BLEDevice::createServer();
+  BLEService *svc = srv->createService(SVC_UUID);
+  temp = svc->createCharacteristic(TEMP_UUID,
+    BLECharacteristic::PROPERTY_READ |
+    BLECharacteristic::PROPERTY_NOTIFY);
+  temp->addDescriptor(new BLE2902());   // CCCD
+  svc->start();
+  BLEDevice::getAdvertising()->addServiceUUID(SVC_UUID);
+  BLEDevice::startAdvertising();
+}
+\end{codigo}
+    \end{column}
+    \begin{column}{0.42\textwidth}
+\begin{codigo}[title=--- laço principal]{CPP}
+void loop() {
+  // centésimos de grau: 24,87 °C -> 2487
+  int16_t c = round(lerTemperatura() * 100);
+  temp->setValue((uint8_t*)&c, sizeof(c));
+  temp->notify();
+  delay(1000);
+}
+\end{codigo}
+      \begin{conceito}[Formato binário]
+        \cod{int16\_t} em centésimos de grau: 2 bytes, \emph{little-endian}.
+      \end{conceito}
+      \begin{atencao}[Contrato]
+        Documente UUIDs, escala e ordem dos bytes; gere UUIDs próprios.
+      \end{atencao}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}[fragile]{Permissões e licença do \cod{flutter\_blue\_plus}}
+  \begin{columns}[T]
+    \begin{column}{0.56\textwidth}
+\begin{codigo}[title=AndroidManifest.xml]{XML}
+<uses-permission android:name=
+    "android.permission.BLUETOOTH_SCAN"
+    android:usesPermissionFlags="neverForLocation" />
+<uses-permission android:name=
+    "android.permission.BLUETOOTH_CONNECT" />
+<!-- Android 11 ou anterior -->
+<uses-permission android:name=
+    "android.permission.ACCESS_FINE_LOCATION"
+    android:maxSdkVersion="30" />
+\end{codigo}
+\begin{codigo}[title=Info.plist]{XML}
+<key>NSBluetoothAlwaysUsageDescription</key>
+<string>Conectar aos sensores das bancadas.</string>
+\end{codigo}
+    \end{column}
+    \begin{column}{0.42\textwidth}
+      \begin{atencao}[Licença do pacote]
+        Desde a versão 2.0 (2025) o \cod{flutter\_blue\_plus} usa licença própria, que já mudou mais de uma vez: uso pessoal, educacional e sem fins lucrativos é livre; uso comercial pode exigir licença paga, e o pacote envia telemetria de licença no \emph{build}. Leia o \cod{LICENSE} da versão que adotar.
+      \end{atencao}
+      \begin{dica}[Alternativas]
+        \cod{universal\_ble} e \cod{bluetooth\_low\_energy}; compare licença, plataformas e manutenção.
+      \end{dica}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}[fragile]{Procurando o ESP32}
+  \begin{columns}[T]
+    \begin{column}{0.58\textwidth}
+\begin{codigo}[title=data/services/ble\_service.dart]{Dart}
+final svcUuid = Guid('4fafc201-1fb5-459e-8fcc-c5c9c331914b');
+final tempUuid = Guid('beb5483e-36e1-4688-b7f5-ea07361b26a8');
+
+Future<List<ScanResult>> procurar() async {
+  await FlutterBluePlus.adapterState
+      .where((s) => s == BluetoothAdapterState.on).first;
+  final achados = <DeviceIdentifier, ScanResult>{};
+  final sub = FlutterBluePlus.onScanResults.listen((rs) {
+    for (final r in rs) achados[r.device.remoteId] = r;
+  });
+  FlutterBluePlus.cancelWhenScanComplete(sub);
+  await FlutterBluePlus.startScan(
+      withServices: [svcUuid],
+      timeout: const Duration(seconds: 10));
+  await FlutterBluePlus.isScanning
+      .where((v) => v == false).first;
+  return achados.values.toList();
+}
+\end{codigo}
+    \end{column}
+    \begin{column}{0.4\textwidth}
+      \begin{conceito}[\cod{ScanResult}]
+        Traz o dispositivo, o nome anunciado (\cod{advertisementData.advName}) e o \textbf{RSSI} (força do sinal, que indica a proximidade).
+      \end{conceito}
+      \begin{dica}
+        O filtro \cod{withServices} faz o sistema entregar só os seus dispositivos e economiza bateria.
+      \end{dica}
+      \begin{atencao}
+        Peça \cod{bluetoothScan} e \cod{bluetoothConnect} antes de procurar e trate o Bluetooth desligado.
+      \end{atencao}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}[fragile]{Conectando e recebendo a temperatura}
+  \begin{columns}[T]
+    \begin{column}{0.58\textwidth}
+\begin{codigo}[title=Notify vira Stream<double>]{Dart}
+Stream<double> temperatura(BluetoothDevice d) async* {
+  await d.connect();
+  final servicos = await d.discoverServices();
+  final c = servicos
+      .firstWhere((s) => s.uuid == svcUuid)
+      .characteristics
+      .firstWhere((c) => c.uuid == tempUuid);
+  await c.setNotifyValue(true);
+  yield* c.onValueReceived.map((bytes) {
+    final v = ByteData.sublistView(Uint8List.fromList(bytes))
+        .getInt16(0, Endian.little);
+    return v / 100;                 // centésimos -> °C
+  });
+}
+
+// enviar um comando
+await comando.write(utf8.encode('LED=1'));
+// ao sair: await d.disconnect();
+\end{codigo}
+    \end{column}
+    \begin{column}{0.4\textwidth}
+      \begin{conceito}[Fluxo]
+        Conectar $\rightarrow$ descobrir serviços $\rightarrow$ achar a característica $\rightarrow$ ativar notify $\rightarrow$ converter os bytes.
+      \end{conceito}
+      \begin{atencao}[Desconexões]
+        Observe \cod{d.connectionState}; ao reconectar, descubra os serviços de novo. Use \cod{d.cancelWhenDisconnected(sub)} para não acumular assinaturas.
+      \end{atencao}
+      \begin{dica}
+        O \cod{Stream} entra no view model como qualquer outro (Módulos 06 e 08).
+      \end{dica}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% =============================================================================
+\section{Serial USB com Arduino}
+
+\begin{frame}[fragile]{Arduino pelo cabo USB (Android)}
+  \begin{columns}[T]
+    \begin{column}{0.4\textwidth}
+\begin{codigo}[title=sensor\_serial.ino]{CPP}
+void setup() {
+  Serial.begin(115200);
+  pinMode(13, OUTPUT);
+}
+void loop() {
+  float t = analogRead(A0)
+      * (5.0 / 1023.0) * 100;  // LM35
+  Serial.print("T=");
+  Serial.println(t, 2);
+  if (Serial.available()) {
+    String cmd =
+        Serial.readStringUntil('\n');
+    digitalWrite(13,
+        cmd == "LED=1" ? HIGH : LOW);
+  }
+  delay(1000);
+}
+\end{codigo}
+    \end{column}
+    \begin{column}{0.58\textwidth}
+\begin{codigo}[title=Lendo linhas com usb\_serial]{Dart}
+Future<Stream<String>> abrirSerial() async {
+  final dispositivos = await UsbSerial.listDevices();
+  final porta = await dispositivos.first.create();
+  if (porta == null || !await porta.open()) {
+    throw const SerialIndisponivel();
+  }
+  await porta.setDTR(true);
+  await porta.setRTS(true);
+  await porta.setPortParameters(115200, UsbPort.DATABITS_8,
+      UsbPort.STOPBITS_1, UsbPort.PARITY_NONE);
+  return porta.inputStream!
+      .cast<List<int>>()
+      .transform(utf8.decoder)
+      .transform(const LineSplitter());      // "T=24.87"
+}
+\end{codigo}
+      \begin{atencao}
+        Só no Android, com cabo \textbf{OTG}; o sistema pede autorização ao conectar. O iOS não permite serial USB genérica.
+      \end{atencao}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% =============================================================================
+\section{MQTT e escolha do protocolo}
+
+\begin{frame}{MQTT: publicar e assinar}
+  \begin{center}
+  \begin{tikzpicture}[node distance=8mm]
+    \node[caixaescura,minimum width=2.6cm] (e1) {ESP32 bancada 3\\ \tiny publica};
+    \node[caixaescura,minimum width=2.6cm,below=4mm of e1] (e2) {ESP32 bancada 4\\ \tiny publica};
+    \node[caixaambarforte,minimum width=2.8cm,minimum height=14mm,right=16mm of $(e1)!0.5!(e2)$] (b) {\textbf{Broker}\\ \tiny Mosquitto, EMQX, HiveMQ};
+    \node[caixa,minimum width=2.6cm,right=16mm of b,yshift=6mm] (app) {App LabMonitor\\ \tiny assina \cod{ifma/dee/+/+/temp}};
+    \node[caixa,minimum width=2.6cm,right=16mm of b,yshift=-6mm] (db) {Servidor / histórico\\ \tiny assina \cod{ifma/\#}};
+    \draw[seta] (e1) -- node[rotulo,above,sloped]{\cod{ifma/dee/lab1/b3/temp}} (b);
+    \draw[seta] (e2) -- (b);
+    \draw[seta] (b) -- (app); \draw[seta] (b) -- (db);
+  \end{tikzpicture}
+  \end{center}
+  \begin{columns}[T]
+    \begin{column}{0.32\textwidth}
+      \begin{conceito}[Tópicos]
+        Hierarquia com \cod{/}. Curingas: \cod{+} (um nível) e \cod{\#} (todos os níveis abaixo).
+      \end{conceito}
+    \end{column}
+    \begin{column}{0.32\textwidth}
+      \begin{conceito}[QoS]
+        \textbf{0}: no máximo uma vez. \textbf{1}: pelo menos uma vez. \textbf{2}: exatamente uma vez.
+      \end{conceito}
+    \end{column}
+    \begin{column}{0.32\textwidth}
+      \begin{conceito}[Retained / LWT]
+        \emph{Retained} guarda o último valor do tópico. \emph{Last Will} avisa quando a placa cai.
+      \end{conceito}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}[fragile]{MQTT no app}
+  \begin{columns}[T]
+    \begin{column}{0.58\textwidth}
+\begin{codigo}[title=data/services/mqtt\_service.dart (mqtt\_client)]{Dart}
+Future<Stream<(String, double)>> leituras(String f) async {
+  final c = MqttServerClient.withPort(
+      'broker.labmonitor.ifma.edu.br', clienteId, 8883)
+    ..secure = true                     // TLS
+    ..keepAlivePeriod = 30
+    ..autoReconnect = true;
+  await c.connect(usuario, senha);
+  c.subscribe(f, MqttQos.atLeastOnce);
+  return c.updates!.expand((lote) => lote).map((m) {
+    final pub = m.payload as MqttPublishMessage;
+    final txt = MqttPublishPayload
+        .bytesToStringAsString(pub.payload.message);
+    return (m.topic, double.parse(txt));
+  });
+}
+\end{codigo}
+    \end{column}
+    \begin{column}{0.4\textwidth}
+\begin{codigo}[title=ESP32 (PubSubClient)]{CPP}
+mqtt.setServer(BROKER, 1883);
+mqtt.connect("esp32-b3", USER, PASS,
+  "ifma/dee/lab1/b3/status", 1, true,
+  "offline");                 // LWT
+mqtt.publish("ifma/dee/lab1/b3/temp",
+  String(t, 2).c_str(), true); // retained
+\end{codigo}
+      \begin{atencao}[Segurança]
+        Broker público só para testes. Em produção: TLS, autenticação e regras de acesso por tópico.
+      \end{atencao}
+      \begin{dica}
+        Publicar: \cod{publishMessage}.
+      \end{dica}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Qual protocolo usar?}
+  \footnotesize
+  \begin{tabularx}{\textwidth}{@{}l L L L L@{}}
+    \toprule
+    & \cabecalho{BLE} & \cabecalho{USB serial} & \cabecalho{HTTP na rede local} & \cabecalho{MQTT via broker} \\
+    \midrule
+    Alcance & $\sim$10--30\,m & o cabo & a rede Wi-Fi & qualquer lugar com internet \\
+    Consumo no sensor & muito baixo & alimentado pelo cabo & alto (Wi-Fi) & médio \\
+    Tempo real & sim (notify) & sim & não (\emph{polling}) & sim (push) \\
+    Plataformas & Android, iOS & só Android & todas & todas \\
+    Vários clientes & um central por vez & um & sim & sim, muitos \\
+    Caso ideal & configurar a placa, bancada ao lado & bancada fixa, Arduino sem rádio & painel na rede do laboratório & monitoramento contínuo e alertas \\
+    \bottomrule
+  \end{tabularx}
+  \vspace{4pt}
+  \begin{dica}[Arquitetura combinada]
+    Use BLE para o \emph{provisionamento} (enviar SSID e senha do Wi-Fi ao ESP32 pelo app) e MQTT para a telemetria do dia a dia.
+  \end{dica}
+\end{frame}
+
+% =============================================================================
+\section{Arquitetura e referência rápida}
+
+\begin{frame}[fragile]{Hardware atrás de uma interface}
+  \begin{columns}[T]
+    \begin{column}{0.54\textwidth}
+\begin{codigo}[title=data/services/fonte\_leituras.dart]{Dart}
+abstract interface class FonteLeituras {
+  Stream<Leitura> leituras(String bancada);
+}
+
+class FonteBle implements FonteLeituras { ... }
+class FonteMqtt implements FonteLeituras { ... }
+class FonteSerial implements FonteLeituras { ... }
+
+class FonteFake implements FonteLeituras {
+  @override
+  Stream<Leitura> leituras(String b) => Stream.periodic(
+      const Duration(seconds: 1),
+      (i) => Leitura(b, 22 + sin(i / 5) * 3));
+}
+\end{codigo}
+    \end{column}
+    \begin{column}{0.44\textwidth}
+      \centering
+      \begin{tikzpicture}[node distance=3mm]
+        \node[caixa,minimum width=3.6cm] (vm) {View model};
+        \node[caixapetroleo,minimum width=3.6cm,below=of vm] (r) {LeituraRepository};
+        \node[caixaambar,minimum width=3.6cm,below=of r] (f) {\cod{FonteLeituras}};
+        \node[caixa,font=\tiny,below=5mm of f,xshift=-13mm] (a) {BLE};
+        \node[caixa,font=\tiny,below=5mm of f] (b) {MQTT};
+        \node[caixa,font=\tiny,below=5mm of f,xshift=13mm] (c) {Fake};
+        \draw[seta] (vm) -- (r); \draw[seta] (r) -- (f);
+        \draw[seta] (f) -- (a); \draw[seta] (f) -- (b); \draw[seta] (f) -- (c);
+      \end{tikzpicture}
+      \begin{conceito}[Por quê]
+        A UI e as regras não sabem de onde vem o dado. O \emph{fake} permite desenvolver sem placa, demonstrar em sala e testar (Módulo 14).
+      \end{conceito}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Referência rápida: pacotes e permissões}
+  \scriptsize
+  \begin{tabularx}{\textwidth}{@{}p{2.0cm} p{3.0cm} p{3.4cm} L@{}}
+    \toprule
+    \cabecalho{Recurso} & \cabecalho{Pacote} & \cabecalho{Android (manifesto)} & \cabecalho{iOS (\cod{Info.plist})} \\
+    \midrule
+    Câmera e QR code & \cod{camera}, \cod{mobile\_scanner} & \cod{CAMERA} & \cod{NSCameraUsageDescription} \\
+    Galeria & \cod{image\_picker} & nenhuma (Photo Picker) & \cod{NSPhotoLibraryUsageDescription} \\
+    Localização & \cod{geolocator} & \cod{ACCESS\_FINE\_LOCATION} & \cod{NSLocationWhenInUseUsageDescription} \\
+    Biometria & \cod{local\_auth} & \cod{USE\_BIOMETRIC} & \cod{NSFaceIDUsageDescription} \\
+    NFC & \cod{flutter\_nfc\_kit} & \cod{NFC} & \cod{NFCReaderUsageDescription} + capacidade \\
+    Notificações & \cod{flutter\_local\_}\-\cod{notifications} & \cod{POST\_NOTIFICATIONS} & pedido em tempo de execução \\
+    Bluetooth LE & \cod{flutter\_blue\_plus} & \cod{BLUETOOTH\_SCAN} e \cod{\_CONNECT} & \cod{NSBluetoothAlwaysUsageDescription} \\
+    Microfone & \cod{record} & \cod{RECORD\_AUDIO} & \cod{NSMicrophoneUsageDescription} \\
+    Rede e MQTT & \cod{dio}, \cod{mqtt\_client} & \cod{INTERNET} & --- \\
+    Serial USB & \cod{usb\_serial} & diálogo do sistema & não suportado \\
+    \bottomrule
+  \end{tabularx}
+\end{frame}
+
+% =============================================================================
+\section{Fechamento}
+
+\begin{frame}{Resumo}
+  \begin{resumo}
+    \begin{itemize}
+      \item Plugins ligam Dart ao nativo; declare permissões e peça no contexto certo.
+      \item Câmera, QR code, GPS, mapas e sensores viram \cod{Future}s e \cod{Stream}s em Dart.
+      \item Biometria desbloqueia segredos locais; NFC identifica objetos por aproximação.
+      \item Notificações locais, WorkManager e \emph{foreground services} cobrem o segundo plano.
+      \item ESP32 e Arduino conversam por BLE, USB serial ou MQTT, atrás de uma interface comum.
+    \end{itemize}
+  \end{resumo}
+\end{frame}
+
+\begin{frame}{Glossário (1/2)}
+  \begin{glossario}
+    \emph{Plugin} & pacote com API em Dart e implementação nativa em cada plataforma \\
+    Permissão em tempo de execução & autorização dada pelo usuário num diálogo do sistema \\
+    ADC & conversor que transforma uma tensão em número \\
+    Taxa de amostragem & quantas medidas são feitas por segundo \\
+    Sensor MEMS & sensor micromecânico gravado no silício (acelerômetro, giroscópio) \\
+    Fusão de sensores & combinação de sensores para compensar os defeitos de cada um \\
+    GNSS & sistemas de navegação por satélite: GPS, GLONASS, Galileo, BeiDou \\
+    Trilateração & cálculo da posição a partir das distâncias a pontos conhecidos \\
+    Doze & modo que adia rede e alarmes com o aparelho parado \\
+  \end{glossario}
+\end{frame}
+
+\begin{frame}{Glossário (2/2)}
+  \begin{glossario}
+    BLE & Bluetooth de baixo consumo, feito para sensores \\
+    GATT & organização dos dados BLE em serviços e características \\
+    Característica & valor com UUID que pode ser lido, escrito ou notificado \\
+    MTU & tamanho máximo de um pacote ATT (23 bytes por padrão) \\
+    MQTT & protocolo leve de publicação e assinatura, com \emph{broker} \\
+    QoS & nível de garantia de entrega do MQTT: 0, 1 ou 2 \\
+    UART & comunicação serial assíncrona (formato 8N1, \emph{baud rate}) \\
+    NDEF & formato padrão das mensagens em etiquetas NFC \\
+  \end{glossario}
+\end{frame}
+
+\begin{frame}{Questões de revisão}
+  \begin{questoes}
+    \item Descreva o caminho de uma temperatura do sensor do ESP32 até a tela. Onde entram o ADC e a taxa de amostragem?
+    \item Por que o acelerômetro sozinho não basta para saber a orientação do celular?
+    \item Quantos satélites o GPS precisa e por quê? Por que, dentro do laboratório, a posição piora?
+    \item Quando pedir uma permissão, e o que fazer se o usuário negar?
+    \item Por que o BLE consome tão pouco? O que é o intervalo de conexão?
+    \item Que QoS do MQTT usar para leituras a cada segundo e para o comando que desliga o relé? Por quê?
+    \item Explique o formato 8N1 e o que acontece se os dois lados usarem \emph{baud rates} diferentes.
+    \item Como reduzir o consumo de bateria de um app que monitora a bancada o dia todo?
+  \end{questoes}
+\end{frame}
+
+\begin{frame}{Exercícios}
+  \begin{exercicio}[Exercício 1 --- Inventário]
+    Leia o QR code de um equipamento, tire uma foto, registre a posição GPS e compartilhe um resumo.
+  \end{exercicio}
+  \begin{exercicio}[Exercício 2 --- Check-in]
+    Confirme presença no laboratório exigindo distância menor que 50\,m \textbf{ou} leitura da etiqueta NFC da bancada, e biometria antes de liberar.
+  \end{exercicio}
+  \begin{exercicio}[Exercício 3 --- IoT]
+    Grave o firmware no ESP32, receba a temperatura por BLE e dispare uma notificação local acima de 30\,°C.
+  \end{exercicio}
+  \begin{projeto}[LabMonitor --- Etapa 13]
+    \cod{FonteLeituras} com implementações BLE, MQTT e \emph{fake}; check-in por QR/NFC; alarme sonoro e notificação de temperatura.
+  \end{projeto}
+\end{frame}
+
+\begin{frame}{Para aprofundar}
+  \small
+  \begin{itemize}
+    \item Plugins e canais de plataforma: \url{https://docs.flutter.dev/platform-integration/platform-channels}
+    \item Pacotes Flutter Community (\emph{plus}): \url{https://github.com/fluttercommunity/plus_plugins}
+    \item permission\_handler: \url{https://pub.dev/packages/permission_handler}
+    \item flutter\_blue\_plus: \url{https://pub.dev/packages/flutter_blue_plus}
+    \item ESP32 com Arduino: \url{https://docs.espressif.com/projects/arduino-esp32}
+    \item MQTT: \url{https://mqtt.org} \quad mqtt\_client: \url{https://pub.dev/packages/mqtt_client}
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{Respostas das questões de revisão}
+  \begin{respostas}
+    \item O sensor transforma temperatura em tensão; o ADC do ESP32 amostra e quantiza em 12 bits; o \emph{firmware} converte em °C e envia por BLE ou MQTT; o app decodifica e exibe. A taxa de amostragem define as leituras por segundo; acima do necessário, só gasta energia.
+    \item Ele mede a gravidade somada à aceleração do movimento e é ruidoso: com o aparelho em movimento, a inclinação calculada erra. A fusão com o giroscópio (vetor de rotação) resolve.
+    \item Quatro: três coordenadas e o erro do relógio do receptor. Dentro de prédios, o sinal é bloqueado ou refletido e o sistema recorre a Wi-Fi e torres, menos precisos.
+    \item No momento em que o recurso é usado, explicando o motivo quando não for óbvio. Se o usuário negar, o app segue funcionando sem o recurso e oferece um atalho para as configurações.
+    \item O rádio fica quase sempre desligado e só acorda nos eventos de conexão. O intervalo de conexão é o tempo entre esses encontros, de 7,5\,ms a 4\,s.
+    \item Leituras: QoS 0 ou 1, pois uma perdida logo é substituída pela seguinte. Relé: QoS 1 com comando idempotente (ou QoS 2), pois perder o comando é grave e repeti-lo não pode causar dano.
+    \item Um bit de início, 8 de dados, nenhum de paridade e 1 de parada. Com \emph{baud rates} diferentes, o receptor amostra nos instantes errados e lê lixo.
+    \item MQTT ou \emph{push} em vez de \emph{polling}, envios agrupados, taxa de amostragem menor, \emph{notify} no BLE, o pacote \cod{workmanager} para tarefas periódicas e nada de GPS contínuo.
+  \end{respostas}
+\end{frame}
+
+\encerramento{Módulo 14 --- Testes: unidade, widget, \emph{golden} e integração.}
+
+\end{document}

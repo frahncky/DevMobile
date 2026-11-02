@@ -1,0 +1,329 @@
+% =============================================================================
+%  Fundamentos compartilhados --- Módulo 15: distribuição de apps
+%  Incluído pelas trilhas Kotlin e Flutter com \input{../fundamentos/f15-publicacao}
+% =============================================================================
+\section{Fundamentos da distribuição de apps}
+
+\begin{frame}{Do código ao aparelho do usuário}
+  \centering
+  \begin{tikzpicture}[node distance=2.4mm,every node/.style={font=\scriptsize,minimum height=9mm,minimum width=1.62cm}]
+    \node[caixa] (c) {Código\\ \tiny versionado};
+    \node[caixapetroleo,right=of c] (b) {Build de\\ release};
+    \node[caixapetroleo,right=of b] (a) {Assinatura};
+    \node[caixaambar,right=of a] (e) {Envio\\ à loja};
+    \node[caixaambar,right=of e] (r) {Revisão\\ e políticas};
+    \node[caixa,right=of r] (t) {Faixas\\ de teste};
+    \node[caixaescura,right=of t] (p) {Produção};
+    \foreach \x/\y in {c/b,b/a,a/e,e/r,r/t,t/p} \draw[seta] (\x) -- (\y);
+    \draw[setaambar,rounded corners] (p.south) -- ++(0,-6mm) -| node[rotulo,pos=0.25,below]{\tiny monitorar falhas e avaliações $\rightarrow$ nova versão} (c.south);
+  \end{tikzpicture}
+  \vspace{6pt}
+  \begin{columns}[T]
+    \begin{column}{0.48\textwidth}
+      \scriptsize
+      \begin{tabularx}{\linewidth}{@{}l L L@{}}
+        \toprule
+        & \cabecalho{Debug} & \cabecalho{Release} \\
+        \midrule
+        Objetivo & desenvolver & distribuir \\
+        Código & com verificações e depuração & otimizado, reduzido e ofuscável \\
+        Desempenho & mais lento & o real \\
+        Assinatura & chave de depuração automática & sua chave de release \\
+        \bottomrule
+      \end{tabularx}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \begin{definicao}[Build de release]
+        Versão do app compilada para o usuário final: sem ferramentas de depuração, com código otimizado e assinada com a chave do desenvolvedor.
+      \end{definicao}
+      \begin{atencao}
+        Teste sempre o build de release antes de publicar: ofuscação e otimizações podem expor defeitos que não aparecem em debug.
+      \end{atencao}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Assinatura digital: a teoria}
+  \begin{columns}[c]
+    \begin{column}{0.54\textwidth}
+      \centering
+      \begin{tikzpicture}[node distance=4mm,every node/.style={font=\scriptsize}]
+        \node[caixa,minimum width=1.6cm] (app) {App};
+        \node[caixa,right=of app,minimum width=1.6cm] (h) {Hash\\ \tiny resumo único};
+        \node[caixaescura,right=of h,minimum width=2cm] (s) {Assinatura};
+        \node[caixaambar,above=5mm of s,minimum width=2cm] (pk) {Chave \textbf{privada}\\ \tiny só o dev tem};
+        \draw[seta] (app) -- (h); \draw[seta] (h) -- (s); \draw[seta] (pk) -- (s);
+        \node[caixa,below=9mm of app,minimum width=1.6cm] (app2) {App\\ \tiny recebido};
+        \node[caixa,right=of app2,minimum width=1.6cm] (h2) {Hash\\ \tiny recalculado};
+        \node[caixapetroleo,right=of h2,minimum width=2cm] (v) {Confere?};
+        \node[caixa,below=5mm of v,minimum width=2cm] (pub) {Chave \textbf{pública}\\ \tiny no certificado};
+        \draw[seta] (app2) -- (h2); \draw[seta] (h2) -- (v); \draw[seta] (pub) -- (v);
+        \draw[setaambar] (s.south) -- node[rotulo,right]{\tiny vai junto} (v.north);
+        \node[rotulo,left=1mm of app,font=\tiny,rotate=90,anchor=south] {quem publica};
+        \node[rotulo,left=1mm of app2,font=\tiny,rotate=90,anchor=south] {sistema};
+      \end{tikzpicture}
+    \end{column}
+    \begin{column}{0.44\textwidth}
+      \begin{definicao}[Assinatura digital]
+        Resumo (\emph{hash}) do pacote cifrado com a \textbf{chave privada} do desenvolvedor. Qualquer um verifica com a \textbf{chave pública}, mas só quem tem a privada consegue assinar.
+      \end{definicao}
+      \begin{conceito}[O que ela garante]
+        \textbf{Integridade}: o pacote não foi alterado.\\
+        \textbf{Autenticidade}: a atualização vem do mesmo autor do app instalado.
+      \end{conceito}
+      \begin{analogia}
+        O lacre de cera com o sinete do remetente: qualquer um reconhece o selo, ninguém o falsifica sem o anel.
+      \end{analogia}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Assinatura em cada plataforma}
+  \begin{columns}[T]
+    \begin{column}{0.5\textwidth}
+      \begin{conceito}[Android]
+        O pacote é assinado com uma chave guardada num \emph{keystore}. Com o \textbf{Play App Signing}, você assina com a \textbf{chave de upload}; o Google confere e reassina com a \textbf{chave do app}, que fica guardada com ele.
+      \end{conceito}
+      \centering
+      \begin{tikzpicture}[node distance=9mm,every node/.style={font=\tiny,align=center}]
+        \node[caixa,text width=1.5cm] (d) {Dev\\ chave de upload};
+        \node[caixapetroleo,text width=1.5cm,right=of d] (g) {Google Play\\ chave do app};
+        \node[caixa,right=of g] (u) {Aparelho};
+        \draw[seta] (d) -- node[rotulo,above]{AAB} (g);
+        \draw[seta] (g) -- node[rotulo,above]{APKs} (u);
+      \end{tikzpicture}
+      \begin{dica}
+        Perdeu a chave de upload? Com o Play App Signing, o Google permite trocá-la. Sem ele, perder a chave impede atualizar o app.
+      \end{dica}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \begin{conceito}[iOS]
+        Todo app precisa ser assinado para rodar num iPhone. Três peças: o \textbf{certificado} (sua identidade), o \textbf{App ID} e o \textbf{perfil de provisionamento}, que liga certificado, app, capacidades e aparelhos.
+      \end{conceito}
+      \begin{dica}
+        O Xcode gerencia tudo isso com \emph{Automatically manage signing}.
+      \end{dica}
+      \begin{atencao}
+        Chaves e certificados são segredos: nunca no Git; guarde cópias num cofre de senhas.
+      \end{atencao}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}[fragile]{Versionamento}
+  \begin{columns}[T]
+    \begin{column}{0.5\textwidth}
+      \begin{definicao}[Versionamento semântico (SemVer)]
+        \textbf{MAJOR.MINOR.PATCH}: \textbf{MAJOR} muda com quebras de compatibilidade, \textbf{MINOR} com funcionalidades novas compatíveis e \textbf{PATCH} com correções.
+      \end{definicao}
+      \centering
+      \begin{tikzpicture}[every node/.style={font=\scriptsize}]
+        \node[caixapetroleo] (m) {2};
+        \node[right=0.5mm of m] (p1) {.};
+        \node[caixaambar,right=0.5mm of p1] (n) {4};
+        \node[right=0.5mm of n] (p2) {.};
+        \node[caixa,right=0.5mm of p2] (c) {1};
+        \node[right=0.5mm of c] (p3) {+};
+        \node[caixaescura,right=0.5mm of p3] (b) {27};
+        \node[rotulo,below=1mm of m,font=\tiny] {major};
+        \node[rotulo,below=1mm of n,font=\tiny] {minor};
+        \node[rotulo,below=1mm of c,font=\tiny] {patch};
+        \node[rotulo,below=1mm of b,font=\tiny,align=center] {número\\do build};
+      \end{tikzpicture}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \scriptsize
+      \begin{tabularx}{\linewidth}{@{}l L L@{}}
+        \toprule
+        & \cabecalho{Para pessoas} & \cabecalho{Para a loja} \\
+        \midrule
+        Android & \cod{versionName} & \cod{versionCode} \\
+        iOS & \cod{CFBundleShort\-VersionString} & \cod{CFBundleVersion} \\
+        Flutter & \cod{version: 2.4.1+27} & (o número após o \cod{+}) \\
+        \bottomrule
+      \end{tabularx}
+      \begin{atencao}[Regra das lojas]
+        O número do build \textbf{sempre aumenta}. Não existe ``voltar versão'': para desfazer um problema, publica-se uma versão nova com número maior.
+      \end{atencao}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Formatos de pacote e tamanho do app}
+  \begin{columns}[T]
+    \begin{column}{0.52\textwidth}
+      \scriptsize
+      \begin{tabularx}{\linewidth}{@{}l L@{}}
+        \toprule
+        \cabecalho{Formato} & \cabecalho{O que é} \\
+        \midrule
+        \textbf{APK} & pacote Android instalável, com tudo para todos os aparelhos \\
+        \textbf{AAB} & \emph{Android App Bundle}: formato de \textbf{envio} à Play, que gera APKs sob medida para cada aparelho \\
+        \textbf{IPA} & pacote iOS enviado à App Store; a Apple também entrega variantes por aparelho (\emph{App Thinning}) \\
+        \bottomrule
+      \end{tabularx}
+      \centering
+      \begin{tikzpicture}[node distance=2mm,every node/.style={font=\tiny}]
+        \node[caixapetroleo,minimum width=1.6cm] (aab) {AAB};
+        \node[caixa,right=8mm of aab,yshift=5mm] (a1) {arm64 + xxhdpi + pt};
+        \node[caixa,right=8mm of aab,yshift=-5mm] (a2) {armeabi + hdpi + en};
+        \draw[seta] (aab) -- (a1.west); \draw[seta] (aab) -- (a2.west);
+      \end{tikzpicture}
+    \end{column}
+    \begin{column}{0.46\textwidth}
+      \begin{conceito}[Por que o tamanho importa]
+        Apps grandes demoram a baixar, ocupam espaço e perdem instalações, principalmente em planos de dados limitados.
+      \end{conceito}
+      \begin{pordentro}[Como os builds encolhem]
+        \textbf{\emph{Tree shaking}} e \textbf{\emph{shrinking}} removem código não usado; a \textbf{ofuscação} troca nomes por símbolos curtos; recursos são comprimidos e separados por aparelho.
+      \end{pordentro}
+      \begin{atencao}
+        Código ofuscado gera relatórios de falha ilegíveis. Guarde os \textbf{símbolos de depuração} de cada versão para decodificá-los.
+      \end{atencao}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{As duas grandes lojas}
+  \scriptsize
+  \begin{tabularx}{\textwidth}{@{}p{2.6cm} L L@{}}
+    \toprule
+    & \cabecalho{Google Play} & \cabecalho{App Store} \\
+    \midrule
+    Conta & taxa única de US\$\,25; pessoal ou organização & Apple Developer Program, US\$\,99 por ano (isenção para instituições de ensino e sem fins lucrativos) \\
+    Revisão & automatizada e humana; de horas a dias (contas novas esperam mais) & humana (\emph{App Review}); em geral de um a dois dias \\
+    Testes & faixas interna, fechada e aberta & TestFlight interno (até 100) e externo (até 10\,000) \\
+    Lançamento gradual & percentual definido por você & \emph{phased release} automático em 7 dias \\
+    Requisito anual & \cod{targetSdk} 36 desde 31/08/2026 & Xcode 26 e SDK do iOS 26 desde 28/04/2026 \\
+    Comissão & de 15\,\% a 30\,\% sobre vendas digitais, conforme receita, produto e país & idem \\
+    \bottomrule
+  \end{tabularx}
+  \vspace{4pt}
+  \begin{dica}
+    Regras de comissão e de pagamento externo mudam com leis e decisões judiciais (União Europeia, EUA, Japão, Coreia). Confira antes de definir o modelo de negócio (Módulo 20).
+  \end{dica}
+\end{frame}
+
+\begin{frame}{Privacidade desde a concepção e LGPD}
+  \begin{columns}[T]
+    \begin{column}{0.5\textwidth}
+      \begin{definicao}[LGPD (Lei 13.709/2018)]
+        Regula o tratamento de \textbf{dados pessoais} no Brasil: tudo que identifica ou pode identificar uma pessoa (nome, e-mail, matrícula, localização, identificador do aparelho).
+      \end{definicao}
+      \begin{conceito}[Princípios que mais afetam um app]
+        \textbf{Finalidade} (para quê), \textbf{necessidade} (o mínimo), \textbf{transparência} (explicar), \textbf{segurança} (proteger) e uma \textbf{base legal} para cada uso (consentimento, execução de contrato\ldots).
+      \end{conceito}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \begin{conceito}[O que as lojas exigem]
+        \begin{itemize}
+          \item Política de privacidade publicada.
+          \item Declaração de dados coletados: \emph{Data safety} (Play) e \emph{App Privacy} (App Store).
+          \item Textos de uso para cada permissão.
+          \item \textbf{Exclusão de conta} dentro do app, se ele permite criar conta.
+        \end{itemize}
+      \end{conceito}
+      \begin{atencao}
+        A declaração deve incluir o que os SDKs de terceiros coletam (analytics, anúncios, Crashlytics). Não é assessoria jurídica: consulte o encarregado de dados (DPO) da instituição.
+      \end{atencao}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Gestão de lançamentos}
+  \begin{columns}[c]
+    \begin{column}{0.52\textwidth}
+      \centering
+      \begin{tikzpicture}[x=1.0cm,y=0.45cm]
+        \draw[cinzamedio,-{Stealth}] (0,0) -- (6.3,0) node[right,font=\tiny]{dias};
+        \draw[cinzamedio,-{Stealth}] (0,0) -- (0,5.6) node[above,font=\tiny]{\% dos usuários};
+        \draw[azulpetroleo,line width=1.4pt] (0,0.3) -- (1,0.3) -- (1,1) -- (2,1) -- (2,2.5) -- (3.5,2.5) -- (3.5,5) -- (6,5);
+        \node[font=\tiny,azulpetroleo] at (0.5,0.9) {1\%};
+        \node[font=\tiny,azulpetroleo] at (1.5,1.6) {5\%};
+        \node[font=\tiny,azulpetroleo] at (2.75,3.1) {20\%};
+        \node[font=\tiny,azulpetroleo] at (4.75,5.6) {100\%};
+        \foreach \x in {1,2,3.5} \fill[ambar] (\x,0) circle (2.2pt);
+        \node[rotulo,font=\tiny,align=center] at (2.2,-1.6) {\textcolor{ambar}{$\bullet$} portões: falhas e avaliações\\ dentro do limite? então avança};
+      \end{tikzpicture}
+    \end{column}
+    \begin{column}{0.46\textwidth}
+      \begin{definicao}[Lançamento gradual]
+        Liberar a versão para uma fração crescente dos usuários, avançando só se os indicadores de saúde continuarem bons.
+      \end{definicao}
+      \begin{conceito}[Ferramentas do processo]
+        \begin{itemize}
+          \item \textbf{Trem de versões}: lançar em datas fixas (a cada duas semanas, por exemplo).
+          \item \textbf{\emph{Feature flags}}: ligar recursos remotamente, sem nova versão.
+          \item \textbf{Versão mínima}: obrigar a atualização quando a antiga é insegura.
+          \item \textbf{Notas de versão} claras para usuários e revisores.
+        \end{itemize}
+      \end{conceito}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{ASO: o funil da loja}
+  \begin{columns}[c]
+    \begin{column}{0.46\textwidth}
+      \centering
+      \begin{tikzpicture}[every node/.style={font=\scriptsize\bfseries,text=white}]
+        \fill[azulpetroleo] (-2.6,3.2) -- (2.6,3.2) -- (2.2,2.5) -- (-2.2,2.5) -- cycle;
+        \node at (0,2.85) {Impressões na busca};
+        \fill[azulprofundo] (-2.15,2.4) -- (2.15,2.4) -- (1.75,1.7) -- (-1.75,1.7) -- cycle;
+        \node at (0,2.05) {Visitas à ficha};
+        \fill[ambar!90!black] (-1.7,1.6) -- (1.7,1.6) -- (1.3,0.9) -- (-1.3,0.9) -- cycle;
+        \node at (0,1.25) {Instalações};
+        \fill[ambar] (-1.25,0.8) -- (1.25,0.8) -- (0.85,0.1) -- (-0.85,0.1) -- cycle;
+        \node[text=azulpetroleo] at (0,0.45) {Uso ativo};
+      \end{tikzpicture}
+    \end{column}
+    \begin{column}{0.52\textwidth}
+      \begin{definicao}[ASO --- \emph{App Store Optimization}]
+        Conjunto de práticas para o app ser \textbf{encontrado} na busca da loja e \textbf{escolhido} por quem vê a ficha.
+      \end{definicao}
+      \scriptsize
+      \begin{tabularx}{\linewidth}{@{}l L@{}}
+        \toprule
+        \cabecalho{Etapa} & \cabecalho{O que influencia} \\
+        \midrule
+        Ser encontrado & título, subtítulo ou descrição curta, palavras-chave, categoria \\
+        Ser escolhido & ícone, capturas de tela, vídeo, nota e avaliações \\
+        Ser mantido & qualidade, desempenho, respostas às avaliações \\
+        \bottomrule
+      \end{tabularx}
+      \begin{dica}
+        As duas lojas permitem testes A/B da ficha (ícone, capturas, textos).
+      \end{dica}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Depois do lançamento: saúde do app}
+  \begin{columns}[T]
+    \begin{column}{0.5\textwidth}
+      \scriptsize
+      \begin{tabularx}{\linewidth}{@{}p{2.3cm} L@{}}
+        \toprule
+        \cabecalho{Indicador} & \cabecalho{O que mede} \\
+        \midrule
+        Usuários sem falhas & \% de usuários que não tiveram nenhum \emph{crash} no período \\
+        Taxa de ANR & \% de sessões em que a tela travou (Android) \\
+        Tempo de inicialização & do toque no ícone à primeira tela útil \\
+        Retenção D1/D7/D30 & \% de usuários que voltam 1, 7 e 30 dias após instalar \\
+        Nota e avaliações & percepção dos usuários; comentários apontam defeitos \\
+        \bottomrule
+      \end{tabularx}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \begin{atencao}[Limites do Android vitals]
+        Acima de 1,09\,\% de falhas percebidas ou 0,47\,\% de ANRs percebidos, o app é considerado de ``mau comportamento'' e perde visibilidade na Play.
+      \end{atencao}
+      \begin{conceito}[Ciclo contínuo]
+        Monitorar $\rightarrow$ priorizar $\rightarrow$ corrigir $\rightarrow$ lançar gradualmente $\rightarrow$ monitorar. Falhas e avaliações alimentam o \emph{backlog} da próxima versão.
+      \end{conceito}
+      \begin{dica}
+        Responda às avaliações com educação e objetividade: a resposta é pública e mostra que o app é cuidado.
+      \end{dica}
+    \end{column}
+  \end{columns}
+\end{frame}

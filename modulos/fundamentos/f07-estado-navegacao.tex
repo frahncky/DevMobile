@@ -1,0 +1,253 @@
+% =============================================================================
+%  Fundamentos compartilhados --- Módulo 07: estado, ciclo de vida, navegação
+%  e movimento
+%  Incluído pelas trilhas Kotlin e Flutter com \input{../fundamentos/f07-estado-navegacao}
+% =============================================================================
+\section{Fundamentos: estado, ciclo de vida e navegação}
+
+\begin{frame}{Estado: o que a tela precisa lembrar}
+  \begin{columns}[T]
+    \begin{column}{0.56\textwidth}
+      \begin{definicao}[Estado]
+        Todo valor que pode mudar com o tempo e influencia o que a tela mostra. A interface é uma função dele: \textbf{UI = f(estado)}.
+      \end{definicao}
+      \scriptsize
+      \begin{tabularx}{\linewidth}{@{}l L l@{}}
+        \toprule
+        \cabecalho{Tipo} & \cabecalho{Exemplo no LabMonitor} & \cabecalho{Onde mora} \\
+        \midrule
+        Efêmero & painel expandido, rolagem, aba ativa & no componente \\
+        Da tela & bancadas carregadas, filtro, erro & no dono da tela \\
+        Do app & usuário logado, tema escolhido & em um serviço compartilhado \\
+        Persistente & reservas, preferências & banco ou disco (Módulo 10) \\
+        \bottomrule
+      \end{tabularx}
+    \end{column}
+    \begin{column}{0.42\textwidth}
+      \begin{definicao}[Estado derivado]
+        Valor calculado a partir de outros, como o total de bancadas livres. Não se guarda: calcula-se, para nunca ficar desatualizado.
+      \end{definicao}
+      \begin{conceito}[Fonte única da verdade]
+        Cada dado tem um único dono que pode alterá-lo; os demais apenas leem. Duas cópias editáveis do mesmo dado acabam divergindo.
+      \end{conceito}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Fluxo unidirecional de dados}
+  \begin{columns}[c]
+    \begin{column}{0.46\textwidth}
+      \centering
+      \begin{tikzpicture}[every node/.style={font=\scriptsize}]
+        \node[caixaambar,minimum width=2.4cm] (e) at (0,1.5) {\textbf{Estado}};
+        \node[caixa,minimum width=2.4cm] (u) at (2,0) {\textbf{Interface}};
+        \node[caixa,minimum width=2.4cm] (v) at (0,-1.5) {\textbf{Evento}\\ \tiny toque, digitação};
+        \node[caixaescura,minimum width=2.4cm] (d) at (-2,0) {\textbf{Dono do estado}\\ \tiny aplica as regras};
+        \draw[seta] (e) to[bend left=20] node[rotulo,right]{desce} (u);
+        \draw[setaambar] (u) to[bend left=20] node[rotulo,right]{gera} (v);
+        \draw[setaambar] (v) to[bend left=20] node[rotulo,left]{sobe} (d);
+        \draw[seta] (d) to[bend left=20] node[rotulo,left]{novo valor} (e);
+      \end{tikzpicture}
+    \end{column}
+    \begin{column}{0.52\textwidth}
+      \begin{definicao}[Fluxo unidirecional (UDF)]
+        O estado desce do dono até a interface; os eventos sobem da interface até o dono. \textbf{Só o dono altera o estado}.
+      \end{definicao}
+      \begin{conceito}[Vantagens]
+        Previsível: cada mudança tem um único caminho. Fácil de depurar: registre eventos e estados. Fácil de testar: um evento entra, um estado sai.
+      \end{conceito}
+      \begin{historia}
+        A Arquitetura Elm, o Flux do Facebook (2014) e o Redux (2015) popularizaram o modelo, hoje padrão no Compose, no Flutter e no SwiftUI.
+      \end{historia}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{A tela como máquina de estados}
+  \begin{columns}[c]
+    \begin{column}{0.5\textwidth}
+      \centering
+      \begin{tikzpicture}[every node/.style={font=\scriptsize}]
+        \node[caixaescura,minimum width=2cm] (c) at (0,0) {Carregando};
+        \node[caixa,minimum width=1.8cm,fill=verdeok!12,draw=verdeok] (s) at (3,1.1) {Sucesso};
+        \node[caixa,minimum width=1.8cm] (v) at (3,0) {Vazio};
+        \node[caixa,minimum width=1.8cm,fill=vermelhoerro!10,draw=vermelhoerro] (x) at (3,-1.1) {Erro};
+        \draw[seta] (-1.6,0) node[rotulo,left]{abrir tela} -- (c);
+        \draw[seta] (c) -- node[rotulo,above,sloped]{dados} (s.west);
+        \draw[seta] (c) -- node[rotulo,above]{lista vazia} (v);
+        \draw[seta] (c) -- node[rotulo,below,sloped]{falha} (x.west);
+        \draw[setaambar,rounded corners] (x.south) -- ++(0,-0.4) -| node[rotulo,pos=0.25,below]{tentar de novo} (c.south);
+        \draw[setaambar,rounded corners] (s.north) -- ++(0,0.4) -| node[rotulo,pos=0.25,above]{puxar para atualizar} (c.north);
+      \end{tikzpicture}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \begin{definicao}[Máquina de estados finitos]
+        Conjunto fechado de estados e de transições permitidas, disparadas por eventos. A tela está sempre em \textbf{exatamente um} estado.
+      \end{definicao}
+      \begin{atencao}[Estados impossíveis]
+        Três booleanos (\cod{carregando}, \cod{erro}, \cod{vazio}) geram 8 combinações, a maioria sem sentido. Uma classe selada com quatro casos admite só os quatro válidos.
+      \end{atencao}
+      \begin{dica}
+        Kotlin e Dart 3 têm classes seladas: o compilador obriga o \cod{when} ou o \cod{switch} a tratar todos os casos.
+      \end{dica}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{O que sobrevive a quê}
+  \scriptsize
+  \newcommand{\vsim}{\textcolor{verdeok}{\textbf{sim}}}
+  \newcommand{\vnao}{\textcolor{vermelhoerro}{não}}
+  \begin{tabularx}{\textwidth}{@{}L *{4}{>{\centering\arraybackslash}p{1.95cm}}@{}}
+    \toprule
+    \cabecalho{Onde o valor está} & \cabecalho{nova recomposição} & \cabecalho{rotação da tela} & \cabecalho{morte do processo} & \cabecalho{app fechado pelo usuário} \\
+    \midrule
+    variável local dentro da função de interface & \vnao & \vnao & \vnao & \vnao \\
+    \cod{remember} (Compose) & \vsim & \vnao & \vnao & \vnao \\
+    \cod{rememberSaveable} (Compose) & \vsim & \vsim & \vsim & \vnao \\
+    \cod{ViewModel} (Android) & \vsim & \vsim & \vnao$^1$ & \vnao \\
+    \cod{State} de um \cod{StatefulWidget} (Flutter) & \vsim & \vsim$^2$ & \vnao & \vnao \\
+    \cod{RestorationMixin} (Flutter) & \vsim & \vsim & \vsim & \vnao \\
+    banco de dados, arquivo, preferências (Módulo 10) & \vsim & \vsim & \vsim & \vsim \\
+    \bottomrule
+  \end{tabularx}\\[1pt]
+  {\tiny $^1$ sim, com \cod{SavedStateHandle}. \quad $^2$ o Flutter não recria a tela ao girar.}
+  \normalsize
+  \begin{columns}[T]
+    \begin{column}{0.49\textwidth}
+      \begin{definicao}[Morte do processo]
+        Em segundo plano, o sistema pode encerrar o app para liberar memória. Ao voltar, o usuário espera a tela como a deixou: o sistema a recria e devolve o pequeno estado salvo.
+      \end{definicao}
+    \end{column}
+    \begin{column}{0.49\textwidth}
+      \begin{dica}[Como testar]
+        Ative ``Não manter atividades'' nas opções do desenvolvedor do Android, ou rode \cod{adb shell am kill <pacote>} com o app em segundo plano.
+      \end{dica}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Ciclo de vida e prioridade dos processos}
+  \begin{columns}[c]
+    \begin{column}{0.44\textwidth}
+      \centering
+      \begin{tikzpicture}[node distance=1.5mm,every node/.style={font=\scriptsize}]
+        \node[caixaescura,minimum width=3.6cm] (a) {primeiro plano (em uso)};
+        \node[caixapetroleo,minimum width=3.6cm,below=of a] (b) {visível, mas encoberto};
+        \node[caixa,minimum width=3.6cm,below=of b] (c) {serviço em execução};
+        \node[caixa,minimum width=3.6cm,below=of c,fill=cinzaclaro] (d) {segundo plano (em cache)};
+        \draw[seta] ([xshift=2mm]a.north east) -- node[rotulo,right,text width=1.4cm]{mais importante} ([xshift=2mm]d.south east);
+        \node[rotulo,below=2mm of d,text width=3.8cm] {com pouca memória, o sistema encerra de baixo para cima};
+      \end{tikzpicture}
+    \end{column}
+    \begin{column}{0.54\textwidth}
+      \begin{definicao}[Ciclo de vida]
+        Sequência de estados por que passam o app e cada tela, controlada pelo sistema: criado, visível, em primeiro plano, em segundo plano, destruído. Cada transição é avisada por \emph{callbacks}.
+      \end{definicao}
+      \begin{conceito}[O que fazer nas transições]
+        Ao sair do primeiro plano: pare câmera, sensores e animações e salve rascunhos. Ao voltar: retome e atualize os dados.
+      \end{conceito}
+      \begin{pordentro}[Por que o sistema encerra apps]
+        A memória do celular é limitada, e o sistema prefere encerrar apps em segundo plano a deixar o aparelho lento: no Android, o \emph{low memory killer}; no iOS, o \emph{jetsam}.
+      \end{pordentro}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Navegação: grafo de destinos e pilha de retorno}
+  \begin{columns}[c]
+    \begin{column}{0.48\textwidth}
+      \centering
+      \begin{tikzpicture}[node distance=4mm and 3mm,every node/.style={font=\tiny}]
+        \node[caixa,minimum width=1.4cm,font=\tiny] (l) {Login};
+        \node[caixaescura,minimum width=1.4cm,font=\tiny,right=of l] (p) {Painel};
+        \node[caixa,minimum width=1.4cm,font=\tiny,below=of p] (e) {Equipamentos};
+        \node[caixa,minimum width=1.4cm,font=\tiny,right=of p] (a) {Ajustes};
+        \node[caixa,minimum width=1.4cm,font=\tiny,below=of e] (d) {Detalhe};
+        \node[caixaambar,minimum width=1.4cm,font=\tiny,below=of d] (r) {Reserva};
+        \draw[seta] (l) -- (p); \draw[seta] (p) -- (e); \draw[seta] (p) -- (a); \draw[seta] (e) -- (d); \draw[seta] (d) -- (r);
+        \node[rotulo,below=1mm of r] {grafo};
+        \node[caixa,minimum width=1.9cm,font=\tiny] (s1) at (4.6,-2.6) {Painel};
+        \node[caixa,minimum width=1.9cm,font=\tiny,above=0.5mm of s1] (s2) {Equipamentos};
+        \node[caixaambarforte,minimum width=1.9cm,font=\tiny,above=0.5mm of s2] (s3) {Detalhe (topo)};
+        \node[pontilhado,fit=(s1)(s2)(s3)] (pil) {};
+        \node[rotulo,below=1mm of pil] {pilha};
+      \end{tikzpicture}
+    \end{column}
+    \begin{column}{0.5\textwidth}
+      \begin{definicao}[Grafo e pilha]
+        Destinos (telas) são \textbf{nós}; as ligações permitidas, \textbf{arestas}. A pilha de retorno é LIFO: navegar empilha, voltar desempilha.
+      \end{definicao}
+      \begin{conceito}[Princípios]
+        Destino inicial fixo; o voltar nunca surpreende; cada aba da barra inferior tem a própria pilha.
+      \end{conceito}
+      \begin{atencao}[Voltar preditivo]
+        Com \cod{targetSdk} 36 no Android 16, o gesto mostra a tela anterior antes de o dedo soltar e \cod{onBackPressed} não é mais chamado: use \cod{BackHandler} ou \cod{PopScope}.
+      \end{atencao}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Navegação declarativa e links profundos}
+  \begin{columns}[T]
+    \begin{column}{0.5\textwidth}
+      \begin{definicao}[Imperativa \emph{versus} declarativa]
+        Imperativa: comandos \cod{push} e \cod{pop}. Declarativa: a pilha é um \textbf{estado} (uma lista de destinos) e o que aparece é função dela, como na interface (Navigation 3, go\_router).
+      \end{definicao}
+      \begin{definicao}[Link profundo (\emph{deep link})]
+        Endereço que abre o app direto em um destino, como \cod{https://labmonitor.app/reserva/42}. O app monta uma pilha sintética (Painel, Reserva) para o voltar fazer sentido.
+      \end{definicao}
+      \begin{atencao}
+        Parâmetros de um link vêm de fora: valide-os (a reserva existe? este usuário pode vê-la?).
+      \end{atencao}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \centering
+      \begin{tikzpicture}[node distance=3mm,every node/.style={font=\tiny}]
+        \node[caixa,minimum width=3.6cm,font=\tiny] (o) {e-mail, notificação ou QR Code};
+        \node[caixapetroleo,minimum width=3.6cm,font=\tiny,below=of o] (s) {sistema confere o domínio};
+        \node[caixaescura,minimum width=3.6cm,font=\tiny,below=of s] (r) {roteador do app interpreta};
+        \node[caixaambar,minimum width=3.6cm,font=\tiny,below=of r] (p) {pilha: Painel $\rightarrow$ Reserva 42};
+        \draw[seta] (o) -- (s); \draw[seta] (s) -- (r); \draw[seta] (r) -- (p);
+      \end{tikzpicture}
+      \raggedright
+      \begin{pordentro}[Links verificados]
+        \emph{App Links} (Android, arquivo \cod{assetlinks.json}) e \emph{Universal Links} (iOS, \cod{apple-app-site-association}) provam que o site e o app têm o mesmo dono.
+      \end{pordentro}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Movimento: interpolação, curvas e molas}
+  \begin{columns}[T]
+    \begin{column}{0.44\textwidth}
+      \centering
+      \begin{tikzpicture}[x=3.4cm,y=1.9cm,baseline=(current bounding box.north)]
+        \draw[->,cinzamedio] (0,0) -- (1.08,0) node[rotulo,right]{t};
+        \draw[->,cinzamedio] (0,0) -- (0,1.35) node[rotulo,above]{progresso};
+        \draw[cinzaclaro,dashed] (0,1) -- (1,1);
+        \draw[cinzamedio,line width=0.8pt] plot[domain=0:1,samples=2] (\x,\x);
+        \draw[azulpetroleo,line width=1pt] plot[domain=0:1,samples=40] (\x,{1-(1-\x)^3});
+        \draw[ambar,line width=1pt] plot[domain=0:1,samples=80] (\x,{1-exp(-5*\x)*cos(deg(10*\x))});
+        \node[rotulo,text=cinzamedio] at (0.82,0.62) {linear};
+        \node[rotulo,text=azulpetroleo] at (0.3,0.88) {desacelera};
+        \node[rotulo,text=ambar] at (0.42,1.3) {mola (passa e volta)};
+      \end{tikzpicture}
+      \raggedright
+      \begin{definicao}[Interpolação]
+        A cada quadro: \cod{valor = início + (fim - início)} $\times$ \cod{curva(t)}, com \cod{t} indo de 0 a 1 ao longo da animação.
+      \end{definicao}
+    \end{column}
+    \begin{column}{0.54\textwidth}
+      \begin{conceito}[Curvas e molas]
+        Curvas de aceleração (\emph{easing}) imitam objetos reais: desaceleram ao chegar. \textbf{Molas} são definidas por rigidez e amortecimento, não por duração, e podem ser interrompidas sem saltos. O Material 3 Expressive (2025) adotou molas como base.
+      \end{conceito}
+      \begin{dica}[Movimento com propósito]
+        Anime para orientar: de onde veio a tela, o que mudou. Transições de 150 a 400\,ms mantêm o app ágil.
+      \end{dica}
+      \begin{atencao}[Acessibilidade]
+        Respeite a opção do sistema de remover ou reduzir animações: movimento excessivo causa desconforto em algumas pessoas.
+      \end{atencao}
+    \end{column}
+  \end{columns}
+\end{frame}

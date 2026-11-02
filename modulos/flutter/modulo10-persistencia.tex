@@ -1,0 +1,521 @@
+\documentclass[aspectratio=169,10pt]{beamer}
+\makeatletter\def\input@path{{../../estilo/}{../estilo/}{estilo/}}\makeatother
+\usepackage{devmobile}
+\modulo[Flutter]{10}{Persistência Local}{shared\_preferences, armazenamento seguro, arquivos, sqflite e Drift com migrações e testes}
+
+\begin{document}
+\capa
+
+\begin{frame}{Objetivos do módulo}
+  \begin{conceito}[Ao final deste módulo você será capaz de]
+    \begin{itemize}
+      \item Escolher onde guardar cada tipo de dado no dispositivo.
+      \item Salvar preferências com \cod{SharedPreferencesAsync} e segredos com \cod{flutter\_secure\_storage}.
+      \item Ler e gravar arquivos com \cod{path\_provider}.
+      \item Usar SQLite diretamente com \textbf{sqflite}.
+      \item Modelar tabelas, consultas reativas e migrações com \textbf{Drift}.
+      \item Tornar o banco local a fonte da verdade de um app \emph{offline-first}.
+    \end{itemize}
+  \end{conceito}
+\end{frame}
+
+\sumario
+
+\input{../fundamentos/f10-persistencia}
+
+% =============================================================================
+\section{Onde guardar cada dado}
+
+\begin{frame}{Opções de armazenamento}
+  \footnotesize
+  \begin{tabularx}{\textwidth}{@{}p{3.6cm} L L@{}}
+    \toprule
+    \cabecalho{Opção} & \cabecalho{Para quê} & \cabecalho{Exemplo no LabMonitor} \\
+    \midrule
+    \cod{shared\_preferences} & pares chave-valor simples & tema escuro, último laboratório aberto \\
+    \cod{flutter\_secure\_storage} & segredos cifrados (Keychain/Keystore) & token de acesso, chave da API \\
+    Arquivos (\cod{path\_provider}) & documentos, imagens, exportações & relatório CSV, fotos de equipamentos \\
+    \cod{sqflite} & SQLite com SQL escrito à mão & tabelas simples, controle total do SQL \\
+    \textbf{Drift} & SQLite tipado, reativo, com migrações & histórico de leituras dos sensores \\
+    \bottomrule
+  \end{tabularx}
+  \vspace{4pt}
+  \begin{columns}[T]
+    \begin{column}{0.47\textwidth}
+      \begin{atencao}
+        Nunca guarde tokens ou senhas em \cod{shared\_preferences}: o arquivo não é cifrado.
+      \end{atencao}
+    \end{column}
+    \begin{column}{0.47\textwidth}
+      \begin{dica}
+        Bancos NoSQL locais (ObjectBox, Hive CE) também existem; confira a manutenção do pacote no pub.dev antes de adotar.
+      \end{dica}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% =============================================================================
+\section{Chave-valor, segredos e arquivos}
+
+\begin{frame}[fragile]{Preferências com \cod{shared\_preferences}}
+  \begin{columns}[T]
+    \begin{column}{0.54\textwidth}
+\begin{codigo}[title=data/services/preferencias\_service.dart]{Dart}
+import 'package:shared_preferences/shared_preferences.dart';
+
+class PreferenciasService {
+  final _prefs = SharedPreferencesAsync();
+
+  Future<bool> modoEscuro() async =>
+      await _prefs.getBool('modoEscuro') ?? false;
+
+  Future<void> definirModoEscuro(bool v) =>
+      _prefs.setBool('modoEscuro', v);
+
+  Future<String?> ultimoLab() => _prefs.getString('ultimoLab');
+
+  Future<void> limpar() => _prefs.clear();
+}
+\end{codigo}
+    \end{column}
+    \begin{column}{0.44\textwidth}
+      \begin{conceito}[Duas APIs atuais]
+        \begin{itemize}
+          \item \cod{SharedPreferencesAsync}: toda leitura vai à plataforma; sempre atualizada.
+          \item \cod{SharedPreferencesWithCache}: carrega um conjunto de chaves (\cod{allowList}) e lê de forma síncrona.
+        \end{itemize}
+      \end{conceito}
+      \begin{dica}
+        A API antiga \cod{SharedPreferences.getInstance()} ainda funciona, mas a documentação recomenda as duas novas.
+      \end{dica}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}[fragile]{Segredos e arquivos}
+  \begin{columns}[T]
+    \begin{column}{0.5\textwidth}
+\begin{codigo}[title=Armazenamento seguro]{Dart}
+const _seguro = FlutterSecureStorage();
+
+Future<void> salvarToken(String jwt) =>
+    _seguro.write(key: 'token', value: jwt);
+
+Future<String?> lerToken() =>
+    _seguro.read(key: 'token');
+
+Future<void> sair() =>
+    _seguro.delete(key: 'token');
+\end{codigo}
+      \begin{conceito}[Por baixo]
+        iOS: \textbf{Keychain}. Android: chave no \textbf{Android Keystore} cifrando os dados. Web: sem garantia equivalente.
+      \end{conceito}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+\begin{codigo}[title=Arquivos com path\_provider]{Dart}
+Future<File> _arquivo() async {
+  final dir = await getApplicationDocumentsDirectory();
+  return File('${dir.path}/leituras.csv');
+}
+
+Future<void> anexar(Leitura l) async {
+  final f = await _arquivo();
+  await f.writeAsString(
+    '${l.em.toIso8601String()};${l.valor}\n',
+    mode: FileMode.append);
+}
+\end{codigo}
+      \begin{dica}
+        \cod{getTemporaryDirectory()} para cache que o sistema pode apagar; \cod{getApplicationSupportDirectory()} para arquivos internos.
+      \end{dica}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% =============================================================================
+\section{SQLite com sqflite}
+
+\begin{frame}[fragile]{Abrindo o banco e criando tabelas}
+  \begin{columns}[T]
+    \begin{column}{0.56\textwidth}
+\begin{codigo}[title=data/services/banco\_service.dart]{Dart}
+import 'package:path/path.dart';
+import 'package:sqflite/sqflite.dart';
+
+Future<Database> abrirBanco() async => openDatabase(
+  join(await getDatabasesPath(), 'labmonitor.db'),
+  version: 2,
+  onCreate: (db, versao) async {
+    await db.execute('''
+      CREATE TABLE leitura (
+        id     INTEGER PRIMARY KEY AUTOINCREMENT,
+        sensor TEXT NOT NULL,
+        valor  REAL NOT NULL,
+        em     INTEGER NOT NULL)''');
+    await db.execute(
+      'CREATE INDEX idx_leitura ON leitura(sensor, em)');
+  },
+  onUpgrade: (db, de, para) async {
+    if (de < 2) await db.execute(
+      'ALTER TABLE leitura ADD COLUMN unidade TEXT');
+  },
+);
+\end{codigo}
+    \end{column}
+    \begin{column}{0.42\textwidth}
+      \begin{conceito}[Ciclo de versões]
+        \cod{onCreate} roda na primeira instalação; \cod{onUpgrade} roda quando a \cod{version} aumenta. Cada mudança de esquema ganha um bloco \cod{if (de < N)}.
+      \end{conceito}
+      \begin{atencao}
+        Em instalações novas o \cod{onCreate} precisa criar o esquema \textbf{mais recente} (inclua aqui a coluna \cod{unidade}).
+      \end{atencao}
+      \begin{dica}
+        Datas como \cod{INTEGER} (milissegundos desde 1970) ordenam e comparam rápido.
+      \end{dica}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}[fragile]{Consultas, transações e segurança}
+  \begin{columns}[T]
+    \begin{column}{0.56\textwidth}
+\begin{codigo}[title=CRUD com sqflite]{Dart}
+Future<int> inserir(Database db, Leitura l) =>
+    db.insert('leitura', l.paraMapa());
+
+Future<List<Leitura>> ultimas(Database db, String s) async {
+  final linhas = await db.query('leitura',
+      where: 'sensor = ?', whereArgs: [s],
+      orderBy: 'em DESC', limit: 50);
+  return linhas.map(Leitura.deMapa).toList();
+}
+
+Future<void> importar(Database db, List<Leitura> ls) =>
+    db.transaction((txn) async {
+      final lote = txn.batch();
+      for (final l in ls) lote.insert('leitura', l.paraMapa());
+      await lote.commit(noResult: true);
+    });
+\end{codigo}
+    \end{column}
+    \begin{column}{0.42\textwidth}
+      \begin{erro}[SQL injection]
+        \cod{db.rawQuery("... WHERE sensor = '\$s'")} deixa o usuário escrever SQL. Use sempre \cod{?} com \cod{whereArgs} ou \cod{arguments}.
+      \end{erro}
+      \begin{conceito}[Transação + batch]
+        Tudo ou nada (ACID, Módulo 09) e muito mais rápido do que mil \cod{insert} isolados.
+      \end{conceito}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% =============================================================================
+\section{Drift: SQLite tipado e reativo}
+
+\begin{frame}[fragile]{Definindo tabelas e o banco}
+  \begin{columns}[T]
+    \begin{column}{0.58\textwidth}
+\begin{codigo}[title=data/services/banco.dart]{Dart}
+import 'package:drift/drift.dart';
+import 'package:drift_flutter/drift_flutter.dart';
+part 'banco.g.dart';
+
+@TableIndex(name: 'idx_leitura', columns: {#sensor, #em})
+class Leituras extends Table {
+  IntColumn get id => integer().autoIncrement()();
+  TextColumn get sensor => text().withLength(max: 40)();
+  RealColumn get valor => real()();
+  DateTimeColumn get em => dateTime()();
+}
+
+@DriftDatabase(tables: [Leituras])
+class BancoApp extends _$BancoApp {
+  BancoApp([QueryExecutor? e])
+      : super(e ?? driftDatabase(name: 'labmonitor'));
+
+  @override
+  int get schemaVersion => 1;
+}
+\end{codigo}
+    \end{column}
+    \begin{column}{0.4\textwidth}
+\begin{terminal}
+$ flutter pub add drift drift_flutter
+$ flutter pub add -d drift_dev build_runner
+$ dart run build_runner build
+\end{terminal}
+      \begin{conceito}[O que é gerado]
+        A classe de dados \cod{Leitura}, o \cod{LeiturasCompanion} para inserções e as consultas tipadas. Erros de nome de coluna viram erros de compilação.
+      \end{conceito}
+      \begin{dica}
+        O construtor opcional permite passar um banco em memória nos testes.
+      \end{dica}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}[fragile]{Consultas e streams}
+  \begin{columns}[T]
+    \begin{column}{0.58\textwidth}
+\begin{codigo}[title=Dentro de BancoApp (ou de um DAO)]{Dart}
+Future<int> registrar(String sensor, double v) =>
+    into(leituras).insert(LeiturasCompanion.insert(
+        sensor: sensor, valor: v, em: DateTime.now()));
+
+Stream<List<Leitura>> observar(String sensor) =>
+    (select(leituras)
+          ..where((t) => t.sensor.equals(sensor))
+          ..orderBy([(t) => OrderingTerm.desc(t.em)])
+          ..limit(50))
+        .watch();
+
+Future<int> apagarAntigas(DateTime limite) =>
+    (delete(leituras)
+          ..where((t) => t.em.isSmallerThanValue(limite)))
+        .go();
+
+Future<double?> media(String sensor) => customSelect(
+    'SELECT AVG(valor) AS m FROM leituras WHERE sensor = ?',
+    variables: [Variable(sensor)], readsFrom: {leituras},
+  ).map((r) => r.read<double?>('m')).getSingle();
+\end{codigo}
+    \end{column}
+    \begin{column}{0.4\textwidth}
+      \begin{conceito}[\cod{.watch()}]
+        Devolve um \cod{Stream} que emite de novo sempre que a tabela muda. A tela se atualiza sozinha quando chega uma leitura nova.
+      \end{conceito}
+      \begin{dica}
+        Também é possível escrever as consultas em SQL puro em arquivos \cod{.drift}; o Drift as valida e gera métodos Dart.
+      \end{dica}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}[fragile]{Migrações com Drift}
+  \begin{columns}[T]
+    \begin{column}{0.56\textwidth}
+\begin{codigo}[title=Versão 2: nova coluna]{Dart}
+class Leituras extends Table {
+  // ... colunas anteriores
+  TextColumn get unidade => text().nullable()();
+}
+
+@override
+int get schemaVersion => 2;
+
+@override
+MigrationStrategy get migration => MigrationStrategy(
+  onCreate: (m) => m.createAll(),
+  onUpgrade: (m, de, para) async {
+    if (de < 2) {
+      await m.addColumn(leituras, leituras.unidade);
+    }
+  },
+);
+\end{codigo}
+    \end{column}
+    \begin{column}{0.42\textwidth}
+\begin{terminal}
+$ dart run drift_dev make-migrations
+\end{terminal}
+      \begin{conceito}[Migrações verificadas]
+        O comando salva o esquema de cada versão e gera migrações passo a passo e testes que conferem se a versão 1 migrada é igual à versão 2 criada do zero.
+      \end{conceito}
+      \begin{atencao}
+        Uma migração errada pode apagar dados de quem já usa o app. Teste sempre a atualização, não só a instalação nova.
+      \end{atencao}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% =============================================================================
+\section{Banco local na arquitetura}
+
+\begin{frame}[fragile]{Repositório \emph{offline-first}}
+  \begin{columns}[T]
+    \begin{column}{0.56\textwidth}
+\begin{codigo}[title=data/repositories/leitura\_repository.dart]{Dart}
+class LeituraRepository {
+  LeituraRepository({required this.banco, required this.api});
+  final BancoApp banco;
+  final ApiService api;
+
+  // a UI sempre lê do banco local
+  Stream<List<Leitura>> observar(String sensor) =>
+      banco.observar(sensor);
+
+  // a rede só atualiza o banco
+  Future<Result<void>> sincronizar(String sensor) async {
+    try {
+      final novas = await api.leituras(sensor);
+      await banco.batch((b) => b.insertAll(banco.leituras,
+          novas.map((d) => d.paraCompanion())));
+      return const Ok(null);
+    } on Exception catch (e) { return Falha(e); }
+  }
+}
+\end{codigo}
+    \end{column}
+    \begin{column}{0.42\textwidth}
+      \centering
+      \begin{tikzpicture}[node distance=5mm]
+        \node[caixa] (ui) {View model};
+        \node[caixaescura,below=of ui] (db) {Banco local (Drift)};
+        \node[caixa,below=of db] (api) {API remota};
+        \draw[setaambar] (db) -- node[rotulo,right]{\tiny stream} (ui);
+        \draw[seta] (api) -- node[rotulo,right]{\tiny sincroniza} (db);
+      \end{tikzpicture}
+      \begin{conceito}[Fonte única da verdade]
+        A tela observa o banco; a rede apenas o atualiza. Sem internet, o app continua mostrando os últimos dados.
+      \end{conceito}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}[fragile]{Testando o banco}
+  \begin{columns}[T]
+    \begin{column}{0.56\textwidth}
+\begin{codigo}[title=test/banco\_test.dart]{Dart}
+import 'package:drift/native.dart';
+import 'package:flutter_test/flutter_test.dart';
+
+void main() {
+  late BancoApp banco;
+  setUp(() => banco = BancoApp(NativeDatabase.memory()));
+  tearDown(() => banco.close());
+
+  test('observar emite a leitura registrada', () async {
+    await banco.registrar('temp', 23.5);
+    final lista = await banco.observar('temp').first;
+    expect(lista.single.valor, 23.5);
+  });
+}
+\end{codigo}
+    \end{column}
+    \begin{column}{0.42\textwidth}
+      \begin{conceito}[Banco em memória]
+        \cod{NativeDatabase.memory()} cria um SQLite real, descartado a cada teste. Rápido e sem efeitos colaterais.
+      \end{conceito}
+      \begin{atencao}[Web]
+        \cod{sqflite} não roda na web. O Drift funciona na web com WebAssembly, mas exige configuração extra.
+      \end{atencao}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{sqflite ou Drift?}
+  \footnotesize
+  \begin{tabularx}{\textwidth}{@{}l L L@{}}
+    \toprule
+    & \cabecalho{sqflite} & \cabecalho{Drift} \\
+    \midrule
+    Consultas & SQL em strings & API Dart tipada ou SQL validado \\
+    Erros de esquema & em tempo de execução & em tempo de compilação \\
+    Reatividade & manual & \cod{.watch()} embutido \\
+    Migrações & \cod{onUpgrade} manual & \cod{MigrationStrategy} + verificação gerada \\
+    Geração de código & não & sim (\cod{build\_runner}) \\
+    Equivalente Kotlin & SQLite direto & Room \\
+    \bottomrule
+  \end{tabularx}
+  \vspace{4pt}
+  \begin{caixaambar}
+    Para aprender SQL, comece com \dest{sqflite}. Para apps reais com várias tabelas e telas reativas, prefira \dest{Drift}.
+  \end{caixaambar}
+\end{frame}
+
+% =============================================================================
+\section{Fechamento}
+
+\begin{frame}{Resumo}
+  \begin{resumo}
+    \begin{itemize}
+      \item Preferências em \cod{shared\_preferences}; segredos em \cod{flutter\_secure\_storage}; documentos em arquivos.
+      \item \cod{sqflite} dá acesso direto ao SQLite: use \cod{?}, transações e \cod{batch}.
+      \item Drift gera código tipado, oferece consultas reativas e migrações verificadas.
+      \item O banco local é a fonte da verdade; a rede apenas o sincroniza.
+      \item Teste com banco em memória e teste também as migrações.
+    \end{itemize}
+  \end{resumo}
+\end{frame}
+
+\begin{frame}{Glossário (1/2)}
+  \begin{glossario}[3.8cm]
+    Persistência & guardar dados que sobrevivem ao fim do processo e ao desligar \\
+    \emph{Sandbox} de arquivos & pastas privadas do app, apagadas na desinstalação \\
+    \cod{shared\_preferences} & pares chave-valor simples, sem criptografia \\
+    \cod{flutter\_secure\_storage} & segredos cifrados no Keychain ou com o Keystore \\
+    \cod{path\_provider} & localiza as pastas do app em cada plataforma \\
+    \cod{sqflite} & acesso ao SQLite com SQL escrito à mão \\
+    Drift & SQLite tipado e reativo, com código gerado \\
+    Migração & leva o banco de uma versão do esquema à seguinte sem perder dados \\
+    Problema N+1 & uma consulta para a lista e mais uma para cada item \\
+  \end{glossario}
+\end{frame}
+
+\begin{frame}{Glossário (2/2)}
+  \begin{glossario}
+    Cache & cópia guardada perto de quem usa, para não buscar de novo \\
+    Invalidação & decidir quando o cache deixou de valer (TTL, evento, versão) \\
+    LRU & política que descarta o item usado há mais tempo \\
+    \emph{Offline-first} & a interface lê e grava no banco local; a sincronização vem depois \\
+    Fila de envio & alterações locais pendentes de envio ao servidor (\emph{outbox}) \\
+    Concorrência otimista & a gravação é recusada se a versão lida já mudou \\
+    Keystore e Keychain & cofres de chaves do Android e do iOS, protegidos por hardware \\
+  \end{glossario}
+\end{frame}
+
+\begin{frame}{Questões de revisão}
+  \begin{questoes}
+    \item Por que um app precisa persistir dados mesmo quando tem internet?
+    \item Onde guardar a preferência de tema, o \emph{token} de acesso, o histórico de leituras e as miniaturas baixadas?
+    \item Quando preferir Drift a \cod{sqflite}?
+    \item Um usuário atualiza da versão 1 direto para a 4 do app. O que a migração do Drift precisa tratar?
+    \item Explique o problema N+1 e como evitá-lo.
+    \item Descreva o caminho de uma reserva feita sem internet em uma arquitetura \emph{offline-first}.
+    \item Dois alunos reservam a mesma bancada sem internet. Que estratégia de conflito usar e por quê?
+    \item Por que não guardar o \emph{token} em \cod{shared\_preferences}?
+  \end{questoes}
+\end{frame}
+
+\begin{frame}{Exercícios}
+  \begin{exercicio}[Exercício 1 --- Preferências]
+    Salve o tema escolhido e o último laboratório aberto e restaure-os ao abrir o app.
+  \end{exercicio}
+  \begin{exercicio}[Exercício 2 --- sqflite]
+    Crie as tabelas \cod{laboratorio} e \cod{equipamento} (1:N) e liste os equipamentos com um \cod{JOIN}.
+  \end{exercicio}
+  \begin{exercicio}[Exercício 3 --- Migração]
+    Adicione a coluna \cod{unidade} na versão 2 do banco Drift e escreva um teste que migra da versão 1.
+  \end{exercicio}
+  \begin{projeto}[LabMonitor --- Etapa 10]
+    Histórico de leituras em Drift observado pelo painel, preferências com \cod{SharedPreferencesAsync} e token em armazenamento seguro.
+  \end{projeto}
+\end{frame}
+
+\begin{frame}{Para aprofundar}
+  \small
+  \begin{itemize}
+    \item Persistência no Flutter: \url{https://docs.flutter.dev/cookbook/persistence}
+    \item shared\_preferences: \url{https://pub.dev/packages/shared_preferences}
+    \item flutter\_secure\_storage: \url{https://pub.dev/packages/flutter_secure_storage}
+    \item sqflite: \url{https://pub.dev/packages/sqflite}
+    \item Drift: \url{https://drift.simonbinder.eu}
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{Respostas das questões de revisão}
+  \begin{respostas}
+    \item O sistema encerra apps em segundo plano, a rede falha e o usuário quer ver os dados na hora: o banco local serve de cache e de fonte da verdade.
+    \item Tema: \cod{shared\_preferences}. \emph{Token}: \cod{flutter\_secure\_storage}. Leituras: Drift ou \cod{sqflite}. Miniaturas: \cod{getApplicationCacheDirectory()}.
+    \item Quando se quer consultas tipadas e verificadas na geração de código, \emph{streams} reativas e migrações assistidas; \cod{sqflite} atende bancos pequenos com controle total do SQL.
+    \item O \cod{onUpgrade} deve aplicar todos os passos de \cod{de} até \cod{para} em sequência (2, 3 e 4), e cada passo precisa de teste a partir da versão antiga (\cod{make-migrations}).
+    \item Buscar a lista e depois fazer uma consulta por item gera N+1 idas ao banco. Use um \cod{JOIN} ou carregue os itens relacionados de uma vez.
+    \item A reserva é gravada no banco como pendente, junto com um registro na fila de envio, na mesma transação. A tela já a mostra; uma tarefa em segundo plano a envia quando houver rede e atualiza o estado.
+    \item Regra no servidor: a bancada é um recurso disputado. A primeira reserva confirmada vence, a segunda é recusada e o app avisa o usuário.
+    \item O arquivo não é cifrado pelo app e pode ir para cópias de segurança ou ser lido em aparelhos com \emph{root}. Segredos vão para o Keychain ou para o Keystore, via \cod{flutter\_secure\_storage}.
+  \end{respostas}
+\end{frame}
+
+\encerramento{Módulo 11 --- Rede e APIs: HTTP, JSON, \cod{http} e Dio.}
+
+\end{document}

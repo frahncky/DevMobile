@@ -1,0 +1,1015 @@
+\documentclass[aspectratio=169,10pt]{beamer}
+\makeatletter\def\input@path{{../../estilo/}{../estilo/}{estilo/}}\makeatother
+\usepackage{devmobile}
+\modulo{03}{Engenharia de Software e Git}{Ciclo de vida, métodos ágeis, requisitos, modelagem, princípios de projeto, código limpo, controle de versão com Git e colaboração no GitHub}
+
+\begin{document}
+\capa
+
+\begin{frame}{Objetivos do módulo}
+  \begin{conceito}[Ao final deste módulo você será capaz de]
+    \begin{itemize}
+      \item Explicar o que é engenharia de software e comparar modelos de processo.
+      \item Organizar o trabalho com Scrum e Kanban.
+      \item Escrever requisitos e histórias de usuário com critérios de aceitação.
+      \item Modelar um app com diagramas UML e C4.
+      \item Aplicar coesão, baixo acoplamento, SOLID e código limpo.
+      \item Usar Git com confiança e colaborar no GitHub com \emph{branches}, \emph{pull requests} e revisão.
+    \end{itemize}
+  \end{conceito}
+\end{frame}
+
+\sumario
+
+% =============================================================================
+\section{O que é engenharia de software}
+
+\begin{frame}{Programar não é o mesmo que fazer software}
+  \begin{columns}[T]
+    \begin{column}{0.5\textwidth}
+      \begin{definicao}[Engenharia de software]
+        Aplicação de uma abordagem \textbf{sistemática, disciplinada e mensurável} ao desenvolvimento, à operação e à manutenção de software (definição do IEEE).
+      \end{definicao}
+      \begin{conceito}[Além do código]
+        Entender o problema, planejar, projetar, testar, entregar, medir e manter, em equipe, com prazos, custos e qualidade.
+      \end{conceito}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \begin{historia}
+        Em 1968, uma conferência da OTAN na Alemanha discutiu a ``crise do software'': projetos atrasados, caros e cheios de defeitos. O termo \emph{engenharia de software} ganhou força ali, como chamado para tratar software com o rigor das engenharias.
+      \end{historia}
+      \begin{analogia}
+        Um programador sozinho faz uma casinha de cachorro; para um prédio, é preciso projeto, cálculo, cronograma, equipe e fiscalização.
+      \end{analogia}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Atividades do ciclo de vida}
+  \begin{columns}[c]
+    \begin{column}{0.48\textwidth}
+      \centering
+      \begin{tikzpicture}
+        \foreach \a/\t/\s in {90/Requisitos/caixapetroleo,30/Projeto/caixapetroleo,-30/Implementação/caixaambar,
+                              -90/Testes/caixaambar,-150/Implantação/caixaescura,150/Manutenção/caixaescura}{
+          \node[\s,font=\scriptsize,minimum width=2.1cm] (n\a) at (\a:1.9) {\t};}
+        \foreach \a/\b in {90/30,30/-30,-30/-90,-90/-150,-150/150,150/90}
+          \draw[setaambar] (n\a) to[bend left=12] (n\b);
+        \node[font=\scriptsize\bfseries,text=azulpetroleo,align=center] at (0,0) {ciclo de\\vida};
+      \end{tikzpicture}
+    \end{column}
+    \begin{column}{0.5\textwidth}
+      \scriptsize
+      \begin{tabularx}{\linewidth}{@{}l L@{}}
+        \toprule
+        \cabecalho{Atividade} & \cabecalho{Pergunta central} \\
+        \midrule
+        Requisitos & o que o sistema deve fazer, para quem e com que qualidade? \\
+        Projeto & como organizar o sistema em partes e como elas conversam? \\
+        Implementação & como escrever o código? \\
+        Testes & funciona como deveria? \\
+        Implantação & como chega aos usuários? \\
+        Manutenção & como corrigir, adaptar e evoluir? \\
+        \bottomrule
+      \end{tabularx}
+      \begin{atencao}
+        A maior parte do custo de um software ao longo da vida está na \textbf{manutenção}. Código legível e testado é investimento, não luxo.
+      \end{atencao}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Modelos de processo}
+  \scriptsize
+  \begin{tabularx}{\textwidth}{@{}p{2.6cm} L L L@{}}
+    \toprule
+    \cabecalho{Modelo} & \cabecalho{Ideia} & \cabecalho{Ponto forte} & \cabecalho{Risco} \\
+    \midrule
+    \textbf{Cascata} & uma fase após a outra, cada uma concluída antes da próxima & previsível quando os requisitos são estáveis & descobrir problemas só no fim \\
+    \textbf{Incremental} & entregar o sistema em partes que se somam & valor entregue cedo & arquitetura precisa prever o crescimento \\
+    \textbf{Espiral} & ciclos guiados pela análise de riscos & bom para projetos grandes e arriscados & complexo de gerenciar \\
+    \textbf{Ágil} & ciclos curtos, entregas frequentes, \emph{feedback} constante & adapta-se a mudanças & exige disciplina e cliente presente \\
+    \bottomrule
+  \end{tabularx}
+  \vspace{4pt}
+  \begin{columns}[T]
+    \begin{column}{0.48\textwidth}
+      \begin{historia}
+        O artigo de Winston Royce (1970), lembrado como origem da cascata, já apontava os riscos de testar só no final e sugeria iterações.
+      \end{historia}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \begin{dica}
+        Apps móveis mudam rápido (sistemas, lojas, usuários): por isso o mercado mobile trabalha quase sempre de forma iterativa e ágil.
+      \end{dica}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% =============================================================================
+\section{Métodos ágeis}
+
+\begin{frame}{O Manifesto Ágil}
+  \begin{columns}[T]
+    \begin{column}{0.54\textwidth}
+      \scriptsize
+      \begin{tabularx}{\linewidth}{@{}L c L@{}}
+        \toprule
+        \cabecalho{Valorizamos mais\ldots} & & \cabecalho{\ldots do que} \\
+        \midrule
+        indivíduos e interações & $>$ & processos e ferramentas \\
+        software em funcionamento & $>$ & documentação abrangente \\
+        colaboração com o cliente & $>$ & negociação de contratos \\
+        responder a mudanças & $>$ & seguir um plano \\
+        \bottomrule
+      \end{tabularx}
+      \begin{conceito}[Leitura correta]
+        Os itens da direita têm valor; os da esquerda têm \textbf{mais} valor. Ágil não é ``sem documentação'' nem ``sem plano''.
+      \end{conceito}
+    \end{column}
+    \begin{column}{0.44\textwidth}
+      \begin{historia}
+        Em 2001, dezessete desenvolvedores reunidos em Utah escreveram o manifesto, com quatro valores e doze princípios.
+      \end{historia}
+      \begin{conceito}[Princípios em destaque]
+        \begin{itemize}
+          \item Entregar software funcionando com frequência.
+          \item Aceitar mudanças, mesmo tarde.
+          \item Ritmo sustentável.
+          \item Simplicidade: maximizar o trabalho \textbf{não} feito.
+          \item Refletir e ajustar a cada ciclo.
+        \end{itemize}
+      \end{conceito}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Scrum}
+  \begin{columns}[c]
+    \begin{column}{0.52\textwidth}
+      \centering
+      \begin{tikzpicture}[every node/.style={font=\tiny,align=center}]
+        \node[caixa,minimum width=1.45cm,minimum height=8mm] (pb) at (0,0) {\emph{Product}\\ \emph{Backlog}};
+        \node[caixa,minimum width=1.45cm,minimum height=8mm] (sb) at (1.95,0) {\emph{Sprint}\\ \emph{Backlog}};
+        \node[circle,draw=azulpetroleo,line width=1.2pt,minimum size=1.5cm] (sp) at (3.95,0) {\emph{Sprint}\\ 1 a 4 sem.};
+        \node[caixaambar,minimum width=1.45cm,minimum height=8mm] (in) at (5.9,0) {Incremento};
+        \draw[seta] (pb) -- node[rotulo,above]{\emph{Planning}} (sb);
+        \draw[seta] (sb) -- (sp);
+        \draw[seta] (sp) -- (in);
+        \draw[setaambar] (4.25,0.72) arc (-20:200:0.32);
+        \node[rotulo] at (3.95,1.35) {\emph{Daily} (24 h)};
+        \draw[setaambar,rounded corners] (in.south) -- ++(0,-6mm) -| node[rotulo,pos=0.25,below]{\emph{Review} e retrospectiva} (pb.south);
+      \end{tikzpicture}
+    \end{column}
+    \begin{column}{0.46\textwidth}
+      \scriptsize
+      \begin{tabularx}{\linewidth}{@{}l L@{}}
+        \toprule
+        \cabecalho{Elemento} & \cabecalho{Função} \\
+        \midrule
+        \emph{Product Owner} & prioriza o \emph{backlog}; representa o valor para o cliente \\
+        \emph{Scrum Master} & remove impedimentos e cuida do processo \\
+        \emph{Developers} & constroem o incremento \\
+        \emph{Daily} & 15 minutos para sincronizar o dia \\
+        \emph{Review} & mostrar o incremento e coletar \emph{feedback} \\
+        Retrospectiva & melhorar a forma de trabalhar \\
+        \bottomrule
+      \end{tabularx}
+    \end{column}
+  \end{columns}
+  \vspace{4pt}
+  \begin{definicao}[Scrum]
+    \emph{Framework} ágil leve, com papéis, eventos e artefatos fixos, que organiza o trabalho em ciclos de duração fixa chamados \emph{sprints}.
+  \end{definicao}
+\end{frame}
+
+\begin{frame}{Kanban}
+  \begin{columns}[c]
+    \begin{column}{0.56\textwidth}
+      \centering
+      \begin{tikzpicture}[every node/.style={font=\tiny}]
+        \foreach \x/\t/\w in {0/A fazer/,1/Em andamento/(máx. 3),2/Em revisão/(máx. 2),3/Concluído/}{
+          \fill[cinzafundo] (\x*1.65,0) rectangle ++(1.55,-3.0);
+          \node[font=\tiny\bfseries,text=azulpetroleo,align=center] at (\x*1.65+0.775,-0.25) {\t\\ \w};}
+        \foreach \x/\y/\c in {0/1/cinzaclaro,0/2/cinzaclaro,0/3/cinzaclaro,1/1/ambarclaro,1/2/ambarclaro,2/1/azulpetroleo!20,3/1/verdeok!25,3/2/verdeok!25}{
+          \fill[\c,draw=cinzamedio] (\x*1.65+0.12,-0.25-\y*0.62) rectangle ++(1.31,-0.48);}
+        \node at (0.775,-1.11) {tela de alertas};
+        \node at (2.425,-1.11) {login Google};
+        \node at (4.075,-1.11) {teste BLE};
+      \end{tikzpicture}
+    \end{column}
+    \begin{column}{0.42\textwidth}
+      \begin{definicao}[Kanban]
+        Método de gestão do \textbf{fluxo} de trabalho: tarefas visíveis num quadro e \textbf{limite de trabalho em andamento} (WIP) em cada coluna.
+      \end{definicao}
+      \begin{conceito}[Por que limitar o WIP]
+        Começar menos e terminar mais: muitas tarefas abertas ao mesmo tempo atrasam todas. Mede-se o \textbf{tempo de ciclo} de cada cartão.
+      \end{conceito}
+    \end{column}
+  \end{columns}
+  \vspace{2pt}
+  \scriptsize
+  \begin{tabularx}{\textwidth}{@{}l L L@{}}
+    \toprule
+    & \cabecalho{Scrum} & \cabecalho{Kanban} \\
+    \midrule
+    Ritmo & \emph{sprints} de duração fixa & fluxo contínuo \\
+    Papéis & PO, Scrum Master, \emph{developers} & não exige papéis novos \\
+    Mudanças & entram na próxima \emph{sprint} & a qualquer momento, respeitando o WIP \\
+    \bottomrule
+  \end{tabularx}
+\end{frame}
+
+% =============================================================================
+\section{Requisitos}
+
+\begin{frame}{Requisitos funcionais e não funcionais}
+  \begin{columns}[T]
+    \begin{column}{0.48\textwidth}
+      \begin{definicao}[Requisito funcional]
+        O que o sistema deve \textbf{fazer}: uma função ou comportamento.
+      \end{definicao}
+      \begin{exemplo}[No LabMonitor]
+        \begin{itemize}
+          \item Listar as bancadas com o estado atual.
+          \item Reservar uma bancada por horário.
+          \item Notificar temperatura acima do limite.
+        \end{itemize}
+      \end{exemplo}
+    \end{column}
+    \begin{column}{0.5\textwidth}
+      \begin{definicao}[Requisito não funcional]
+        \textbf{Como} o sistema deve ser: qualidades e restrições.
+      \end{definicao}
+      \scriptsize
+      \begin{tabularx}{\linewidth}{@{}l L@{}}
+        \toprule
+        \cabecalho{Qualidade} & \cabecalho{Exemplo mensurável} \\
+        \midrule
+        Desempenho & painel abre em menos de 2\,s \\
+        Disponibilidade offline & últimas leituras visíveis sem rede \\
+        Bateria & menos de 3\,\% por hora com BLE ativo \\
+        Acessibilidade & alvos de toque de 48\,dp; leitor de tela \\
+        Segurança e LGPD & tokens cifrados; exclusão de conta \\
+        Compatibilidade & Android 8+ e iOS 15+ \\
+        \bottomrule
+      \end{tabularx}
+    \end{column}
+  \end{columns}
+  \begin{atencao}
+    Requisito vago (``o app deve ser rápido'') não pode ser testado. Escreva requisitos \textbf{verificáveis}, com números.
+  \end{atencao}
+\end{frame}
+
+\begin{frame}{Histórias de usuário}
+  \begin{columns}[T]
+    \begin{column}{0.52\textwidth}
+      \begin{definicao}[História de usuário]
+        Descrição curta de uma necessidade, do ponto de vista de quem usa:\\[2pt]
+        \textbf{Como} \emph{papel}, \textbf{quero} \emph{ação}, \textbf{para} \emph{benefício}.
+      \end{definicao}
+      \begin{exemplo}[História com critérios de aceitação]
+        \textbf{Como} aluno, \textbf{quero} reservar uma bancada pelo celular \textbf{para} garantir meu horário de prática.\\[2pt]
+        \scriptsize
+        \textbf{Dado} que a B7 está livre das 14h às 16h, \textbf{quando} eu a reservo, \textbf{então} ela aparece como minha.\\
+        \textbf{Dado} que a B7 já está reservada, \textbf{quando} tento reservá-la no mesmo horário, \textbf{então} vejo ``Horário indisponível''.
+      \end{exemplo}
+    \end{column}
+    \begin{column}{0.46\textwidth}
+      \scriptsize
+      \begin{tabularx}{\linewidth}{@{}l L@{}}
+        \toprule
+        \cabecalho{INVEST} & \cabecalho{Uma boa história é\ldots} \\
+        \midrule
+        \textbf{I}ndependente & entregável sem depender de outra \\
+        \textbf{N}egociável & detalhes combinados em conversa \\
+        \textbf{V}aliosa & gera valor para alguém \\
+        \textbf{E}stimável & a equipe consegue estimar \\
+        \emph{\textbf{S}mall} (pequena) & cabe numa \emph{sprint} \\
+        \textbf{T}estável & tem critérios de aceitação \\
+        \bottomrule
+      \end{tabularx}
+      \begin{definicao}[Definição de pronto]
+        Lista que vale para todas as histórias: código revisado, testes passando, acessível, documentado, integrado.
+      \end{definicao}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Priorizar e estimar}
+  \begin{columns}[T]
+    \begin{column}{0.5\textwidth}
+      \scriptsize
+      \begin{tabularx}{\linewidth}{@{}l L@{}}
+        \toprule
+        \cabecalho{MoSCoW} & \cabecalho{Exemplo no LabMonitor} \\
+        \midrule
+        \textbf{M}ust (deve) & login, lista de bancadas, reserva \\
+        \textbf{S}hould (deveria) & alertas de temperatura \\
+        \textbf{C}ould (poderia) & modo escuro, widget na tela inicial \\
+        \textbf{W}on't (não agora) & versão para relógio \\
+        \bottomrule
+      \end{tabularx}
+      \begin{conceito}[Valor $\times$ esforço]
+        Comece pelo que traz muito valor com pouco esforço; questione o que traz pouco valor com muito esforço.
+      \end{conceito}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \begin{definicao}[Pontos de história]
+        Medida \textbf{relativa} de esforço, complexidade e incerteza (em geral na sequência 1, 2, 3, 5, 8, 13). Compara-se uma história com outra já conhecida, em vez de estimar horas.
+      \end{definicao}
+      \begin{conceito}[\emph{Planning poker}]
+        Cada pessoa mostra sua estimativa ao mesmo tempo; as divergências viram conversa, que revela riscos e mal-entendidos.
+      \end{conceito}
+      \begin{dica}
+        \textbf{Velocidade}: pontos concluídos por \emph{sprint}. Serve para planejar a equipe, nunca para comparar pessoas.
+      \end{dica}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% =============================================================================
+\section{Modelagem}
+
+\begin{frame}{UML: diagrama de classes do domínio}
+  \begin{columns}[c]
+    \begin{column}{0.6\textwidth}
+      \centering
+      \begin{tikzpicture}[classe/.style={draw=azulpetroleo,fill=white,rectangle split,rectangle split parts=2,
+          rectangle split part fill={azulpetroleo!12,white},font=\tiny,align=left,text width=2.1cm,inner sep=2pt},
+          every edge/.style={draw,cinzatexto}]
+        \node[classe] (lab) at (0,0) {\textbf{Laboratorio}\nodepart{second}nome: String\\bloco: String};
+        \node[classe] (ban) at (3.2,0) {\textbf{Bancada}\nodepart{second}codigo: String\\livre: Boolean};
+        \node[classe] (res) at (3.2,-2.0) {\textbf{Reserva}\nodepart{second}inicio, fim: DataHora\\cancelar()};
+        \node[classe] (usu) at (0,-2.0) {\textbf{Usuario}\nodepart{second}nome, email\\papel: Papel};
+        \node[classe] (lei) at (6.3,0) {\textbf{Leitura}\nodepart{second}sensor: String\\valor: Real, em};
+        \draw (lab) -- node[font=\tiny,above,pos=0.15]{1} node[font=\tiny,above,pos=0.85]{*} (ban);
+        \draw (ban) -- node[font=\tiny,right,pos=0.15]{1} node[font=\tiny,right,pos=0.85]{*} (res);
+        \draw (usu) -- node[font=\tiny,above,pos=0.15]{1} node[font=\tiny,above,pos=0.85]{*} (res);
+        \draw (ban) -- node[font=\tiny,above,pos=0.15]{1} node[font=\tiny,above,pos=0.85]{*} (lei);
+      \end{tikzpicture}
+    \end{column}
+    \begin{column}{0.38\textwidth}
+      \begin{definicao}[UML]
+        \emph{Unified Modeling Language}: notação padrão para desenhar a estrutura e o comportamento de sistemas.
+      \end{definicao}
+      \begin{conceito}[Diagrama de classes]
+        Mostra as entidades, seus atributos e operações e as \textbf{associações} entre elas com multiplicidade (1, \texttt{*}).
+      \end{conceito}
+      \begin{dica}
+        Esse diagrama vira as tabelas do Módulo 09 e os modelos de domínio do Módulo 08.
+      \end{dica}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{UML: casos de uso e sequência}
+  \begin{columns}[c]
+    \begin{column}{0.44\textwidth}
+      \centering
+      \begin{tikzpicture}[uc/.style={ellipse,draw=azulpetroleo,fill=azulpetroleo!8,font=\tiny,minimum width=2.3cm,minimum height=0.6cm}]
+        \draw[azulpetroleo] (0,0.75) circle (0.12) (0,0.63) -- (0,0.35) (-0.18,0.53) -- (0.18,0.53) (0,0.35) -- (-0.14,0.12) (0,0.35) -- (0.14,0.12);
+        \node[font=\tiny] at (0,-0.05) {Aluno};
+        \draw[azulpetroleo] (0,-1.15) circle (0.12) (0,-1.27) -- (0,-1.55) (-0.18,-1.37) -- (0.18,-1.37) (0,-1.55) -- (-0.14,-1.78) (0,-1.55) -- (0.14,-1.78);
+        \node[font=\tiny] at (0,-1.95) {Técnico};
+        \draw[cinzamedio,rounded corners] (1.0,1.0) rectangle (4.1,-2.1);
+        \node[font=\tiny\bfseries,text=azulpetroleo] at (2.55,0.82) {LabMonitor};
+        \node[uc] (u1) at (2.55,0.35) {Reservar bancada};
+        \node[uc] (u2) at (2.55,-0.4) {Ver leituras};
+        \node[uc] (u3) at (2.55,-1.15) {Cadastrar equipamento};
+        \node[uc] (u4) at (2.55,-1.8) {Receber alerta};
+        \draw (0.2,0.45) -- (u1); \draw (0.2,0.45) -- (u2);
+        \draw (0.2,-1.45) -- (u2); \draw (0.2,-1.45) -- (u3); \draw (0.2,-1.45) -- (u4);
+      \end{tikzpicture}
+    \end{column}
+    \begin{column}{0.54\textwidth}
+      \centering
+      \begin{tikzpicture}[font=\tiny,every node/.append style={fill=white,inner sep=1pt}]
+        \foreach \x/\t in {0/Aluno,1.6/App,3.2/API,4.8/Banco}{
+          \node[caixa,minimum width=1.2cm] at (\x,0) {\t};
+          \draw[cinzamedio,dashed] (\x,-0.3) -- (\x,-2.9);}
+        \draw[seta] (0,-0.6) -- node[above]{toca ``Reservar''} (1.6,-0.6);
+        \draw[seta] (1.6,-1.0) -- node[above]{POST /reservas} (3.2,-1.0);
+        \draw[seta] (3.2,-1.4) -- node[above]{INSERT (transação)} (4.8,-1.4);
+        \draw[seta,dashed] (4.8,-1.8) -- node[above]{ok} (3.2,-1.8);
+        \draw[seta,dashed] (3.2,-2.2) -- node[above]{201 Created} (1.6,-2.2);
+        \draw[seta,dashed] (1.6,-2.6) -- node[above]{``Reserva confirmada''} (0,-2.6);
+      \end{tikzpicture}
+      \begin{conceito}[Dois olhares]
+        \textbf{Casos de uso}: quem usa o sistema e para quê. \textbf{Sequência}: a ordem das mensagens entre as partes num cenário.
+      \end{conceito}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Modelo C4: arquitetura em níveis de zoom}
+  \begin{columns}[c]
+    \begin{column}{0.58\textwidth}
+      \centering
+      \begin{tikzpicture}[node distance=7mm,every node/.style={font=\scriptsize,align=center}]
+        \node[caixaambar,text width=1.8cm] (al) {Aluno e técnico\\ \tiny pessoas};
+        \node[caixapetroleo,text width=2.1cm,right=of al] (app) {App LabMonitor\\ \tiny Kotlin ou Flutter};
+        \node[caixapetroleo,text width=2.0cm,right=of app] (api) {API\\ \tiny backend (Mód. 16/17)};
+        \node[caixa,text width=1.6cm,below=of api] (db) {Banco de dados};
+        \node[caixa,text width=1.8cm,below=of app] (br) {Broker MQTT};
+        \node[caixaescura,text width=1.6cm,below=of al] (esp) {ESP32 nas bancadas};
+        \draw[seta] (al) -- node[rotulo,above]{\tiny usa} (app);
+        \draw[seta] (app) -- node[rotulo,above]{\tiny HTTPS} (api);
+        \draw[seta] (api) -- (db);
+        \draw[seta] (esp) -- node[rotulo,below]{\tiny publica} (br);
+        \draw[seta] (br) -- node[rotulo,left]{\tiny assina} (app);
+        \draw[seta] (br) -- (api);
+      \end{tikzpicture}
+    \end{column}
+    \begin{column}{0.4\textwidth}
+      \begin{definicao}[Modelo C4]
+        Quatro níveis de diagramas: \textbf{Contexto} (o sistema e quem o usa), \textbf{Contêineres} (apps, APIs, bancos), \textbf{Componentes} (partes de cada contêiner) e \textbf{Código}.
+      \end{definicao}
+      \begin{dica}
+        O diagrama ao lado mistura contexto e contêineres: o suficiente para qualquer pessoa nova no projeto entender o todo em um minuto.
+      \end{dica}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% =============================================================================
+\section{Princípios de projeto e código limpo}
+
+\begin{frame}{Coesão e acoplamento}
+  \begin{columns}[c]
+    \begin{column}{0.5\textwidth}
+      \centering
+      \begin{tikzpicture}[m/.style={draw=azulpetroleo,rounded corners,minimum width=1.6cm,minimum height=1.2cm},
+          d/.style={circle,fill=ambar,inner sep=1.5pt}]
+        \node[m] (a) at (0,0) {}; \node[m] (b) at (2.3,0) {};
+        \foreach \p in {(-0.4,0.25),(0.3,0.3),(-0.2,-0.25),(0.4,-0.2)} \node[d] at \p {};
+        \foreach \p in {(1.9,0.25),(2.6,0.3),(2.1,-0.25),(2.7,-0.2)} \node[d] at \p {};
+        \draw[azulpetroleo,thick] (0.8,0) -- (1.5,0);
+        \node[font=\tiny,text=verdeok] at (1.15,-0.85) {alta coesão, baixo acoplamento};
+        \node[m] (c) at (0,-2.1) {}; \node[m] (e) at (2.3,-2.1) {};
+        \foreach \p in {(-0.4,-1.85),(0.3,-1.8),(-0.2,-2.35),(0.4,-2.3)} \node[d] at \p {};
+        \foreach \p in {(1.9,-1.85),(2.6,-1.8),(2.1,-2.35),(2.7,-2.3)} \node[d] at \p {};
+        \draw[vermelhoerro] (-0.4,-1.85) -- (2.6,-1.8) (0.3,-1.8) -- (2.1,-2.35)
+          (-0.2,-2.35) -- (2.7,-2.3) (0.4,-2.3) -- (1.9,-1.85);
+        \node[font=\tiny,text=vermelhoerro] at (1.15,-2.95) {baixa coesão, alto acoplamento};
+      \end{tikzpicture}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \begin{definicao}[Coesão]
+        Quanto os elementos de um módulo trabalham para um \textbf{mesmo objetivo}. Queremos alta.
+      \end{definicao}
+      \begin{definicao}[Acoplamento]
+        Quanto um módulo depende dos detalhes de outro. Queremos baixo: mudar um não deve quebrar o outro.
+      \end{definicao}
+      \begin{analogia}
+        Uma boa cozinha: cada gaveta guarda coisas do mesmo tipo (coesão), e trocar o fogão não exige refazer a pia (acoplamento baixo).
+      \end{analogia}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{SOLID}
+  \scriptsize
+  \begin{tabularx}{\textwidth}{@{}p{3.6cm} L L@{}}
+    \toprule
+    \cabecalho{Princípio} & \cabecalho{Significado} & \cabecalho{No LabMonitor} \\
+    \midrule
+    \textbf{S} --- Responsabilidade única & uma classe tem um só motivo para mudar & a tela não faz HTTP; o serviço não desenha \\
+    \textbf{O} --- Aberto/fechado & aberto para extensão, fechado para modificação & nova fonte de leituras (MQTT) sem alterar o painel \\
+    \textbf{L} --- Substituição de Liskov & subtipos podem substituir o tipo base sem surpresas & \cod{FonteFake} funciona onde \cod{FonteBle} funciona \\
+    \textbf{I} --- Segregação de interfaces & interfaces pequenas e específicas & \cod{LeitorDeSensor} separado de \cod{ConfiguradorDePlaca} \\
+    \textbf{D} --- Inversão de dependência & depender de abstrações, não de implementações & o view model recebe \cod{BancadaRepository}, não a classe concreta \\
+    \bottomrule
+  \end{tabularx}
+  \vspace{4pt}
+  \begin{columns}[T]
+    \begin{column}{0.48\textwidth}
+      \begin{historia}
+        Os princípios foram reunidos por Robert C. Martin no início dos anos 2000; o acrônimo foi sugerido por Michael Feathers.
+      \end{historia}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \begin{atencao}
+        Princípios são guias, não leis. Aplicá-los além da conta cria camadas e interfaces que ninguém precisa.
+      \end{atencao}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}[fragile]{Inversão de dependência nas duas trilhas}
+  \begin{columns}[T]
+    \begin{column}{0.49\textwidth}
+\begin{codigo}[title=Kotlin]{Kotlin}
+interface BancadaRepository {
+  suspend fun listar(): List<Bancada>
+}
+class BancadaRepositoryRemoto(
+  private val api: ApiService
+) : BancadaRepository {
+  override suspend fun listar() =
+    api.bancadas().map { it.paraModelo() }
+}
+class PainelViewModel(
+  private val repo: BancadaRepository  // abstração
+) : ViewModel()
+\end{codigo}
+    \end{column}
+    \begin{column}{0.49\textwidth}
+\begin{codigo}[title=Dart]{Dart}
+abstract interface class BancadaRepository {
+  Future<List<Bancada>> listar();
+}
+class BancadaRepositoryRemoto
+    implements BancadaRepository {
+  BancadaRepositoryRemoto(this.api);
+  final ApiService api;
+  @override
+  Future<List<Bancada>> listar() async =>
+      [for (final d in await api.bancadas()) d.paraModelo()];
+}
+class PainelViewModel extends ChangeNotifier {
+  PainelViewModel(this.repo);   // abstração
+  final BancadaRepository repo;
+}
+\end{codigo}
+    \end{column}
+  \end{columns}
+  \begin{destaque}
+    O view model não sabe se os dados vêm da API, do banco local ou de um \emph{fake} de teste: só conhece o contrato.
+  \end{destaque}
+\end{frame}
+
+\begin{frame}{Código limpo}
+  \begin{columns}[T]
+    \begin{column}{0.5\textwidth}
+      \begin{conceito}[Práticas]
+        \begin{itemize}
+          \item \textbf{Nomes que revelam a intenção}: \cod{reservasDoDia}, não \cod{lista2}.
+          \item \textbf{Funções pequenas}, que fazem uma coisa.
+          \item \textbf{Sem números mágicos}: \cod{limiteAlertaCelsius = 30}.
+          \item Comentários explicam o \textbf{porquê}; o código mostra o \textbf{como}.
+          \item Tratar erros perto de onde acontecem.
+        \end{itemize}
+      \end{conceito}
+      \begin{conceito}[DRY, KISS, YAGNI]
+        Não se repita; mantenha simples; não construa o que ainda não é necessário.
+      \end{conceito}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \scriptsize
+      \begin{tabularx}{\linewidth}{@{}l L@{}}
+        \toprule
+        \cabecalho{Mau cheiro} & \cabecalho{Sinal de que\ldots} \\
+        \midrule
+        Método longo & faz coisas demais \\
+        Classe deus & concentra responsabilidades de várias \\
+        Código duplicado & falta uma abstração \\
+        Lista longa de parâmetros & falta um objeto \\
+        Comentário explicando o óbvio & o nome não está bom \\
+        \bottomrule
+      \end{tabularx}
+      \begin{definicao}[Refatoração]
+        Mudar a estrutura interna do código \textbf{sem mudar o comportamento}, em pequenos passos protegidos por testes.
+      \end{definicao}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Padrões de projeto}
+  \begin{columns}[T]
+    \begin{column}{0.5\textwidth}
+      \begin{definicao}[Padrão de projeto]
+        Solução reutilizável e nomeada para um problema recorrente de projeto. Dá à equipe um \textbf{vocabulário} comum.
+      \end{definicao}
+      \begin{historia}
+        O livro \emph{Design Patterns} (1994), de Gamma, Helm, Johnson e Vlissides (a ``Gangue dos Quatro''), catalogou 23 padrões em três categorias.
+      \end{historia}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \scriptsize
+      \begin{tabularx}{\linewidth}{@{}l L@{}}
+        \toprule
+        \cabecalho{Padrão} & \cabecalho{Onde aparece no curso} \\
+        \midrule
+        \emph{Factory} (criacional) & criar o cliente HTTP configurado \\
+        \emph{Builder} (criacional) & montar requisições e notificações \\
+        \emph{Adapter} (estrutural) & DTO da API $\rightarrow$ modelo de domínio \\
+        \emph{Observer} (comportamental) & \emph{streams}, \emph{flows} e \emph{listeners} \\
+        \emph{Strategy} (comportamental) & fonte de leituras: BLE, MQTT ou \emph{fake} \\
+        \emph{Command} (comportamental) & ações do view model (Módulo 08) \\
+        \emph{Repository} & acesso a dados atrás de uma interface \\
+        \bottomrule
+      \end{tabularx}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% =============================================================================
+\section{Controle de versão com Git}
+
+\begin{frame}{Por que controlar versões}
+  \begin{columns}[c]
+    \begin{column}{0.52\textwidth}
+      \centering
+      \begin{tikzpicture}[every node/.style={font=\tiny,align=center}]
+        \node[font=\scriptsize\bfseries,text=azulpetroleo] at (1.0,1.55) {Centralizado (SVN)};
+        \node[caixaescura,minimum width=1.6cm] (srv) at (1.0,0.9) {Servidor central};
+        \node[caixa] (c1) at (0,-0.3) {Dev 1};
+        \node[caixa] (c2) at (1.0,-0.3) {Dev 2};
+        \node[caixa] (c3) at (2.0,-0.3) {Dev 3};
+        \draw[seta,<->] (srv) -- (c1); \draw[seta,<->] (srv) -- (c2); \draw[seta,<->] (srv) -- (c3);
+        \node[font=\scriptsize\bfseries,text=azulpetroleo] at (4.6,1.55) {Distribuído (Git)};
+        \node[caixapetroleo,minimum width=1.6cm] (gh) at (4.6,0.9) {GitHub};
+        \node[caixapetroleo] (d1) at (3.75,-0.3) {Dev 1\\ histórico\\ completo};
+        \node[caixapetroleo] (d2) at (5.45,-0.3) {Dev 2\\ histórico\\ completo};
+        \draw[seta,<->] (gh) -- (d1); \draw[seta,<->] (gh) -- (d2); \draw[seta,<->,dashed] (d1) -- (d2);
+      \end{tikzpicture}
+    \end{column}
+    \begin{column}{0.46\textwidth}
+      \begin{conceito}[O que o controle de versão dá]
+        Histórico de cada mudança (quem, quando, por quê), volta a qualquer versão, trabalho em paralelo sem sobrescrever o colega e base para revisão e CI.
+      \end{conceito}
+      \begin{historia}
+        Linus Torvalds criou o Git em 2005 para o desenvolvimento do kernel Linux, priorizando velocidade, integridade e trabalho distribuído.
+      \end{historia}
+      \begin{dica}
+        No Git, cada clone é um repositório completo: dá para fazer \emph{commits} offline.
+      \end{dica}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Git por dentro: \emph{snapshots}, \emph{hashes} e ponteiros}
+  \begin{columns}[c]
+    \begin{column}{0.52\textwidth}
+      \centering
+      \begin{tikzpicture}[c/.style={circle,draw=azulpetroleo,fill=white,line width=1pt,minimum size=7mm,font=\tiny}]
+        \node[c] (a) at (0,0) {a1f};
+        \node[c] (b) at (1.3,0) {7c2};
+        \node[c] (c) at (2.6,0) {e90};
+        \node[c] (d) at (3.9,0.9) {44b};
+        \node[c] (e) at (5.2,0.9) {b3d};
+        \draw[seta] (b) -- (a); \draw[seta] (c) -- (b); \draw[seta] (d) -- (c); \draw[seta] (e) -- (d);
+        \node[caixaambar,font=\tiny] (main) at (2.6,-0.9) {main};
+        \node[caixaambar,font=\tiny] (feat) at (5.2,1.8) {feature/alertas};
+        \node[caixaescura,font=\tiny] (head) at (6.6,1.8) {HEAD};
+        \draw[seta] (main) -- (c); \draw[seta] (feat) -- (e); \draw[seta] (head) -- (feat);
+      \end{tikzpicture}\\[2pt]
+      {\tiny Cada \emph{commit} aponta para o anterior (seu pai).}
+    \end{column}
+    \begin{column}{0.46\textwidth}
+      \begin{pordentro}[Como o Git guarda tudo]
+        Cada \emph{commit} é uma \textbf{foto completa} do projeto (arquivos repetidos são reaproveitados), identificada por um \emph{hash} calculado do conteúdo. Mudou um byte, muda o \emph{hash}: o histórico não pode ser alterado sem que se perceba.
+      \end{pordentro}
+      \begin{definicao}[Branch e HEAD]
+        Uma \emph{branch} é só um \textbf{ponteiro móvel} para um \emph{commit}. \cod{HEAD} indica onde você está agora.
+      \end{definicao}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}[fragile]{As três áreas do Git}
+  \begin{columns}[c]
+    \begin{column}{0.54\textwidth}
+      \centering
+      \begin{tikzpicture}[node distance=10mm,every node/.style={font=\scriptsize,align=center}]
+        \node[caixa,minimum width=1.75cm,minimum height=1.2cm] (wd) {Diretório\\ de trabalho};
+        \node[caixaambar,minimum width=1.75cm,minimum height=1.2cm,right=of wd] (st) {\emph{Staging}\\ (índice)};
+        \node[caixapetroleo,minimum width=1.75cm,minimum height=1.2cm,right=of st] (rp) {Repositório\\ (\emph{commits})};
+        \draw[seta] ([yshift=2mm]wd.east) -- node[rotulo,above]{\tiny\texttt{git add}} ([yshift=2mm]st.west);
+        \draw[seta] ([yshift=2mm]st.east) -- node[rotulo,above]{\tiny\texttt{git commit}} ([yshift=2mm]rp.west);
+        \draw[setaambar] ([yshift=-2mm]st.west) -- node[rotulo,below,align=center]{\tiny\texttt{restore}\\ \tiny\texttt{--staged}} ([yshift=-2mm]wd.east);
+        \draw[setaambar,rounded corners] (rp.south) -- ++(0,-5mm) -| node[rotulo,pos=0.25,below]{\tiny\texttt{git switch} / \texttt{git restore}} (wd.south);
+      \end{tikzpicture}
+    \end{column}
+    \begin{column}{0.44\textwidth}
+      \begin{conceito}[Para que serve o \emph{staging}]
+        Escolher exatamente o que entra no próximo \emph{commit}. Um \emph{commit} deve contar \textbf{uma} mudança coerente, mesmo que você tenha mexido em várias coisas.
+      \end{conceito}
+\begin{terminal}
+$ git status          # o que mudou?
+$ git diff            # diferenças não preparadas
+$ git add lib/painel/ # preparar só isso
+$ git commit -m "feat: filtro no painel"
+\end{terminal}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}[fragile]{Comandos essenciais}
+  \begin{columns}[T]
+    \begin{column}{0.5\textwidth}
+\begin{terminal}[title=Configurar e começar]
+$ git config --global user.name "Ana Souza"
+$ git config --global user.email ana@ifma.edu.br
+$ git config --global init.defaultBranch main
+$ git clone https://github.com/turma/labmonitor.git
+$ git log --oneline --graph --all
+\end{terminal}
+\begin{terminal}[title=Trabalhar numa branch]
+$ git switch -c feature/alertas
+# ... editar, testar ...
+$ git add .
+$ git commit -m "feat: alerta de temperatura"
+$ git push -u origin feature/alertas
+\end{terminal}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+\begin{terminal}[title=Sincronizar e integrar]
+$ git switch main
+$ git pull               # fetch + merge
+$ git merge feature/alertas
+$ git branch -d feature/alertas
+\end{terminal}
+\begin{codigo}[title=.gitignore (trechos)]{bash}
+build/
+.dart_tool/          # Flutter
+.gradle/             # Android
+local.properties
+key.properties
+*.jks
+.env
+\end{codigo}
+      \begin{atencao}
+        Segredos que entraram num \emph{commit} continuam no histórico: troque a chave.
+      \end{atencao}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}[fragile]{Integrando: \emph{merge} e conflitos}
+  \begin{columns}[c]
+    \begin{column}{0.5\textwidth}
+      \centering
+      \begin{tikzpicture}[c/.style={circle,draw=azulpetroleo,fill=white,line width=0.9pt,minimum size=5mm}]
+        \node[font=\tiny\bfseries,text=azulpetroleo] at (1.4,1.5) {\emph{Fast-forward}};
+        \node[c] (a) at (0,1) {}; \node[c] (b) at (1,1) {}; \node[c,fill=ambarclaro] (c) at (2,1) {}; \node[c,fill=ambarclaro] (d) at (3,1) {};
+        \draw[seta] (b) -- (a); \draw[seta] (c) -- (b); \draw[seta] (d) -- (c);
+        \node[font=\tiny] at (3,0.6) {main avança};
+        \node[font=\tiny\bfseries,text=azulpetroleo] at (1.4,0.1) {De três vias};
+        \node[c] (e) at (0,-0.5) {}; \node[c] (f) at (1,-0.5) {}; \node[c] (g) at (2,-0.2) {}; \node[c,fill=ambarclaro] (h) at (2,-0.9) {};
+        \node[c,fill=azulpetroleo] (m) at (3,-0.5) {};
+        \draw[seta] (f) -- (e); \draw[seta] (g) -- (f); \draw[seta] (h) -- (f); \draw[seta] (m) -- (g); \draw[seta] (m) -- (h);
+        \node[font=\tiny] at (3.6,-0.5) {\emph{merge}};
+      \end{tikzpicture}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+\begin{codigo}[title=Conflito: os dois mudaram a mesma linha]{bash}
+<<<<<<< HEAD
+const limiteAlerta = 30.0;
+=======
+const limiteAlerta = 28.5;
+>>>>>>> feature/alertas
+\end{codigo}
+      \begin{conceito}[Resolver]
+        Edite o arquivo deixando a versão correta (conversando com o colega, se preciso), remova os marcadores, rode os testes, \cod{git add} e \cod{git commit}.
+      \end{conceito}
+      \begin{dica}
+        \emph{Branches} curtas e integradas com frequência geram menos conflitos.
+      \end{dica}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{\emph{Rebase} e a regra de ouro}
+  \begin{columns}[c]
+    \begin{column}{0.5\textwidth}
+      \centering
+      \begin{tikzpicture}[c/.style={circle,draw=azulpetroleo,fill=white,line width=0.9pt,minimum size=5mm,font=\tiny}]
+        \node[font=\tiny\bfseries,text=azulpetroleo] at (1.5,1.6) {Antes};
+        \node[c] (a) at (0,1) {A}; \node[c] (b) at (1,1) {B}; \node[c] (c) at (2,1) {C};
+        \node[c,fill=ambarclaro] (x) at (2,0.4) {X}; \node[c,fill=ambarclaro] (y) at (3,0.4) {Y};
+        \draw[seta] (b) -- (a); \draw[seta] (c) -- (b); \draw[seta] (x) -- (b); \draw[seta] (y) -- (x);
+        \node[font=\tiny\bfseries,text=azulpetroleo] at (1.5,-0.3) {Depois de \texttt{git rebase main}};
+        \node[c] (a2) at (0,-0.9) {A}; \node[c] (b2) at (1,-0.9) {B}; \node[c] (c2) at (2,-0.9) {C};
+        \node[c,fill=ambar] (x2) at (3,-0.9) {X'}; \node[c,fill=ambar] (y2) at (4,-0.9) {Y'};
+        \draw[seta] (b2) -- (a2); \draw[seta] (c2) -- (b2); \draw[seta] (x2) -- (c2); \draw[seta] (y2) -- (x2);
+      \end{tikzpicture}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \begin{definicao}[\emph{Rebase}]
+        Reaplica os seus \emph{commits} sobre outra base, criando \emph{commits} novos (X', Y'). O histórico fica linear, como se você tivesse começado depois.
+      \end{definicao}
+      \begin{erro}[Regra de ouro]
+        Nunca faça \emph{rebase} de \emph{commits} que outras pessoas já baixaram: os \emph{hashes} mudam e o histórico delas diverge do seu.
+      \end{erro}
+      \begin{dica}
+        \emph{Merge} preserva a história real; \emph{rebase} deixa a história legível. Use \emph{rebase} só na sua \emph{branch} local.
+      \end{dica}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% =============================================================================
+\section{Colaboração no GitHub}
+
+\begin{frame}{GitHub flow}
+  \centering
+  \begin{tikzpicture}[node distance=4mm,every node/.style={font=\scriptsize,align=center,minimum height=10mm}]
+    \node[caixa,text width=1.6cm] (b) {Criar\\ \emph{branch}};
+    \node[caixa,right=of b,text width=1.6cm] (c) {\emph{Commits}\\ pequenos};
+    \node[caixapetroleo,right=of c,text width=1.8cm] (p) {Abrir\\ \emph{pull request}};
+    \node[caixaambar,right=of p,text width=1.8cm] (r) {Revisão\\ + CI verde};
+    \node[caixapetroleo,right=of r,text width=1.5cm] (m) {\emph{Merge}\\ na main};
+    \node[caixaescura,right=of m,text width=1.5cm] (d) {Entrega};
+    \foreach \x/\y in {b/c,c/p,p/r,r/m,m/d} \draw[seta] (\x) -- (\y);
+    \draw[setaambar,rounded corners] (r.south) -- ++(0,-5mm) -| node[rotulo,pos=0.25,below]{\tiny pedidos de mudança} (c.south);
+  \end{tikzpicture}
+  \vspace{6pt}
+  \begin{columns}[T]
+    \begin{column}{0.48\textwidth}
+      \begin{definicao}[\emph{Pull request} (PR)]
+        Pedido para integrar uma \emph{branch} em outra. Reúne descrição, diferenças, comentários de revisão e o resultado do CI num só lugar.
+      \end{definicao}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \begin{conceito}[Proteção da \emph{main}]
+        Configure o repositório para exigir PR, ao menos uma aprovação e CI verde antes do \emph{merge}. Ninguém envia direto para a \emph{main}.
+      \end{conceito}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Revisão de código}
+  \begin{columns}[T]
+    \begin{column}{0.5\textwidth}
+      \begin{conceito}[O que olhar]
+        \begin{enumerate}
+          \item Resolve o problema descrito?
+          \item Há testes? Eles falhariam sem a mudança?
+          \item É legível? Nomes, tamanho das funções, duplicação.
+          \item Respeita a arquitetura (camadas, dependências)?
+          \item Segurança e privacidade: segredos, validação, dados pessoais.
+          \item Acessibilidade e textos para o usuário.
+        \end{enumerate}
+      \end{conceito}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \begin{dica}[Para quem envia]
+        PRs pequenos (até cerca de 400 linhas) são revisados melhor e mais rápido. Descreva o porquê e mostre capturas de tela das mudanças visuais.
+      \end{dica}
+      \begin{dica}[Para quem revisa]
+        Comente o código, não a pessoa. Faça perguntas (``e se a lista vier vazia?'') e diferencie o que bloqueia do que é sugestão.
+      \end{dica}
+      \begin{analogia}
+        Como a revisão de um artigo científico: outro par de olhos acha o que o autor não vê.
+      \end{analogia}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}[fragile]{Mensagens de \emph{commit} e versões}
+  \begin{columns}[T]
+    \begin{column}{0.52\textwidth}
+\begin{terminal}[title=git log --oneline]
+b3d feat(alertas): notifica acima do limite
+44b fix(ble): reconecta após queda do sinal
+e90 test(painel): cobre o estado de erro
+7c2 docs: instruções de execução no README
+a1f refactor!: repositório retorna Result
+\end{terminal}
+      \begin{definicao}[\emph{Conventional Commits}]
+        Padrão \cod{tipo(escopo): descrição}. Tipos comuns: \cod{feat}, \cod{fix}, \cod{docs}, \cod{test}, \cod{refactor}, \cod{chore}. O \cod{!} indica quebra de compatibilidade.
+      \end{definicao}
+    \end{column}
+    \begin{column}{0.46\textwidth}
+      \begin{conceito}[Ligação com o SemVer]
+        \cod{fix} $\rightarrow$ PATCH; \cod{feat} $\rightarrow$ MINOR; quebra (\cod{!}) $\rightarrow$ MAJOR. Ferramentas geram a versão e o \emph{changelog} a partir das mensagens (Módulo 15).
+      \end{conceito}
+      \begin{dica}[Boa mensagem]
+        Imperativo, curta (até cerca de 50 caracteres) e com o \textbf{porquê} no corpo quando não for óbvio.
+      \end{dica}
+      \begin{definicao}[Tag]
+        Nome fixo para um \emph{commit} (\cod{v1.2.0}); no GitHub, vira uma \emph{release} com notas e arquivos.
+      \end{definicao}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Issues, quadro do projeto, README e licença}
+  \begin{columns}[T]
+    \begin{column}{0.5\textwidth}
+      \begin{conceito}[Organização no GitHub]
+        \textbf{Issues} registram histórias, tarefas e defeitos; \textbf{Projects} mostra as \emph{issues} num quadro Kanban; \textbf{Milestones} agrupam o que entra numa versão. Um PR com ``\cod{Closes \#12}'' fecha a \emph{issue} ao ser integrado.
+      \end{conceito}
+      \begin{conceito}[README que funciona]
+        O que é o projeto, captura de tela, como rodar, arquitetura, como contribuir e licença.
+      \end{conceito}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \scriptsize
+      \begin{tabularx}{\linewidth}{@{}l L@{}}
+        \toprule
+        \cabecalho{Licença} & \cabecalho{Em resumo} \\
+        \midrule
+        MIT & uso livre, inclusive comercial; manter o aviso de copyright \\
+        Apache 2.0 & como a MIT, com concessão explícita de patentes \\
+        GPL-3.0 & quem distribui versões modificadas deve abrir o código sob a mesma licença \\
+        Sem licença & ninguém tem permissão para reutilizar o código \\
+        \bottomrule
+      \end{tabularx}
+      \begin{atencao}
+        Confira a licença dos pacotes que você usa (Módulo 13: \cod{flutter\_blue\_plus}) e as regras da instituição para projetos acadêmicos.
+      \end{atencao}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% =============================================================================
+\section{Fechamento}
+
+\begin{frame}{Resumo}
+  \begin{resumo}
+    \begin{itemize}
+      \item Engenharia de software é abordagem sistemática para construir \textbf{e manter} software.
+      \item Métodos ágeis entregam em ciclos curtos; Scrum organiza em \emph{sprints}, Kanban limita o trabalho em andamento.
+      \item Requisitos verificáveis, histórias INVEST e critérios de aceitação guiam o que construir.
+      \item UML e C4 comunicam a estrutura; coesão, baixo acoplamento e SOLID guiam o projeto.
+      \item Git guarda fotos do projeto num grafo de \emph{commits}; \emph{branches} são ponteiros.
+      \item No GitHub, PR + revisão + CI protegem a \emph{main}.
+    \end{itemize}
+  \end{resumo}
+\end{frame}
+
+\begin{frame}{Glossário (1/2)}
+  \begin{glossario}
+    Ciclo de vida & sequência de atividades do software, da ideia à manutenção \\
+    \emph{Sprint} & ciclo de duração fixa do Scrum que gera um incremento \\
+    WIP & trabalho em andamento; o Kanban limita sua quantidade \\
+    História de usuário & necessidade descrita como ``como\ldots quero\ldots para\ldots'' \\
+    Critério de aceitação & condição verificável para considerar a história pronta \\
+    Requisito não funcional & qualidade ou restrição (desempenho, segurança, acessibilidade) \\
+    Coesão / acoplamento & foco interno de um módulo / dependência entre módulos \\
+    Refatoração & mudança da estrutura do código sem mudar o comportamento \\
+  \end{glossario}
+\end{frame}
+
+\begin{frame}{Glossário (2/2)}
+  \begin{glossario}
+    \emph{Commit} & foto do projeto com autor, data, mensagem e ponteiro para o anterior \\
+    \emph{Branch} & ponteiro móvel para um \emph{commit}; linha de trabalho independente \\
+    \cod{HEAD} & indica o \emph{commit} ou a \emph{branch} atual \\
+    \emph{Staging} & área onde se prepara o conteúdo do próximo \emph{commit} \\
+    \emph{Merge} / \emph{rebase} & integrar históricos com um \emph{commit} de junção / reaplicando \emph{commits} \\
+    \emph{Pull request} & pedido de integração com revisão e CI \\
+    \emph{Conventional Commits} & padrão de mensagens \cod{tipo(escopo): descrição} \\
+    \emph{Tag} & nome fixo para um \emph{commit}, usado em versões \\
+  \end{glossario}
+\end{frame}
+
+\begin{frame}{Questões de revisão}
+  \begin{questoes}
+    \item Por que a manutenção domina o custo de um software, e o que isso muda na forma de programar?
+    \item Compare cascata e ágil quanto ao momento em que os problemas são descobertos.
+    \item Transforme ``o app deve ser rápido'' em um requisito não funcional verificável.
+    \item Escreva uma história de usuário com dois critérios de aceitação para ``cancelar reserva''.
+    \item Explique coesão e acoplamento com um exemplo de código ruim e sua correção.
+    \item Por que se diz que uma \emph{branch} no Git é ``barata''?
+    \item Quando usar \emph{merge} e quando usar \emph{rebase}? Qual é a regra de ouro?
+    \item Um colega enviou uma chave de API num \emph{commit} já publicado. O que fazer?
+  \end{questoes}
+\end{frame}
+
+\begin{frame}{Exercícios}
+  \begin{exercicio}[Exercício 1 --- Requisitos]
+    Escreva cinco histórias de usuário do LabMonitor com critérios de aceitação e classifique-as por MoSCoW.
+  \end{exercicio}
+  \begin{exercicio}[Exercício 2 --- Modelagem]
+    Desenhe os diagramas de classes e de sequência para ``registrar uma leitura recebida por BLE''.
+  \end{exercicio}
+  \begin{exercicio}[Exercício 3 --- Git em dupla]
+    Em dupla, criem um conflito proposital na mesma linha, resolvam-no e integrem via \emph{pull request} com revisão.
+  \end{exercicio}
+  \begin{projeto}[LabMonitor --- Etapa 3]
+    Crie o repositório com README, licença e \cod{.gitignore}; registre o \emph{backlog} como \emph{issues} num quadro do GitHub Projects; proteja a \emph{main} e entregue a primeira tarefa por \emph{pull request}.
+  \end{projeto}
+\end{frame}
+
+\begin{frame}{Para aprofundar}
+  \small
+  \begin{itemize}
+    \item \emph{Pro Git} (livro gratuito, com tradução): \url{https://git-scm.com/book/pt-br/v2}
+    \item Guia do Scrum: \url{https://scrumguides.org}
+    \item Manifesto Ágil: \url{https://agilemanifesto.org/iso/ptbr/manifesto.html}
+    \item Modelo C4: \url{https://c4model.com}
+    \item \emph{Conventional Commits}: \url{https://www.conventionalcommits.org/pt-br}
+    \item Documentação do GitHub: \url{https://docs.github.com/pt}
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{Respostas das questões de revisão}
+  \begin{respostas}
+    \item O software vive anos sendo corrigido e adaptado (novas versões do sistema, das lojas, de requisitos). Por isso vale investir em legibilidade, testes e baixo acoplamento desde o início.
+    \item Na cascata, a integração e os testes vêm no fim, quando corrigir é caro; no ágil, cada ciclo curto entrega algo testável e expõe problemas cedo.
+    \item Exemplo: ``o painel exibe a lista de bancadas em até 2 s após o toque, em um aparelho intermediário, com rede 4G''.
+    \item ``Como aluno, quero cancelar minha reserva para liberar o horário.'' Critérios: a reserva some da minha lista e a bancada fica livre; não posso cancelar reservas de outras pessoas.
+    \item Uma tela que faz HTTP, SQL e desenho tem baixa coesão e acopla a UI à API; separar em view, view model, repositório e serviço resolve.
+    \item Porque é só um ponteiro para um \emph{commit}: criar ou apagar não copia arquivos.
+    \item \emph{Merge} para integrar e preservar a história; \emph{rebase} para organizar a sua \emph{branch} local antes do PR. Nunca reescrever \emph{commits} já compartilhados.
+    \item Considerar a chave comprometida: revogá-la e gerar outra imediatamente. Limpar o histórico não basta, pois cópias já podem existir.
+  \end{respostas}
+\end{frame}
+
+\encerramento{Módulo 04 (comum) --- Design de interfaces e UX: princípios, acessibilidade, Material 3 e Figma.}
+
+\end{document}

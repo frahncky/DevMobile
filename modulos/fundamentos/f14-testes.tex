@@ -1,0 +1,351 @@
+% =============================================================================
+%  Fundamentos compartilhados --- Módulo 14: teste de software
+%  Incluído pelas trilhas Kotlin e Flutter com \input{../fundamentos/f14-testes}
+% =============================================================================
+\section{Fundamentos de teste de software}
+
+\begin{frame}{Erro, defeito e falha}
+  \begin{definicao}[Três palavras que não são sinônimos]
+    \textbf{Erro} (\emph{error}): engano cometido por uma pessoa.
+    \textbf{Defeito} (\emph{defect}, \emph{bug}): imperfeição no código ou em outro artefato, consequência do erro.
+    \textbf{Falha} (\emph{failure}): comportamento incorreto observado quando o defeito é executado.
+  \end{definicao}
+  \centering
+  \begin{tikzpicture}[node distance=17mm]
+    \node[caixa,minimum width=3.0cm] (e) {\textbf{Erro}\\ \tiny o dev usa \texttt{>} em vez de \texttt{>=}};
+    \node[caixapetroleo,minimum width=3.0cm,right=of e] (d) {\textbf{Defeito}\\ \tiny a regra de alerta fica errada};
+    \node[caixaambar,minimum width=3.2cm,right=of d] (f) {\textbf{Falha}\\ \tiny a 30,0\,°C nenhum alerta aparece};
+    \draw[seta] (e) -- node[rotulo,above]{\tiny introduz} (d);
+    \draw[seta] (d) -- node[rotulo,above]{\tiny executado} (f);
+  \end{tikzpicture}
+  \vspace{2pt}
+  \begin{columns}[T]
+    \begin{column}{0.48\textwidth}
+      \begin{conceito}[Consequência]
+        Um defeito pode ficar anos sem causar falha, se a linha nunca for executada nas condições certas. Testar é \textbf{provocar} essas condições.
+      \end{conceito}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \begin{historia}
+        Em 1947, a equipe do computador Harvard Mark II, da qual Grace Hopper fazia parte, achou uma mariposa presa num relé e a colou no diário de bordo. A palavra \emph{bug} já existia, mas o episódio a popularizou.
+      \end{historia}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Para que serve testar}
+  \begin{columns}[T]
+    \begin{column}{0.5\textwidth}
+      \begin{conceito}[Objetivos dos testes]
+        \begin{itemize}
+          \item Encontrar defeitos antes do usuário.
+          \item Dar confiança para entregar.
+          \item Impedir que defeitos corrigidos voltem (\textbf{regressão}).
+          \item Documentar, em código executável, como o sistema deve se comportar.
+          \item Permitir \textbf{refatorar} sem medo.
+        \end{itemize}
+      \end{conceito}
+      \begin{atencao}[Princípio fundamental]
+        Testes mostram que defeitos \textbf{existem}; nunca provam que \textbf{não existem}. A ideia é de Edsger Dijkstra.
+      \end{atencao}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \begin{pordentro}[Teste exaustivo é impossível]
+        Uma função com dois inteiros de 32 bits tem $2^{64}$ combinações de entrada, cerca de $1{,}8\times10^{19}$. A um bilhão de testes por segundo, seriam quase 600 anos. Por isso escolhemos casos \textbf{representativos} com técnicas de projeto de testes.
+      \end{pordentro}
+      \begin{analogia}
+        O \emph{crash test} de um carro não bate o veículo em todas as velocidades e ângulos: escolhe poucos cenários que representam os acidentes reais.
+      \end{analogia}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{O custo de achar tarde}
+  \begin{columns}[c]
+    \begin{column}{0.52\textwidth}
+      \centering
+      \begin{tikzpicture}[x=0.95cm,y=0.5cm]
+        \draw[cinzamedio] (0,0) -- (5.3,0);
+        \foreach \x/\h/\t in {0.4/0.6/Requisitos,1.4/1.2/Projeto,2.4/2.2/Código,3.4/3.8/Teste,4.4/6.4/Produção}{
+          \fill[azulpetroleo] (\x,0) rectangle ++(0.6,\h);
+          \node[font=\tiny,rotate=35,anchor=north east] at (\x+0.45,-0.1) {\t};}
+        \fill[ambar] (4.4,0) rectangle ++(0.6,6.4);
+        \node[rotulo,font=\tiny,align=center] at (2.2,6.5) {custo relativo de corrigir\\ (ilustrativo)};
+      \end{tikzpicture}
+    \end{column}
+    \begin{column}{0.46\textwidth}
+      \begin{conceito}[Por que custa mais]
+        Um defeito achado em produção exige investigar relatos, reproduzir, corrigir, testar de novo, gerar versão, passar pela revisão da loja e esperar os usuários atualizarem. No app, ainda há dados já gravados errado.
+      \end{conceito}
+      \begin{dica}[\emph{Shift left}]
+        Antecipar a qualidade: revisar requisitos, escrever testes junto com o código e rodá-los a cada \emph{commit}.
+      \end{dica}
+      \begin{historia}
+        Barry Boehm mediu esse efeito nos anos 1970 e 1980; os números variam entre projetos, mas a tendência se repete.
+      \end{historia}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Verificação, validação e níveis de teste}
+  \begin{columns}[c]
+    \begin{column}{0.56\textwidth}
+      \centering
+      \begin{tikzpicture}[every node/.style={font=\scriptsize,minimum width=2.25cm,minimum height=6mm}]
+        \node[caixa] (l1) at (1.15,0) {Requisitos};
+        \node[caixa] (l2) at (1.55,-0.75) {Especificação};
+        \node[caixa] (l3) at (1.95,-1.5) {Arquitetura};
+        \node[caixa] (l4) at (2.35,-2.25) {Projeto detalhado};
+        \node[caixaescura] (c) at (3.8,-3.0) {Código};
+        \node[caixaambar] (r4) at (5.25,-2.25) {Teste de unidade};
+        \node[caixaambar] (r3) at (5.65,-1.5) {Integração};
+        \node[caixaambar] (r2) at (6.05,-0.75) {Teste de sistema};
+        \node[caixaambar] (r1) at (6.45,0) {Aceitação};
+        \foreach \a/\b in {l1/l2,l2/l3,l3/l4,l4/c,c/r4,r4/r3,r3/r2,r2/r1} \draw[seta] (\a) -- (\b);
+        \foreach \a/\b in {l1/r1,l2/r2,l3/r3,l4/r4} \draw[pontilhado,<->] (\a) -- (\b);
+      \end{tikzpicture}\\[2pt]
+      {\tiny Modelo em V: cada nível de teste confere um nível de especificação.}
+    \end{column}
+    \begin{column}{0.42\textwidth}
+      \begin{definicao}[Verificação]
+        ``Estamos construindo o produto \textbf{corretamente}?'' Confere o software contra a especificação.
+      \end{definicao}
+      \begin{definicao}[Validação]
+        ``Estamos construindo o produto \textbf{certo}?'' Confere se o software resolve o problema real do usuário.
+      \end{definicao}
+      \begin{dica}
+        O teste de aceitação é feito com o cliente: no LabMonitor, os técnicos do laboratório usando o app.
+      \end{dica}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Caixa-preta: partições e valores-limite}
+  \begin{columns}[T]
+    \begin{column}{0.5\textwidth}
+      \begin{definicao}[Teste caixa-preta]
+        Projetado a partir da \textbf{especificação}, sem olhar o código: entradas e saídas esperadas.
+      \end{definicao}
+      \begin{conceito}[Partição de equivalência]
+        Divide as entradas em classes que o sistema deve tratar do mesmo jeito; basta um representante de cada classe.
+      \end{conceito}
+      \begin{conceito}[Análise de valor-limite]
+        Defeitos se concentram nas bordas (\texttt{<} no lugar de \texttt{<=}). Teste o limite e seus vizinhos imediatos.
+      \end{conceito}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \begin{exemplo}[Regra: a reserva dura de 1 a 4 horas inteiras]
+        \centering
+        \begin{tikzpicture}[x=0.62cm]
+          \draw[cinzamedio,-{Stealth}] (-0.5,0) -- (6.5,0);
+          \fill[vermelhoerro!25] (-0.5,-0.15) rectangle (0.5,0.15);
+          \fill[verdeok!35] (0.5,-0.15) rectangle (4.5,0.15);
+          \fill[vermelhoerro!25] (4.5,-0.15) rectangle (6.5,0.15);
+          \foreach \v in {0,1,2,3,4,5,6} \node[font=\tiny,below] at (\v,-0.15) {\v};
+          \node[font=\tiny,above] at (0,0.15) {inválida};
+          \node[font=\tiny,above] at (2.5,0.15) {válida};
+          \node[font=\tiny,above] at (5.5,0.15) {inválida};
+        \end{tikzpicture}\par
+        \scriptsize
+        \begin{tabular}{@{}l l@{}}
+          \toprule
+          \cabecalho{Casos} & \cabecalho{Por quê} \\
+          \midrule
+          2 h & representante da classe válida \\
+          0 h e 1 h & limite inferior e vizinho \\
+          4 h e 5 h & limite superior e vizinho \\
+          $-1$ h, ``abc'' & entradas absurdas \\
+          \bottomrule
+        \end{tabular}
+      \end{exemplo}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}[fragile]{Caixa-branca: critérios de cobertura}
+  \begin{columns}[T]
+    \begin{column}{0.46\textwidth}
+      \begin{definicao}[Teste caixa-branca]
+        Projetado a partir da \textbf{estrutura interna} do código: comandos, decisões e caminhos.
+      \end{definicao}
+\begin{codigo}[title=Pseudocódigo]{bash}
+se temp >= limite E alertaAtivo:
+    notificar()
+registrar(temp)
+\end{codigo}
+      \begin{atencao}
+        Cobertura mede o que foi \textbf{executado}, não o que foi \textbf{conferido}: um teste sem \cod{expect} também ``cobre''.
+      \end{atencao}
+    \end{column}
+    \begin{column}{0.52\textwidth}
+      \scriptsize
+      \begin{tabularx}{\linewidth}{@{}p{2.1cm} L@{}}
+        \toprule
+        \cabecalho{Critério} & \cabecalho{Exige, no exemplo} \\
+        \midrule
+        \textbf{Comandos} & cada linha rodar ao menos uma vez: 1 teste (30\,°C, ativo) basta \\
+        \textbf{Decisões} & cada \cod{se} (\emph{branch}) ser verdadeiro e falso: 2 testes \\
+        \textbf{Condições} & cada condição simples verdadeira e falsa: \cod{temp} e \cod{alertaAtivo} variando \\
+        \textbf{Caminhos} & todas as rotas possíveis; cresce exponencialmente com laços e \cod{se}s \\
+        \bottomrule
+      \end{tabularx}
+      \begin{conceito}[Hierarquia]
+        Caminhos $\Rightarrow$ decisões $\Rightarrow$ comandos: quem satisfaz um critério mais forte satisfaz os mais fracos.
+      \end{conceito}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Dublês de teste}
+  \begin{columns}[T]
+    \begin{column}{0.62\textwidth}
+      \scriptsize
+      \begin{tabularx}{\linewidth}{@{}l L L@{}}
+        \toprule
+        \cabecalho{Dublê} & \cabecalho{O que é} & \cabecalho{Exemplo no LabMonitor} \\
+        \midrule
+        \textbf{Dummy} & objeto só para preencher um parâmetro; nunca é usado & um \emph{logger} vazio exigido pelo construtor \\
+        \textbf{Stub} & devolve respostas prontas & repositório que sempre devolve 3 bancadas \\
+        \textbf{Spy} & stub que também registra as chamadas & conta quantas notificações foram enviadas \\
+        \textbf{Mock} & objeto com \textbf{expectativas} de interação, verificadas no teste & ``\cod{reservar(7)} deve ser chamado uma vez'' \\
+        \textbf{Fake} & implementação funcional simplificada & banco em memória, API falsa com dados fixos \\
+        \bottomrule
+      \end{tabularx}
+    \end{column}
+    \begin{column}{0.36\textwidth}
+      \begin{definicao}[Dublê de teste]
+        Objeto que substitui uma dependência real (rede, banco, sensor, relógio) durante o teste.
+      \end{definicao}
+      \begin{analogia}
+        Como o dublê de cinema: entra nas cenas perigosas ou caras no lugar do ator.
+      \end{analogia}
+      \begin{historia}
+        A classificação é de Gerard Meszaros, no livro \emph{xUnit Test Patterns} (2007).
+      \end{historia}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Propriedades de um bom teste}
+  \begin{columns}[T]
+    \begin{column}{0.5\textwidth}
+      \scriptsize
+      \begin{tabularx}{\linewidth}{@{}l L@{}}
+        \toprule
+        \cabecalho{FIRST} & \cabecalho{Significado} \\
+        \midrule
+        \textbf{F}ast & rápido: roda em milissegundos, então roda sempre \\
+        \textbf{I}ndependent & não depende da ordem nem de outros testes \\
+        \textbf{R}epeatable & mesmo resultado em qualquer máquina e horário \\
+        \textbf{S}elf-validating & passa ou falha sozinho, sem alguém olhar a saída \\
+        \textbf{T}imely & escrito junto com o código (ou antes) \\
+        \bottomrule
+      \end{tabularx}
+      \begin{conceito}[Estrutura]
+        \textbf{AAA}: \emph{Arrange}, \emph{Act}, \emph{Assert}.\\
+        \textbf{BDD}: \emph{Given}, \emph{When}, \emph{Then} (dado, quando, então).
+      \end{conceito}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \begin{erro}[Teste instável (\emph{flaky})]
+        Passa e falha sem o código mudar. Causas típicas: depender do relógio real, da rede, da ordem de execução, de esperas fixas (\emph{sleep}) ou de estado compartilhado entre testes.
+      \end{erro}
+      \begin{dica}[Teste também é código]
+        Merece nomes claros, nada de duplicação e revisão. Um bom nome de teste descreve uma \textbf{regra}: ``reserva sobreposta é recusada''.
+      \end{dica}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}[fragile]{TDD, BDD e regressão}
+  \begin{columns}[T]
+    \begin{column}{0.4\textwidth}
+      \centering
+      \begin{tikzpicture}
+        \node[circle,fill=vermelhoerro,text=white,font=\scriptsize\bfseries,minimum size=1.35cm,align=center] (v) at (90:1.35) {Vermelho\\ \tiny teste falha};
+        \node[circle,fill=verdeok,text=white,font=\scriptsize\bfseries,minimum size=1.35cm,align=center] (g) at (-30:1.35) {Verde\\ \tiny passa};
+        \node[circle,fill=azulpetroleo,text=white,font=\scriptsize\bfseries,minimum size=1.35cm,align=center] (r) at (210:1.35) {Refatorar\\ \tiny melhora};
+        \draw[setaambar] (v) to[bend left=25] (g);
+        \draw[setaambar] (g) to[bend left=25] (r);
+        \draw[setaambar] (r) to[bend left=25] (v);
+      \end{tikzpicture}
+      \begin{definicao}[TDD]
+        \emph{Test-Driven Development} (Kent Beck): o teste é escrito \textbf{antes} do código e guia o projeto.
+      \end{definicao}
+    \end{column}
+    \begin{column}{0.58\textwidth}
+\begin{codigo}[title=BDD: cenário em linguagem natural (Gherkin)]{bash}
+Funcionalidade: Reserva de bancada
+  Cenário: horário já ocupado
+    Dado que a bancada B7 está reservada das 14h às 16h
+    Quando eu peço a B7 das 15h às 17h
+    Então vejo "Horário indisponível"
+\end{codigo}
+      \begin{definicao}[BDD]
+        \emph{Behavior-Driven Development}: descreve o comportamento em exemplos que clientes, testadores e devs entendem; os cenários viram testes.
+      \end{definicao}
+      \begin{definicao}[Teste de regressão]
+        Rodar de novo os testes existentes após cada mudança, para garantir que nada que funcionava quebrou. Automatizar é o que torna isso viável.
+      \end{definicao}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Desafios do teste em apps móveis}
+  \begin{columns}[T]
+    \begin{column}{0.5\textwidth}
+      \scriptsize
+      \begin{tabularx}{\linewidth}{@{}p{2.0cm} L@{}}
+        \toprule
+        \cabecalho{Desafio} & \cabecalho{O que pode dar errado} \\
+        \midrule
+        Fragmentação & milhares de modelos Android, versões de sistema, tamanhos e densidades de tela \\
+        Rede & sem sinal, 3G lento, troca Wi-Fi/móvel no meio de uma requisição \\
+        Interrupções & ligação, notificação, app enviado ao fundo e encerrado pelo sistema \\
+        Hardware & câmera, GPS, Bluetooth e sensores diferentes ou ausentes \\
+        Permissões & usuário nega, concede ``só desta vez'' ou revoga depois \\
+        Recursos & bateria fraca, pouca memória, armazenamento cheio \\
+        Pessoas & idioma, fonte grande, leitor de tela, modo escuro \\
+        \bottomrule
+      \end{tabularx}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \begin{conceito}[Estratégia]
+        \begin{itemize}
+          \item Automatizar a lógica em testes de unidade e widget (rápidos, sem aparelho).
+          \item Definir uma \textbf{matriz de dispositivos} representativa (versões antigas e novas, tela pequena e grande).
+          \item Usar emuladores no dia a dia e aparelhos reais ou \emph{device farms} antes de publicar.
+          \item Simular rede ruim e interrupções.
+        \end{itemize}
+      \end{conceito}
+      \begin{dica}
+        As estatísticas do Android Studio e do console da loja mostram quais versões seus usuários realmente usam.
+      \end{dica}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Qualidade é mais do que testar}
+  \begin{columns}[T]
+    \begin{column}{0.5\textwidth}
+      \begin{definicao}[Modelo de qualidade ISO/IEC 25010]
+        Organiza a qualidade de um produto de software em características como adequação funcional, eficiência de desempenho, compatibilidade, usabilidade, confiabilidade, segurança, manutenibilidade e portabilidade.
+      \end{definicao}
+      \begin{dica}
+        A revisão de 2023 renomeou algumas características (usabilidade virou capacidade de interação) e incluiu \emph{safety}.
+      \end{dica}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \begin{conceito}[Técnicas que se somam]
+        \begin{itemize}
+          \item \textbf{Estáticas} (sem executar): revisão de código, análise estática, \emph{lint}, tipagem forte.
+          \item \textbf{Dinâmicas} (executando): testes automatizados e exploratórios.
+          \item \textbf{Em produção}: monitoramento de falhas, métricas e \emph{feedback} dos usuários.
+        \end{itemize}
+      \end{conceito}
+      \begin{destaque}
+        Qualidade se \textbf{constrói} durante o desenvolvimento; testes confirmam que ela está lá.
+      \end{destaque}
+    \end{column}
+  \end{columns}
+\end{frame}

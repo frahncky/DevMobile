@@ -1,0 +1,446 @@
+\documentclass[aspectratio=169,10pt]{beamer}
+\makeatletter\def\input@path{{../../estilo/}{../estilo/}{estilo/}}\makeatother
+\usepackage{devmobile}
+\modulo[Flutter]{06}{Dart Assíncrono}{Event loop, Future e async/await, tratamento de erros, Stream, StreamController, FutureBuilder/StreamBuilder e Isolates}
+
+\begin{document}
+\capa
+
+\begin{frame}{Objetivos do módulo}
+  \begin{conceito}[Ao final deste módulo você será capaz de]
+    \begin{itemize}
+      \item Explicar o \emph{event loop} do Dart e por que a interface não pode ser bloqueada.
+      \item Escrever código assíncrono com \cod{Future}, \cod{async} e \cod{await}, tratando erros e tempos limite.
+      \item Executar tarefas em paralelo com \cod{Future.wait}.
+      \item Produzir e consumir fluxos de dados com \cod{Stream}, \cod{async*} e \cod{StreamController}.
+      \item Mostrar dados assíncronos na tela com \cod{FutureBuilder} e \cod{StreamBuilder}.
+      \item Levar cálculos pesados para outro \emph{isolate}.
+    \end{itemize}
+  \end{conceito}
+\end{frame}
+
+\sumario
+
+\input{../fundamentos/f06-concorrencia}
+
+% =============================================================================
+\section{O event loop}
+
+\begin{frame}{Uma única thread, sem travar}
+  \begin{columns}[c]
+    \begin{column}{0.5\textwidth}
+      \small
+      \begin{itemize}
+        \item O código Dart do app roda em um \termo{isolate} principal, com uma única thread.
+        \item O \termo{event loop} processa, um de cada vez, toques, quadros a desenhar, respostas de rede e temporizadores.
+        \item Para 60\,Hz, cada quadro tem cerca de \textbf{16\,ms}. Uma tarefa longa atrasa os quadros e a tela ``engasga'' (\emph{jank}).
+        \item Operações de I/O (rede, arquivo, banco) são \textbf{assíncronas}: o Dart pede ao sistema e segue atendendo eventos até a resposta chegar.
+      \end{itemize}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \centering
+      \begin{tikzpicture}[node distance=3mm]
+        \node[caixa,minimum width=1.4cm] (t) {toque};
+        \node[caixa,minimum width=1.4cm,right=of t] (q) {quadro};
+        \node[caixa,minimum width=1.4cm,right=of q] (r) {resposta HTTP};
+        \node[pontilhado,fit=(t)(q)(r),label={[rotulo]above:fila de eventos}] (fila) {};
+        \node[caixaescura,minimum width=3.2cm,below=10mm of q] (loop) {\emph{event loop}};
+        \draw[seta] (fila) -- node[rotulo,right]{um por vez} (loop);
+        \draw[setaambar,rounded corners] (loop.west) -- ++(-6mm,0) |- (fila.west);
+      \end{tikzpicture}
+      \begin{atencao}
+        I/O não trava a UI se for assíncrono. Já um laço de CPU pesado trava, mesmo dentro de uma função \cod{async}: para isso existem os \emph{isolates}.
+      \end{atencao}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% =============================================================================
+\section{Future e async/await}
+
+\begin{frame}[fragile]{\cod{Future}, \cod{async} e \cod{await}}
+  \begin{columns}[T]
+    \begin{column}{0.52\textwidth}
+\begin{codigo}[title=future.dart]{Dart}
+Future<double> lerTemperatura() async {
+  await Future.delayed(const Duration(milliseconds: 500));
+  return 24.7;
+}
+
+Future<String> relatorio() async {
+  final t = await lerTemperatura();   // espera sem travar
+  return 'Temperatura: $t °C';
+}
+
+void main() async {
+  print('antes');
+  final r = await relatorio();
+  print(r);
+  print('depois');
+}
+\end{codigo}
+    \end{column}
+    \begin{column}{0.46\textwidth}
+      \begin{conceito}[\cod{Future<T>}]
+        Promessa de um valor do tipo \cod{T} (ou de um erro) que chegará no futuro. Uma função \cod{async} sempre devolve um \cod{Future}.
+      \end{conceito}
+      \begin{conceito}[\cod{await}]
+        Suspende a função até o \cod{Future} terminar, liberando o \emph{event loop} para outros eventos. Só pode ser usado dentro de funções \cod{async}.
+      \end{conceito}
+      \begin{erro}
+        Esquecer o \cod{await} faz o código seguir sem o resultado. O \emph{lint} \cod{unawaited\_futures} ajuda a encontrar esses casos.
+      \end{erro}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}[fragile]{Erros, tempo limite e paralelismo}
+  \begin{columns}[T]
+    \begin{column}{0.52\textwidth}
+\begin{codigo}[title=Tratando falhas]{Dart}
+Future<void> carregar() async {
+  try {
+    final dados = await api.bancadas()
+        .timeout(const Duration(seconds: 10));
+    mostrar(dados);
+  } on TimeoutException {
+    mostrarErro('O servidor demorou demais');
+  } on SocketException {
+    mostrarErro('Sem conexão');
+  } catch (e, pilha) {
+    registrar(e, pilha);
+  }
+}
+\end{codigo}
+\begin{codigo}[title=Em paralelo]{Dart}
+final (temp, umid) = await (
+  lerTemperatura(), lerUmidade()
+).wait;             // os dois rodam ao mesmo tempo
+\end{codigo}
+    \end{column}
+    \begin{column}{0.46\textwidth}
+      \scriptsize
+      \begin{tabularx}{\linewidth}{@{}l L@{}}
+        \toprule
+        \cabecalho{Recurso} & \cabecalho{Uso} \\
+        \midrule
+        \cod{.timeout(d)} & falha após um tempo \\
+        \cod{Future.wait([..])} & espera vários \\
+        \cod{(a, b).wait} & idem, com \emph{records} \\
+        \cod{Future.any} & o primeiro que terminar \\
+        \cod{Future.delayed} & espera um tempo \\
+        \bottomrule
+      \end{tabularx}
+      \begin{dica}
+        Sequencial: tempo total = soma. Em paralelo: tempo total $\approx$ a mais lenta.
+      \end{dica}
+      \begin{atencao}[Cancelamento]
+        \cod{Future} não se cancela: use \cod{Stream} ou o \cod{CancelToken} do Dio (Módulo 11).
+      \end{atencao}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% =============================================================================
+\section{Streams}
+
+\begin{frame}[fragile]{\cod{Stream}: vários valores no tempo}
+  \begin{columns}[T]
+    \begin{column}{0.52\textwidth}
+\begin{codigo}[title=Simulando um sensor]{Dart}
+Stream<double> temperaturas() async* {
+  var t = 24.0;
+  final rnd = Random();
+  while (true) {
+    t += rnd.nextDouble() * 0.6 - 0.3;
+    yield t;                          // emite um valor
+    await Future.delayed(const Duration(seconds: 1));
+  }
+}
+
+final inscricao = temperaturas()
+    .map((t) => t.toStringAsFixed(1))
+    .listen((texto) => print('$texto °C'));
+
+// ao sair da tela:
+await inscricao.cancel();
+\end{codigo}
+    \end{column}
+    \begin{column}{0.46\textwidth}
+      \centering
+      \begin{tikzpicture}[node distance=4mm]
+        \node[caixaescura] (p) {produtor\\ \cod{yield}};
+        \node[caixaambar,right=of p] (o) {operadores\\ \cod{map}, \cod{where}};
+        \node[caixa,right=of o] (c) {ouvinte\\ \cod{listen}};
+        \draw[seta] (p) -- (o); \draw[seta] (o) -- (c);
+      \end{tikzpicture}
+      \begin{conceito}[Future \emph{versus} Stream]
+        \cod{Future}: \textbf{um} valor. \cod{Stream}: \textbf{vários} valores ao longo do tempo (leituras de sensor, mensagens MQTT, mudanças no banco).
+      \end{conceito}
+      \begin{atencao}
+        Sempre cancele a inscrição (\cod{cancel()}) quando não precisar mais dos dados; senão o sensor continua gastando bateria.
+      \end{atencao}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}[fragile]{Operadores e StreamController}
+  \begin{columns}[T]
+    \begin{column}{0.52\textwidth}
+\begin{codigo}[title=Pipeline reativo]{Dart}
+final alertas = temperaturas()
+    .map((t) => double.parse(t.toStringAsFixed(1)))
+    .distinct()                     // ignora repetidos
+    .where((t) => t > 30)
+    .map((t) => 'Alerta: $t °C');
+
+await for (final a in alertas.take(3)) {
+  print(a);                         // consome 3 e para
+}
+\end{codigo}
+\begin{codigo}[title=StreamController]{Dart}
+class Barramento {
+  final _ctrl = StreamController<String>.broadcast();
+  Stream<String> get eventos => _ctrl.stream;
+  void publicar(String e) => _ctrl.add(e);
+  void fechar() => _ctrl.close();
+}
+\end{codigo}
+    \end{column}
+    \begin{column}{0.46\textwidth}
+      \scriptsize
+      \begin{tabularx}{\linewidth}{@{}l L@{}}
+        \toprule
+        \cabecalho{Operador} & \cabecalho{Efeito} \\
+        \midrule
+        \cod{map}, \cod{where} & transformar e filtrar \\
+        \cod{distinct} & descarta repetidos seguidos \\
+        \cod{take}, \cod{first} & limita a quantidade \\
+        \cod{asyncMap} & transforma com \cod{Future} \\
+        \cod{handleError} & trata erros \\
+        \cod{timeout} & erro se ficar sem eventos \\
+        \bottomrule
+      \end{tabularx}
+      \begin{conceito}[Simples \emph{versus} broadcast]
+        Uma \cod{Stream} simples aceita \textbf{um} ouvinte; uma \emph{broadcast} aceita vários.
+      \end{conceito}
+      \begin{dica}
+        O pacote \cod{rxdart} acrescenta \cod{debounceTime}, \cod{combineLatest} e outros operadores.
+      \end{dica}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% =============================================================================
+\section{Assíncrono na interface}
+
+\begin{frame}[fragile]{FutureBuilder e StreamBuilder}
+  \begin{columns}[T]
+    \begin{column}{0.56\textwidth}
+\begin{codigo}[title=Painel em tempo real]{Dart}
+class PainelTemperatura extends StatelessWidget {
+  const PainelTemperatura({super.key, required this.leituras});
+  final Stream<double> leituras;
+
+  @override
+  Widget build(BuildContext context) => StreamBuilder<double>(
+    stream: leituras,
+    builder: (context, snap) {
+      if (snap.hasError) return Text('Erro: ${snap.error}');
+      if (!snap.hasData) {
+        return const CircularProgressIndicator();
+      }
+      return Text('${snap.data!.toStringAsFixed(1)} °C',
+          style: Theme.of(context).textTheme.displayMedium);
+    },
+  );
+}
+\end{codigo}
+    \end{column}
+    \begin{column}{0.42\textwidth}
+      \begin{conceito}[\cod{AsyncSnapshot}]
+        \cod{snap.connectionState}, \cod{hasData}, \cod{data}, \cod{hasError} e \cod{error} permitem desenhar os estados carregando, sucesso e erro.
+      \end{conceito}
+      \begin{erro}[Future criado no \cod{build}]
+        \cod{FutureBuilder(future: api.carregar())} refaz a requisição a cada reconstrução. Crie o \cod{Future} no \cod{initState} ou no \emph{view model} (Módulo 08).
+      \end{erro}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}[fragile]{Temporizadores e \cod{mounted}}
+  \begin{columns}[T]
+    \begin{column}{0.54\textwidth}
+\begin{codigo}[title=Atualização periódica]{Dart}
+class _PainelState extends State<Painel> {
+  Timer? _timer;
+  double? _temp;
+
+  @override
+  void initState() {
+    super.initState();
+    _timer = Timer.periodic(const Duration(seconds: 5),
+        (_) => _atualizar());
+  }
+
+  Future<void> _atualizar() async {
+    final t = await api.temperatura();
+    if (!mounted) return;            // a tela ainda existe?
+    setState(() => _temp = t);
+  }
+
+  @override
+  void dispose() { _timer?.cancel(); super.dispose(); }
+  // build(...)
+}
+\end{codigo}
+    \end{column}
+    \begin{column}{0.44\textwidth}
+      \begin{atencao}[Depois de um \cod{await}]
+        O usuário pode ter saído da tela. Verifique \cod{mounted} antes de chamar \cod{setState} ou usar o \cod{context}.
+      \end{atencao}
+      \begin{conceito}[Limpeza]
+        Tudo que é criado no \cod{initState} (timers, inscrições, controladores) é liberado no \cod{dispose}.
+      \end{conceito}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% =============================================================================
+\section{Isolates}
+
+\begin{frame}[fragile]{Isolates: CPU sem travar a interface}
+  \begin{columns}[T]
+    \begin{column}{0.52\textwidth}
+\begin{codigo}[title=Cálculo pesado em outro isolate]{Dart}
+// função pura, sem acesso à UI
+List<double> fft(List<double> amostras) {
+  // ... milhares de operações
+  return espectro;
+}
+
+Future<void> analisar() async {
+  final espectro = await Isolate.run(
+      () => fft(amostras));     // roda em paralelo
+  setState(() => _espectro = espectro);
+}
+
+// atalho do Flutter (também funciona na web)
+final dados = await compute(decodificarJson, textoGrande);
+\end{codigo}
+    \end{column}
+    \begin{column}{0.46\textwidth}
+      \centering
+      \begin{tikzpicture}[node distance=4mm]
+        \node[caixaescura,minimum width=2.4cm] (ui) {isolate principal\\ \tiny UI e eventos};
+        \node[caixaambar,minimum width=2.4cm,right=12mm of ui] (w) {novo isolate\\ \tiny CPU};
+        \draw[seta] ([yshift=2mm]ui.east) -- node[rotulo,above]{dados} ([yshift=2mm]w.west);
+        \draw[setaambar] ([yshift=-2mm]w.west) -- node[rotulo,below]{resultado} ([yshift=-2mm]ui.east);
+      \end{tikzpicture}
+      \begin{conceito}[Isolate]
+        Unidade de execução com \textbf{memória própria}: não compartilha variáveis, troca mensagens. Por isso não há condições de corrida.
+      \end{conceito}
+      \begin{dica}[Quando usar]
+        FFT de sinais, filtros, compressão de imagem, JSON muito grande (centenas de KB) e criptografia.
+      \end{dica}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% =============================================================================
+\section{Fechamento}
+
+\begin{frame}{Resumo}
+  \begin{resumo}
+    \begin{itemize}
+      \item O Dart roda o app num \emph{event loop} de uma thread; nada pode bloqueá-lo por muito tempo.
+      \item \cod{Future} representa um valor futuro; \cod{async}/\cod{await} deixam o código sequencial e legível.
+      \item Trate erros com \cod{try}/\cod{on}/\cod{catch}, use \cod{timeout} e paralelize com \cod{Future.wait}.
+      \item \cod{Stream} emite vários valores; cancele as inscrições quando terminar.
+      \item \cod{FutureBuilder}/\cod{StreamBuilder} desenham os estados; verifique \cod{mounted} após \cod{await}.
+      \item Cálculo pesado vai para outro isolate com \cod{Isolate.run} ou \cod{compute}.
+    \end{itemize}
+  \end{resumo}
+\end{frame}
+
+\begin{frame}{Glossário (1/2)}
+  \begin{glossario}
+    \emph{Thread} & linha de execução dentro de um processo, com pilha própria \\
+    \emph{Isolate} & unidade de execução do Dart com memória própria; comunica-se por mensagens \\
+    Laço de eventos & processa os eventos da fila, um de cada vez, na mesma \emph{thread} \\
+    Microtarefa & tarefa curta executada antes do próximo evento da fila \\
+    Concorrência & tarefas em andamento no mesmo período, que se alternam \\
+    Paralelismo & tarefas executando no mesmo instante, em núcleos diferentes \\
+    \cod{Future} & resultado que ainda vai existir: pendente, com valor ou com erro \\
+    \cod{async}/\cod{await} & escrevem código assíncrono com cara de sequencial \\
+    \emph{Jank} & quadro perdido porque a \emph{thread} da interface ficou ocupada \\
+  \end{glossario}
+\end{frame}
+
+\begin{frame}{Glossário (2/2)}
+  \begin{glossario}
+    \cod{Stream} & fluxo de vários valores ao longo do tempo \\
+    \cod{StreamSubscription} & inscrição em um fluxo; deve ser cancelada ao terminar \\
+    \emph{Broadcast} & fluxo quente que aceita vários ouvintes \\
+    \cod{StreamController} & cria e alimenta um fluxo manualmente \\
+    Condição de corrida & resultado que depende da ordem imprevisível dos eventos \\
+    Contrapressão & estratégia para quando o produtor é mais rápido que o consumidor \\
+    \cod{Isolate.run} & executa uma função em outro \emph{isolate} e devolve o resultado \\
+  \end{glossario}
+\end{frame}
+
+\begin{frame}{Questões de revisão}
+  \begin{questoes}
+    \item Se cada \emph{isolate} tem uma única \emph{thread}, como o app faz uma requisição de rede sem travar a tela?
+    \item Diferencie concorrência de paralelismo. Qual deles exige outro \emph{isolate} no Dart?
+    \item Por que um laço de CPU pesado trava a interface mesmo dentro de uma função \cod{async}?
+    \item O que acontece no laço de eventos quando a execução chega a um \cod{await}?
+    \item Quem roda primeiro: microtarefas ou eventos? Por que isso importa?
+    \item Dê um exemplo de condição de corrida em Dart, mesmo com uma \emph{thread} só, e como evitá-la.
+    \item Qual a diferença entre um \cod{Stream} de inscrição única e um \emph{broadcast}?
+    \item Por que \emph{isolates} não precisam de travas para proteger seus dados?
+  \end{questoes}
+\end{frame}
+
+\begin{frame}{Exercícios}
+  \begin{exercicio}[Exercício 1 --- Paralelismo]
+    Escreva três funções que simulam leituras com atrasos de 1\,s, 2\,s e 3\,s. Meça o tempo total em sequência e com \cod{Future.wait}.
+  \end{exercicio}
+  \begin{exercicio}[Exercício 2 --- Stream]
+    Crie uma \cod{Stream<int>} que simula um ADC de 12 bits a 10\,Hz e um pipeline que converte para volts, agrupa 10 amostras, calcula a média e emite alerta acima de 3,0\,V.
+  \end{exercicio}
+  \begin{exercicio}[Exercício 3 --- Isolate]
+    Gere 1 milhão de amostras e calcule estatísticas na thread principal com uma animação girando na tela. Repita com \cod{Isolate.run} e compare.
+  \end{exercicio}
+  \begin{projeto}[LabMonitor --- Etapa 6]
+    Implemente \cod{SimuladorSensor} com uma \cod{Stream<Leitura>} por bancada e mostre a última leitura de cada bancada com \cod{StreamBuilder}.
+  \end{projeto}
+\end{frame}
+
+\begin{frame}{Para aprofundar}
+  \small
+  \begin{itemize}
+    \item Programação assíncrona: \url{https://dart.dev/libraries/async/async-await}
+    \item Streams: \url{https://dart.dev/libraries/async/using-streams}
+    \item Concorrência e isolates: \url{https://dart.dev/language/concurrency}
+    \item Isolates no Flutter: \url{https://docs.flutter.dev/perf/isolates}
+    \item Pacote rxdart: \url{https://pub.dev/packages/rxdart}
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{Respostas das questões de revisão}
+  \begin{respostas}
+    \item A requisição é I/O assíncrono: o Dart a entrega ao sistema operacional e segue atendendo eventos; quando a resposta chega, um evento completa o \cod{Future}.
+    \item Concorrência: tarefas que se alternam no mesmo período (vários \cod{Future}s no laço). Paralelismo: execução simultânea em núcleos diferentes, que no Dart exige outro \emph{isolate}.
+    \item \cod{async} não cria \emph{thread}: o trecho entre dois \cod{await} roda até o fim no laço de eventos. Um cálculo longo ocupa a \emph{thread} e impede os quadros; use \cod{Isolate.run}.
+    \item A função pausa e devolve o controle ao laço, que atende outros eventos; quando o \cod{Future} completa, a continuação é agendada e a função segue do mesmo ponto.
+    \item A fila de microtarefas é esvaziada antes do próximo evento. Microtarefas demais atrasam toques e quadros, como um laço longo.
+    \item Duas buscas por texto: a resposta da primeira chega depois da segunda e sobrescreve o resultado mais novo. Guarde o identificador da última busca e ignore respostas antigas.
+    \item Inscrição única aceita um só ouvinte e começa a produzir quando alguém escuta; o \emph{broadcast} aceita vários, e quem chega tarde perde os eventos anteriores.
+    \item Cada \emph{isolate} tem memória própria e só troca cópias por mensagens: nenhum objeto mutável é acessado por dois \emph{isolates} ao mesmo tempo.
+  \end{respostas}
+\end{frame}
+
+\encerramento{Módulo 07 --- Estado, navegação e animações: StatefulWidget, ciclo de vida, go\_router e animações.}
+
+\end{document}

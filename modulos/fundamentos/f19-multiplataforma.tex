@@ -1,0 +1,221 @@
+% =============================================================================
+%  Fundamentos compartilhados --- Módulo 19: desenvolvimento multiplataforma
+%  Incluído pelas trilhas Kotlin e Flutter com \input{../fundamentos/f19-multiplataforma}
+% =============================================================================
+\section{Fundamentos do desenvolvimento multiplataforma}
+
+\begin{frame}{O problema: muitas plataformas, uma equipe}
+  \begin{columns}[c]
+    \begin{column}{0.5\textwidth}
+      \begin{conceito}[Por que existe o multiplataforma]
+        Android e iOS têm linguagens, ferramentas e componentes diferentes. Dois apps nativos significam duas bases de código, duas equipes e o dobro de testes para cada funcionalidade.
+      \end{conceito}
+      \begin{definicao}[Desenvolvimento multiplataforma]
+        Escrever uma vez parte (ou todo) o código e executá-lo em mais de um sistema, aceitando algum compromisso em desempenho, aparência ou acesso ao hardware.
+      \end{definicao}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \begin{historia}
+        Java prometia ``escreva uma vez, rode em qualquer lugar'' nos anos 1990. No mobile, vieram os apps híbridos com WebView (PhoneGap/Cordova, 2009), o React Native (2015), o Flutter (2017--2018) e o Kotlin Multiplatform (estável em 2023).
+      \end{historia}
+      \begin{atencao}
+        Nenhuma abordagem elimina o conhecimento de cada plataforma: permissões, publicação, ciclo de vida e integrações nativas continuam diferentes.
+      \end{atencao}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{O espectro das abordagens}
+  \centering
+  \begin{tikzpicture}[every node/.style={font=\scriptsize,align=center,minimum height=12mm,text width=2.05cm}]
+    \node[caixa] (w) at (0,0) {\textbf{Web / PWA}\\ \tiny HTML, CSS, JS no navegador};
+    \node[caixa] (h) at (2.35,0) {\textbf{Híbrido}\\ \tiny site dentro de uma WebView (Capacitor)};
+    \node[caixapetroleo] (r) at (4.7,0) {\textbf{Componentes nativos}\\ \tiny React Native};
+    \node[caixaambar] (f) at (7.05,0) {\textbf{Motor próprio}\\ \tiny Flutter};
+    \node[caixapetroleo] (k) at (9.4,0) {\textbf{Lógica compartilhada}\\ \tiny Kotlin Multiplatform};
+    \node[caixaescura] (n) at (11.75,0) {\textbf{Nativo}\\ \tiny Kotlin, Swift};
+    \draw[setaambar,<->] (-1.0,-1.0) -- node[rotulo,below,text width=8cm]{\tiny mais código compartilhado \hfill mais fidelidade e acesso nativo} (12.75,-1.0);
+  \end{tikzpicture}
+  \vspace{4pt}
+  \scriptsize
+  \begin{tabularx}{\textwidth}{@{}l L L L@{}}
+    \toprule
+    & \cabecalho{O que se compartilha} & \cabecalho{Quem desenha a tela} & \cabecalho{Compromisso principal} \\
+    \midrule
+    Web/PWA e híbrido & tudo & o navegador (HTML/CSS) & desempenho e acesso limitado ao hardware \\
+    React Native & UI e lógica em JS/TS & componentes nativos de cada sistema & ponte entre JS e o nativo \\
+    Flutter & UI e lógica em Dart & o motor do Flutter, pixel a pixel & tamanho do app; aparência própria \\
+    KMP & lógica (e opcionalmente a UI) & nativa ou Compose Multiplatform & UI pode exigir código por plataforma \\
+    \bottomrule
+  \end{tabularx}
+\end{frame}
+
+\begin{frame}{Como o código executa em cada abordagem}
+  \begin{columns}[T]
+    \begin{column}{0.52\textwidth}
+      \scriptsize
+      \begin{tabularx}{\linewidth}{@{}l L@{}}
+        \toprule
+        \cabecalho{Tecnologia} & \cabecalho{Execução no aparelho} \\
+        \midrule
+        PWA / híbrido & JavaScript interpretado e compilado sob demanda (JIT) pelo motor do navegador \\
+        React Native & JavaScript pré-compilado em \emph{bytecode} e executado pelo motor Hermes \\
+        Flutter & Dart compilado antes (AOT) para código de máquina ARM \\
+        KMP (Android) & Kotlin $\rightarrow$ \emph{bytecode} $\rightarrow$ DEX, executado pelo ART \\
+        KMP (iOS) & Kotlin/Native compilado via LLVM para binário nativo \\
+        Nativo & Kotlin no ART; Swift compilado via LLVM \\
+        \bottomrule
+      \end{tabularx}
+    \end{column}
+    \begin{column}{0.46\textwidth}
+      \begin{definicao}[JIT e AOT]
+        \textbf{JIT} (\emph{just-in-time}): compila durante a execução; flexível, permite recarregar código.
+        \textbf{AOT} (\emph{ahead-of-time}): compila antes da distribuição; inicia mais rápido e tem desempenho previsível.
+      \end{definicao}
+      \begin{pordentro}[Por que o iOS importa aqui]
+        A App Store não permite que apps gerem e executem código de máquina novo em tempo de execução (exceto o motor do navegador). Por isso o Flutter usa AOT no iOS e o React Native usa um interpretador de \emph{bytecode}.
+      \end{pordentro}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Quem desenha os pixels?}
+  \begin{columns}[c]
+    \begin{column}{0.56\textwidth}
+      \centering
+      \begin{tikzpicture}[node distance=2mm,every node/.style={font=\scriptsize,minimum width=2.6cm}]
+        \node[caixa] (a1) {Seu código};
+        \node[caixapetroleo,below=of a1] (a2) {Componentes nativos\\ \tiny \texttt{UIButton}, \texttt{View}};
+        \node[caixaescura,below=of a2] (a3) {Sistema desenha};
+        \node[above=1mm of a1,font=\scriptsize\bfseries,text=azulpetroleo] {Nativo / React Native};
+        \node[caixa,right=4mm of a1] (b1) {Seu código};
+        \node[caixaambar,below=of b1] (b2) {Motor próprio\\ \tiny Impeller / Skia};
+        \node[caixaescura,below=of b2] (b3) {GPU (Metal, Vulkan)};
+        \node[above=1mm of b1,font=\scriptsize\bfseries,text=azulpetroleo] {Flutter, Compose MP};
+        \draw[seta] (a1) -- (a2); \draw[seta] (a2) -- (a3);
+        \draw[seta] (b1) -- (b2); \draw[seta] (b2) -- (b3);
+      \end{tikzpicture}
+    \end{column}
+    \begin{column}{0.42\textwidth}
+      \begin{conceito}[Componentes nativos]
+        A tela usa os controles do sistema: aparência e comportamento idênticos aos de outros apps e atualizados junto com o sistema.
+      \end{conceito}
+      \begin{conceito}[Motor próprio]
+        O framework desenha cada pixel numa tela em branco: aparência idêntica em todas as plataformas e controle total de animações, mas precisa reimplementar o comportamento de cada controle.
+      \end{conceito}
+      \begin{analogia}
+        Montar a casa com móveis de loja (nativos) ou fabricar os próprios móveis (motor próprio).
+      \end{analogia}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Conversando com o nativo: pontes, canais e FFI}
+  \begin{columns}[T]
+    \begin{column}{0.5\textwidth}
+      \scriptsize
+      \begin{tabularx}{\linewidth}{@{}p{2.2cm} L@{}}
+        \toprule
+        \cabecalho{Mecanismo} & \cabecalho{Como funciona} \\
+        \midrule
+        \textbf{Troca de mensagens} & chamadas serializadas e assíncronas entre os dois lados (canais de plataforma do Flutter, ponte antiga do React Native) \\
+        \textbf{Interface direta} & chamada de funções nativas sem serializar, inclusive síncrona (FFI do Dart, JSI do React Native) \\
+        \textbf{Geração de código} & a interface é declarada uma vez e o código dos dois lados é gerado (Pigeon, Turbo Modules, exportação para Swift do KMP) \\
+        \bottomrule
+      \end{tabularx}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \begin{pordentro}[O custo de atravessar]
+        Cada chamada por mensagem converte os dados para bytes, troca de \emph{thread} e converte de volta. Para chamadas raras (abrir a câmera) não importa; para milhares por segundo (áudio, imagens), use interfaces diretas.
+      \end{pordentro}
+      \begin{definicao}[FFI --- \emph{Foreign Function Interface}]
+        Mecanismo para chamar funções escritas em outra linguagem, em geral bibliotecas C, compartilhando memória.
+      \end{definicao}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Progressive Web Apps}
+  \begin{columns}[T]
+    \begin{column}{0.5\textwidth}
+      \begin{definicao}[PWA]
+        Site que se comporta como app: pode ser instalado na tela inicial, funciona offline e recebe notificações. Base: um \textbf{manifesto} (nome, ícones, cores) e um \textbf{\emph{service worker}} (script que intercepta requisições e gerencia o cache).
+      \end{definicao}
+      \begin{conceito}[Vantagens]
+        Uma única base web, sem loja e sem revisão, atualização instantânea, link compartilhável.
+      \end{conceito}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \begin{atencao}[Limites]
+        \begin{itemize}
+          \item Acesso a hardware depende do navegador: Web Bluetooth e Web NFC não existem no Safari.
+          \item No iOS, notificações exigem que o usuário instale o site na tela inicial.
+          \item Menos presença nas lojas e menos integração com o sistema.
+        \end{itemize}
+      \end{atencao}
+      \begin{dica}
+        Para um painel de consulta do LabMonitor no computador do laboratório, uma versão web basta; para BLE e NFC, o app nativo ou multiplataforma é necessário.
+      \end{dica}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Decidindo com uma matriz ponderada}
+  \begin{columns}[T]
+    \begin{column}{0.58\textwidth}
+      \scriptsize
+      \begin{tabular}{@{}l c c c c c@{}}
+        \toprule
+        \cabecalho{Critério} & \cabecalho{Peso} & \cabecalho{Nativo} & \cabecalho{Flutter} & \cabecalho{RN} & \cabecalho{KMP} \\
+        \midrule
+        Atender Android e iOS & 3 & 2 & 5 & 5 & 4 \\
+        Acesso a BLE, NFC, câmera & 3 & 5 & 4 & 4 & 5 \\
+        Equipe já sabe a linguagem & 2 & 4 & 3 & 2 & 4 \\
+        Tempo até a 1ª versão & 2 & 2 & 5 & 4 & 3 \\
+        Manutenção em 5 anos & 1 & 4 & 4 & 3 & 4 \\
+        \midrule
+        \textbf{Total ponderado} & & 37 & \textbf{47} & 42 & 45 \\
+        \bottomrule
+      \end{tabular}\\[2pt]
+      {\tiny Notas de 1 a 5 ilustrativas: app novo, equipe que conhece Kotlin. Com um app Kotlin já existente, o critério ``reaproveitar código'' favoreceria o KMP.}
+    \end{column}
+    \begin{column}{0.4\textwidth}
+      \begin{definicao}[Matriz de decisão ponderada]
+        Lista os critérios, dá um peso a cada um conforme sua importância, atribui notas às opções e soma nota $\times$ peso.
+      \end{definicao}
+      \begin{atencao}
+        O resultado depende dos pesos: discuta-os com a equipe e o cliente \textbf{antes} de dar as notas, para não ajustar a matriz ao resultado desejado.
+      \end{atencao}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Além do celular: telas e formatos}
+  \begin{columns}[T]
+    \begin{column}{0.5\textwidth}
+      \begin{definicao}[Responsivo e adaptativo]
+        \textbf{Responsivo}: o mesmo layout se estica ou reorganiza conforme o espaço.
+        \textbf{Adaptativo}: layouts diferentes para classes de tela e para cada forma de entrada (toque, mouse, teclado, controle remoto).
+      \end{definicao}
+      \scriptsize
+      \begin{tabularx}{\linewidth}{@{}l l L@{}}
+        \toprule
+        \cabecalho{Classe} & \cabecalho{Largura} & \cabecalho{Exemplos} \\
+        \midrule
+        Compacta & $<$ 600\,dp & celular em pé \\
+        Média & 600--839\,dp & tablet em pé, dobrável aberto \\
+        Expandida & $\geq$ 840\,dp & tablet deitado, desktop \\
+        \bottomrule
+      \end{tabularx}\\[2pt]
+      {\tiny Classes de janela do Material Design.}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \begin{conceito}[Outros formatos]
+        Relógios, TVs, carros (Android Auto, CarPlay), painéis embarcados e quiosques. Cada um muda a distância de leitura, a forma de entrada e o tempo de atenção do usuário.
+      \end{conceito}
+      \begin{dica}
+        Projete pelo \textbf{espaço disponível}, não pelo tipo de aparelho: uma janela de desktop pode ser estreita como um celular.
+      \end{dica}
+    \end{column}
+  \end{columns}
+\end{frame}

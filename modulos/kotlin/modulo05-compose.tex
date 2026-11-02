@@ -1,0 +1,619 @@
+\documentclass[aspectratio=169,10pt]{beamer}
+\makeatletter\def\input@path{{../../estilo/}{../estilo/}{estilo/}}\makeatother
+\usepackage{devmobile}
+\modulo[Kotlin]{05}{Interfaces com Jetpack Compose}{UI declarativa, componentes, layouts, modifiers, listas, Material 3 e temas}
+
+\begin{document}
+\capa
+
+\begin{frame}{Objetivos do módulo}
+  \begin{conceito}[Ao final deste módulo você será capaz de]
+    \begin{itemize}
+      \item Explicar o paradigma declarativo, o layout por restrições e a recomposição.
+      \item Usar os componentes básicos: textos, botões, imagens, campos e cartões.
+      \item Montar telas com \cod{Column}, \cod{Row} e \cod{Box}, alinhamentos e espaçamentos.
+      \item Aplicar \cod{Modifier} entendendo que a ordem importa.
+      \item Exibir listas eficientes com \cod{LazyColumn} e grades.
+      \item Estruturar telas com \cod{Scaffold} e personalizar o tema Material 3.
+    \end{itemize}
+  \end{conceito}
+\end{frame}
+
+\sumario
+
+\input{../fundamentos/f05-ui-declarativa}
+
+% =============================================================================
+\section{Declarativo na prática}
+
+\begin{frame}{Do imperativo ao Compose}
+  \begin{columns}[T]
+    \begin{column}{0.48\textwidth}
+      \begin{exemplo}[Imperativo (Views + XML)]
+        \small
+        Você cria a árvore de \emph{widgets} e a \textbf{modifica} manualmente quando os dados mudam:\\[2pt]
+        \cod{texto.setText("25 °C")}\\
+        \cod{alerta.setVisibility(View.VISIBLE)}\\[2pt]
+        Fácil esquecer algo e deixar a tela inconsistente.
+      \end{exemplo}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \begin{exemplo}[Declarativo (Compose)]
+        \small
+        Você descreve \textbf{como a tela deve ser} para um dado estado. Quando o estado muda, o Compose \textbf{redesenha} o que for necessário:\\[2pt]
+        \cod{Text("\$temp °C")}\\
+        \cod{if (temp > 30) Alerta()}\\[2pt]
+        A tela fica sempre consistente.
+      \end{exemplo}
+    \end{column}
+  \end{columns}
+  \begin{center}
+  \begin{tikzpicture}[node distance=10mm]
+    \node[caixaambar,minimum width=2.6cm] (e) {\textbf{Estado}\\ \cod{temp = 31.2}};
+    \node[caixaescura,minimum width=2.6cm,right=of e] (f) {\textbf{Funções}\\ \cod{@Composable}};
+    \node[caixa,minimum width=2.6cm,right=of f] (u) {\textbf{UI}\\ na tela};
+    \draw[seta] (e) -- node[rotulo,above]{entrada} (f);
+    \draw[seta] (f) -- node[rotulo,above]{emite} (u);
+    \draw[setaambar,rounded corners] (u.south) -- ++(0,-5mm) -| node[rotulo,pos=0.25,below]{evento do usuário altera o estado} (e.south);
+  \end{tikzpicture}
+  \end{center}
+  \begin{destaque}
+    \textbf{UI = f(estado)}
+  \end{destaque}
+\end{frame}
+
+\begin{frame}[fragile]{Funções \cod{@Composable}}
+  \begin{columns}[T]
+    \begin{column}{0.52\textwidth}
+\begin{codigo}[title=CartaoBancada.kt]{Kotlin}
+@Composable
+fun CartaoBancada(
+  numero: Int,
+  temperatura: Double,
+  modifier: Modifier = Modifier
+) {
+  Column(modifier = modifier.padding(16.dp)) {
+    Text(
+      text = "Bancada $numero",
+      style = MaterialTheme.typography.titleMedium
+    )
+    Text("%.1f °C".format(temperatura))
+    if (temperatura > 30.0) {
+      Text("Acima do limite!", color = Color.Red)
+    }
+  }
+}
+\end{codigo}
+    \end{column}
+    \begin{column}{0.46\textwidth}
+      \small
+      \begin{itemize}
+        \item São funções Kotlin comuns anotadas com \cod{@Composable}.
+        \item Nome em \textbf{PascalCase} (são ``substantivos'').
+        \item Não retornam nada: \textbf{emitem} elementos de UI.
+        \item Podem usar \cod{if}, \cod{for} e \cod{when} livremente.
+        \item Recebem um \cod{modifier} opcional como primeiro parâmetro com valor padrão.
+      \end{itemize}
+      \begin{atencao}[Devem ser rápidas e sem efeitos colaterais]
+        O Compose pode chamá-las muitas vezes, em qualquer ordem. Nada de rede, banco ou \cod{Log} pesado dentro delas.
+      \end{atencao}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% =============================================================================
+\section{Componentes básicos}
+
+\begin{frame}[fragile]{Texto, botões, ícones e imagens}
+  \begin{columns}[T]
+    \begin{column}{0.54\textwidth}
+\begin{codigo}[title=Componentes]{Kotlin}
+Text(
+  text = stringResource(R.string.titulo),
+  style = MaterialTheme.typography.headlineSmall,
+  maxLines = 1,
+  overflow = TextOverflow.Ellipsis
+)
+
+Button(onClick = { reservar() }) { Text("Reservar") }
+OutlinedButton(onClick = {}) { Text("Cancelar") }
+TextButton(onClick = {}) { Text("Detalhes") }
+IconButton(onClick = { abrirMenu() }) {
+  Icon(Icons.Default.MoreVert, contentDescription = "Menu")
+}
+
+Image(
+  painter = painterResource(R.drawable.osciloscopio),
+  contentDescription = "Foto do osciloscópio",
+  contentScale = ContentScale.Crop,
+  modifier = Modifier.size(64.dp).clip(CircleShape)
+)
+\end{codigo}
+    \end{column}
+    \begin{column}{0.44\textwidth}
+      \centering
+      \begin{tikzpicture}[font=\scriptsize]
+        \draw[petroleo,rounded corners=3pt,fill=petroleo!4] (0,0) rectangle (4.6,3.5);
+        \node[anchor=west,font=\small\bfseries,text=cinzatexto] at (0.2,3.1) {Bancada 3 -- Osciloscópio};
+        \fill[petroleo,rounded corners=8pt] (0.2,2.05) rectangle (1.6,2.55) node[midway,white] {Reservar};
+        \draw[petroleo,rounded corners=8pt] (1.75,2.05) rectangle (3.15,2.55) node[midway,petroleo] {Cancelar};
+        \node[text=petroleo] at (3.85,2.3) {Detalhes};
+        \fill[ambar!60] (0.75,1.05) circle (0.45);
+        \node[font=\tiny,white] at (0.75,1.05) {img};
+        \node[anchor=west,text width=2.9cm,font=\tiny,text=cinzamedio] at (1.4,1.05) {\cod{Image} recortada em círculo com \cod{clip(CircleShape)}};
+        \node[text=cinzamedio] at (4.3,3.1) {$\vdots$};
+        \node[rotulo] at (2.3,0.3) {resultado aproximado};
+      \end{tikzpicture}
+      \begin{atencao}[Acessibilidade]
+        Toda imagem informativa precisa de \cod{contentDescription}; imagens decorativas usam \cod{null}.
+      \end{atencao}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}[fragile]{Campos de entrada, seleção e cartões}
+  \begin{columns}[T]
+    \begin{column}{0.54\textwidth}
+\begin{codigo}[title=Entrada de dados]{Kotlin}
+var descricao by remember { mutableStateOf("") }
+var ligado by remember { mutableStateOf(false) }
+
+OutlinedTextField(
+  value = descricao,
+  onValueChange = { descricao = it },
+  label = { Text("Descrição") },
+  singleLine = true,
+  isError = descricao.isBlank(),
+  keyboardOptions = KeyboardOptions(
+    keyboardType = KeyboardType.Text)
+)
+
+Row(verticalAlignment = Alignment.CenterVertically) {
+  Text("Alimentação")
+  Switch(checked = ligado, onCheckedChange = { ligado = it })
+}
+
+Card(modifier = Modifier.fillMaxWidth()) {
+  Text("Conteúdo do cartão", Modifier.padding(16.dp))
+}
+\end{codigo}
+    \end{column}
+    \begin{column}{0.44\textwidth}
+      \begin{conceito}[Componentes controlados]
+        O \cod{TextField} \textbf{não guarda} o texto: ele mostra o \cod{value} recebido e avisa mudanças por \cod{onValueChange}. Quem guarda o estado é você (Módulo 07).
+      \end{conceito}
+      \scriptsize
+      \begin{tabularx}{\linewidth}{@{}l L@{}}
+        \toprule
+        \cabecalho{Componente} & \cabecalho{Uso} \\
+        \midrule
+        \cod{Checkbox}, \cod{Switch} & valores booleanos \\
+        \cod{RadioButton} & uma opção entre várias \\
+        \cod{Slider} & valor numérico contínuo \\
+        \cod{DropdownMenu} & menus e listas suspensas \\
+        \cod{AlertDialog} & confirmações \\
+        \cod{CircularProgressIndicator} & carregamento \\
+        \bottomrule
+      \end{tabularx}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% =============================================================================
+\section{Layouts}
+
+\begin{frame}{\cod{Column}, \cod{Row} e \cod{Box}}
+  \begin{columns}[T]
+    \begin{column}{0.32\textwidth}
+      \centering
+      \begin{tikzpicture}
+        \draw[petroleo,thick,rounded corners=2pt] (0,0) rectangle (2.6,2.6);
+        \foreach \y/\t in {2.0/A,1.25/B,0.5/C}{\node[caixaescura,minimum width=2cm,minimum height=5mm] at (1.3,\y) {\t};}
+        \draw[setaambar] (2.85,2.3) -- (2.85,0.3);
+      \end{tikzpicture}\\[3pt]
+      \textbf{\cod{Column}}\\ \footnotesize empilha na vertical
+    \end{column}
+    \begin{column}{0.32\textwidth}
+      \centering
+      \begin{tikzpicture}
+        \draw[petroleo,thick,rounded corners=2pt] (0,0) rectangle (2.6,2.6);
+        \foreach \x/\t in {0.45/A,1.3/B,2.15/C}{\node[caixaescura,minimum width=6mm,minimum height=2cm] at (\x,1.3) {\t};}
+        \draw[setaambar] (0.2,-0.25) -- (2.4,-0.25);
+      \end{tikzpicture}\\[3pt]
+      \textbf{\cod{Row}}\\ \footnotesize alinha na horizontal
+    \end{column}
+    \begin{column}{0.32\textwidth}
+      \centering
+      \begin{tikzpicture}
+        \draw[petroleo,thick,rounded corners=2pt] (0,0) rectangle (2.6,2.6);
+        \node[caixa,minimum width=2.2cm,minimum height=2.2cm,fill=petroleo!20] at (1.3,1.3) {};
+        \node[caixaescura,minimum width=1.3cm,minimum height=1.1cm] at (1.3,1.3) {B};
+        \node[caixaambarforte,minimum width=5mm,minimum height=5mm] at (2.15,2.15) {C};
+      \end{tikzpicture}\\[3pt]
+      \textbf{\cod{Box}}\\ \footnotesize sobrepõe (eixo Z)
+    \end{column}
+  \end{columns}
+  \vspace{6pt}
+  \begin{columns}[T]
+    \begin{column}{0.48\textwidth}
+      \begin{conceito}[Arrangement (eixo principal)]
+        \cod{Top}, \cod{Center}, \cod{Bottom}, \cod{SpaceBetween}, \cod{SpaceEvenly}, \cod{spacedBy(8.dp)}.
+      \end{conceito}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \begin{conceito}[Alignment (eixo cruzado)]
+        Em \cod{Column}: \cod{Start}, \cod{CenterHorizontally}, \cod{End}. Em \cod{Row}: \cod{Top}, \cod{CenterVertically}, \cod{Bottom}.
+      \end{conceito}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}[fragile]{Compondo uma tela real}
+  \begin{columns}[T]
+    \begin{column}{0.58\textwidth}
+\begin{codigo}[title=ItemEquipamento.kt]{Kotlin}
+@Composable
+fun ItemEquipamento(eq: Equipamento, onClick: () -> Unit) {
+  Card(onClick = onClick, modifier = Modifier.fillMaxWidth()) {
+    Row(
+      modifier = Modifier.padding(12.dp),
+      verticalAlignment = Alignment.CenterVertically,
+      horizontalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+      Icon(Icons.Default.Memory, contentDescription = null)
+      Column(Modifier.weight(1f)) {   // ocupa o que sobrar
+        Text(eq.descricao, fontWeight = FontWeight.Bold)
+        Text(eq.patrimonio,
+          style = MaterialTheme.typography.bodySmall)
+      }
+      Box(
+        Modifier.size(12.dp).clip(CircleShape)
+          .background(if (eq.disponivel) Verde else Ambar)
+      )
+    }
+  }
+}
+\end{codigo}
+    \end{column}
+    \begin{column}{0.40\textwidth}
+      \centering
+      \begin{tikzpicture}[font=\scriptsize]
+        \draw[petroleo,rounded corners=4pt,fill=white] (0,0) rectangle (4.4,1.3);
+        \draw[petroleo!40,dashed] (0.15,0.15) rectangle (4.25,1.15);
+        \node[caixaescura,minimum size=6mm,inner sep=0pt] at (0.55,0.65) {\tiny CPU};
+        \node[anchor=west,font=\scriptsize\bfseries] at (1.0,0.85) {Osciloscópio};
+        \node[anchor=west,font=\tiny,text=cinzamedio] at (1.0,0.45) {IFMA-0042};
+        \fill[verdeok] (3.95,0.65) circle (0.1);
+        \draw[ambar,decorate,decoration={brace,amplitude=3pt,mirror}] (1.0,-0.05) -- (3.6,-0.05) node[midway,below=3pt,rotulo]{\cod{weight(1f)}};
+        \node[rotulo] at (2.2,1.6) {\cod{Card} $\rightarrow$ \cod{Row} $\rightarrow$ [\cod{Icon} | \cod{Column} | \cod{Box}]};
+      \end{tikzpicture}
+      \begin{dica}
+        \cod{Modifier.weight(1f)} distribui o espaço restante dentro de \cod{Row}/\cod{Column}, como o \emph{flex} do CSS.
+      \end{dica}
+      \begin{dica}
+        \cod{Spacer(Modifier.height(8.dp))} cria espaço vazio entre elementos.
+      \end{dica}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% =============================================================================
+\section{Modifiers}
+
+\begin{frame}[fragile]{Modifiers: a ordem importa}
+  \begin{columns}[T]
+    \begin{column}{0.5\textwidth}
+\begin{codigo}[title={Mesmos modifiers, ordens diferentes}]{Kotlin}
+// (a) fundo e DEPOIS espaçamento interno
+Text("A", Modifier
+  .background(Ambar)
+  .padding(16.dp))
+
+// (b) espaçamento e DEPOIS fundo
+Text("B", Modifier
+  .padding(16.dp)
+  .background(Ambar))
+
+// (c) clique antes do padding:
+// a área de toque inclui o padding
+Text("C", Modifier
+  .clickable { /* ... */ }
+  .padding(16.dp))
+\end{codigo}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \centering
+      \begin{tikzpicture}
+        \fill[ambar] (0,0) rectangle (1.6,1.0); \node at (0.8,0.5) {\textbf{A}};
+        \node[rotulo] at (0.8,-0.3) {(a) fundo inclui o padding};
+        \draw[cinzamedio,dashed] (2.4,0) rectangle (4.0,1.0);
+        \fill[ambar] (3.0,0.35) rectangle (3.4,0.65); \node at (3.2,0.5) {\textbf{B}};
+        \node[rotulo] at (3.2,-0.3) {(b) fundo só no conteúdo};
+      \end{tikzpicture}
+      \begin{conceito}[Como pensar]
+        Os modifiers são aplicados \textbf{em cadeia, de fora para dentro}: cada um envolve o resultado dos seguintes.
+      \end{conceito}
+      \scriptsize
+      \renewcommand{\arraystretch}{1.1}
+      \begin{tabular}{@{}l l@{}}
+        \toprule
+        \cabecalho{Categoria} & \cabecalho{Exemplos} \\
+        \midrule
+        Tamanho & \cod{size}, \cod{fillMaxWidth}, \cod{weight} \\
+        Espaço & \cod{padding}, \cod{offset} \\
+        Desenho & \cod{background}, \cod{border}, \cod{clip} \\
+        Interação & \cod{clickable}, \cod{toggleable} \\
+        Semântica & \cod{semantics}, \cod{testTag} \\
+        \bottomrule
+      \end{tabular}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% =============================================================================
+\section{Listas}
+
+\begin{frame}[fragile]{\cod{LazyColumn}: listas eficientes}
+  \begin{columns}[T]
+    \begin{column}{0.54\textwidth}
+\begin{codigo}[title=ListaEquipamentos.kt]{Kotlin}
+@Composable
+fun ListaEquipamentos(
+  itens: List<Equipamento>,
+  onItemClick: (Equipamento) -> Unit,
+  modifier: Modifier = Modifier
+) {
+  LazyColumn(
+    modifier = modifier,
+    contentPadding = PaddingValues(16.dp),
+    verticalArrangement = Arrangement.spacedBy(8.dp)
+  ) {
+    item { Text("Equipamentos (${itens.size})") }
+    items(
+      items = itens,
+      key = { it.patrimonio }      // chave estável!
+    ) { eq ->
+      ItemEquipamento(eq, onClick = { onItemClick(eq) })
+    }
+  }
+}
+\end{codigo}
+    \end{column}
+    \begin{column}{0.44\textwidth}
+      \begin{conceito}[Lazy = sob demanda]
+        Só compõe os itens visíveis na tela (mais uma margem), como a antiga \cod{RecyclerView}. Uma \cod{Column} com 1000 itens compõe todos de uma vez.
+      \end{conceito}
+      \begin{dica}[Use \cod{key}]
+        Uma chave estável preserva o estado e as animações de cada item quando a lista é reordenada.
+      \end{dica}
+      \scriptsize
+      \begin{tabularx}{\linewidth}{@{}l L@{}}
+        \toprule
+        \cod{LazyRow} & lista horizontal \\
+        \cod{LazyVerticalGrid} & grade (\cod{GridCells.Adaptive(160.dp)}) \\
+        \cod{stickyHeader} & cabeçalhos fixos de seção \\
+        \bottomrule
+      \end{tabularx}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% =============================================================================
+\section{Material 3 e temas}
+
+\begin{frame}[fragile]{\cod{Scaffold}: o esqueleto da tela}
+  \begin{columns}[T]
+    \begin{column}{0.56\textwidth}
+\begin{codigo}[title=TelaEquipamentos.kt]{Kotlin}
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun TelaEquipamentos(itens: List<Equipamento>) {
+  Scaffold(
+    topBar = {
+      TopAppBar(title = { Text("LabMonitor") })
+    },
+    floatingActionButton = {
+      FloatingActionButton(onClick = { /* novo */ }) {
+        Icon(Icons.Default.Add, "Adicionar")
+      }
+    },
+    bottomBar = { BarraNavegacao() }
+  ) { innerPadding ->
+    ListaEquipamentos(
+      itens,
+      onItemClick = {},
+      modifier = Modifier.padding(innerPadding)
+    )
+  }
+}
+\end{codigo}
+    \end{column}
+    \begin{column}{0.42\textwidth}
+      \centering
+      \begin{tikzpicture}[font=\tiny]
+        \draw[petroleo,thick,rounded corners=5pt] (0,0) rectangle (2.6,4.4);
+        \fill[petroleo] (0.08,3.75) rectangle (2.52,4.25) node[midway,white] {TopAppBar};
+        \foreach \y in {3.2,2.65,2.1,1.55}{\draw[petroleo!50,rounded corners=1pt,fill=petroleo!6] (0.2,\y) rectangle (2.4,\y+0.42);}
+        \node[rotulo] at (1.3,1.25) {conteúdo};
+        \fill[ambar,rounded corners=3pt] (1.85,0.72) rectangle (2.4,1.2) node[midway,white,font=\small] {+};
+        \fill[petroleo!15] (0.08,0.1) rectangle (2.52,0.6) node[midway,petroleo] {NavigationBar};
+      \end{tikzpicture}
+      \begin{atencao}[\cod{innerPadding}]
+        Aplique o padding recebido no conteúdo; senão ele fica escondido atrás das barras.
+      \end{atencao}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}[fragile]{Tema Material 3}
+  \begin{columns}[T]
+    \begin{column}{0.53\textwidth}
+\begin{codigo}[title=ui/theme/Theme.kt]{Kotlin}
+private val Claro = lightColorScheme(
+  primary = Color(0xFF0D3052),    // azul-petróleo
+  secondary = Color(0xFFDE8A1C))  // âmbar
+private val Escuro = darkColorScheme(
+  primary = Color(0xFF9CC4EA),
+  secondary = Color(0xFFE69A1F))
+@Composable fun LabMonitorTheme(
+  escuro: Boolean = isSystemInDarkTheme(),
+  dinamica: Boolean = true,
+  content: @Composable () -> Unit
+) {
+  val ctx = LocalContext.current
+  val cores = when {
+    dinamica && Build.VERSION.SDK_INT >= 31 ->
+      if (escuro) dynamicDarkColorScheme(ctx)
+      else dynamicLightColorScheme(ctx)
+    escuro -> Escuro
+    else -> Claro
+  }
+  MaterialTheme(cores, content = content)
+}
+\end{codigo}
+    \end{column}
+    \begin{column}{0.43\textwidth}
+      \begin{conceito}[Três pilares]
+        \textbf{Cores} (\cod{colorScheme}), \textbf{tipografia} (\cod{typography}) e \textbf{formas} (\cod{shapes}). Os componentes leem tudo do tema.
+      \end{conceito}
+      \begin{center}
+      \begin{tikzpicture}
+        \foreach \c/\n [count=\i] in {petroleo/primary,ambar/secondary,petroleoesc/tertiary,cinzaclaro/surface}{
+          \fill[\c,rounded corners=2pt] (\i*1.05-1.05,0) rectangle ++(0.9,0.6);
+          \node[rotulo] at (\i*1.05-0.6,-0.2) {\n};}
+      \end{tikzpicture}
+      \end{center}
+      \begin{dica}[Use o tema, não cores fixas]
+        \cod{MaterialTheme.colorScheme.primary} se adapta ao tema escuro e à cor dinâmica do Android 12+; \cod{Color.Red} não. O \emph{Material Theme Builder} gera as cores a partir de uma cor base.
+      \end{dica}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Unidades, recursos e telas adaptáveis}
+  \begin{columns}[T]
+    \begin{column}{0.48\textwidth}
+      \begin{conceito}[\cod{dp} e \cod{sp}]
+        \begin{itemize}
+          \item \cod{dp} (\emph{density-independent pixel}): tamanhos e espaços. 1\,dp $\approx$ 1/160 polegada.
+          \item \cod{sp} (\emph{scale-independent pixel}): fontes; respeita o tamanho de fonte escolhido pelo usuário.
+        \end{itemize}
+      \end{conceito}
+      \begin{atencao}[Alvo de toque]
+        Elementos clicáveis precisam de pelo menos \textbf{48\,dp $\times$ 48\,dp}.
+      \end{atencao}
+    \end{column}
+    \begin{column}{0.50\textwidth}
+      \begin{conceito}[Telas adaptáveis]
+        Use \termo{window size classes} para escolher o layout pelo espaço disponível, não pelo modelo do aparelho:
+        \begin{itemize}
+          \item \textbf{Compacta} (celular em retrato): uma coluna e \cod{NavigationBar}.
+          \item \textbf{Média} (dobrável, tablet em retrato): \cod{NavigationRail}.
+          \item \textbf{Expandida} (tablet, desktop): lista e detalhe lado a lado.
+        \end{itemize}
+      \end{conceito}
+      \begin{dica}
+        \cod{NavigationSuiteScaffold} troca automaticamente a barra inferior pela lateral conforme a largura.
+      \end{dica}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% =============================================================================
+\section{Fechamento}
+
+\begin{frame}{Resumo}
+  \begin{resumo}
+    \begin{itemize}
+      \item Em Compose, a UI é função do estado: descreva a tela e deixe o framework atualizá-la.
+      \item Funções \cod{@Composable} são rápidas, sem efeitos colaterais e recebem um \cod{modifier}.
+      \item \cod{Column}, \cod{Row} e \cod{Box} com \cod{Arrangement}, \cod{Alignment} e \cod{weight} resolvem quase todo layout.
+      \item A ordem dos modifiers define o resultado.
+      \item \cod{LazyColumn} com \cod{key} para listas; \cod{Scaffold} para a estrutura da tela.
+      \item Cores, tipografia e formas vêm do \cod{MaterialTheme}: nada de cores fixas.
+    \end{itemize}
+  \end{resumo}
+\end{frame}
+
+\begin{frame}{Glossário (1/2)}
+  \begin{glossario}
+    UI declarativa & a interface é descrita como função do estado; o framework aplica as mudanças \\
+    Composição & montar interfaces combinando componentes pequenos e independentes \\
+    \cod{@Composable} & função que emite elementos de interface em vez de devolver um valor \\
+    Recomposição & nova execução das funções que leram um estado alterado \\
+    \emph{Skipping} & pular a função cujos parâmetros não mudaram desde a última execução \\
+    Restrições & limites mínimos e máximos de largura e altura passados do pai ao filho \\
+    \cod{Modifier} & cadeia ordenada que altera tamanho, espaço, desenho e interação \\
+    \cod{LazyColumn} & lista que compõe apenas os itens visíveis \\
+    Chave (\emph{key}) & identidade estável de um item entre recomposições \\
+  \end{glossario}
+\end{frame}
+
+\begin{frame}{Glossário (2/2)}
+  \begin{glossario}
+    \cod{Scaffold} & estrutura padrão de uma tela Material: barras, FAB e conteúdo \\
+    \emph{Token} de design & decisão visual nomeada pelo papel (\cod{primary}, \cod{titleMedium}) \\
+    \cod{CompositionLocal} & valor disponível implicitamente para toda uma subárvore \\
+    \cod{dp} e \cod{sp} & unidades independentes de densidade; o \cod{sp} segue a escala de fonte \\
+    \emph{Window size class} & classe de largura da janela: compacta, média ou expandida \\
+    \emph{Jank} & quadro perdido por exceder o orçamento de tempo \\
+    Árvore de semântica & descrição da tela usada por leitores de tela como o TalkBack \\
+  \end{glossario}
+\end{frame}
+
+\begin{frame}{Questões de revisão}
+  \begin{questoes}
+    \item Qual a diferença entre uma interface imperativa e uma declarativa? Por que a declarativa evita telas inconsistentes?
+    \item Explique a regra ``restrições descem, tamanhos sobem, o pai posiciona'' com um exemplo numérico.
+    \item Quais são as fases de um quadro no Compose e o que cada uma decide?
+    \item O que é recomposição e quando uma função \cod{@Composable} é pulada?
+    \item Por que uma função \cod{@Composable} não deve iniciar uma chamada de rede?
+    \item Por que \cod{Modifier.padding(16.dp).background(c)} é diferente de \cod{Modifier.background(c).padding(16.dp)}?
+    \item O que acontece em uma \cod{LazyColumn} sem \cod{key} quando o primeiro item, que estava expandido, é removido?
+    \item Por que usar \cod{MaterialTheme.colorScheme.primary} em vez de \cod{Color(0xFF0D3052)} dentro de um componente?
+  \end{questoes}
+\end{frame}
+
+\begin{frame}{Exercícios}
+  \begin{exercicio}[Exercício 1 --- Layout]
+    Reproduza um cartão de ``medidor'' com título, valor grande, unidade menor ao lado e uma barra de progresso (\cod{LinearProgressIndicator}) colorida conforme a faixa.
+  \end{exercicio}
+  \begin{exercicio}[Exercício 2 --- Modifiers]
+    Crie um botão circular de 56\,dp com borda âmbar de 2\,dp, fundo azul-petróleo e ícone central. Troque a ordem de \cod{clip} e \cod{background} e explique o resultado.
+  \end{exercicio}
+  \begin{exercicio}[Exercício 3 --- Previews]
+    Escreva \cod{@Preview}s do seu cartão nos temas claro e escuro, com fonte 1,5$\times$ e em largura de tablet.
+  \end{exercicio}
+  \begin{projeto}[LabMonitor --- Etapa 5]
+    Crie a tela \textbf{Equipamentos}: \cod{Scaffold} com \cod{TopAppBar}, FAB e \cod{LazyColumn} de \cod{ItemEquipamento} usando os dados de \cod{DadosExemplo}. Aplique o tema com as cores do curso.
+  \end{projeto}
+\end{frame}
+
+\begin{frame}{Para aprofundar}
+  \small
+  \begin{itemize}
+    \item Tutorial oficial do Compose: \url{https://developer.android.com/develop/ui/compose/tutorial}
+    \item Pensando em Compose: \url{https://developer.android.com/develop/ui/compose/mental-model}
+    \item Layouts básicos: \url{https://developer.android.com/develop/ui/compose/layouts/basics}
+    \item Modifiers: \url{https://developer.android.com/develop/ui/compose/modifiers}
+    \item Material 3 em Compose: \url{https://developer.android.com/develop/ui/compose/designsystems/material3}
+    \item Material Design 3: \url{https://m3.material.io}
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{Respostas das questões de revisão}
+  \begin{respostas}
+    \item No imperativo, o código altera componentes existentes e precisa sincronizá-los a cada evento; no declarativo, descreve-se a tela para cada estado e o framework aplica as diferenças. Há um só caminho do estado à tela, então nada fica esquecido.
+    \item Na tela de 360\,dp, a \cod{Column} passa ao cartão largura de 0 a 360\,dp e altura livre; o cartão escolhe 360 $\times$ 96\,dp; a coluna o põe em $y = 0$ e o próximo em $y = 96$.
+    \item Composição (o que mostrar), layout (medir e posicionar) e desenho (pintar); a GPU então gera os pixels. Uma mudança só de cor pode pular as duas primeiras fases.
+    \item É a nova execução das funções que leram um estado alterado. A função é pulada quando seus parâmetros são estáveis e iguais aos da execução anterior.
+    \item Porque ela pode rodar muitas vezes e em qualquer ordem: a chamada se repetiria a cada recomposição. Efeitos ficam em \cod{LaunchedEffect} (Módulo 07) ou no \cod{ViewModel}.
+    \item Os modifiers se aplicam em cadeia, de fora para dentro: no primeiro, o espaçamento vem antes e o fundo cobre só o conteúdo; no segundo, o fundo cobre também o espaçamento.
+    \item A correspondência é feita pela posição: o estado ``expandido'' passa para o item que ocupou a posição 0. Com \cod{key = \{ it.id \}}, o estado sai junto com o item removido.
+    \item O \emph{token} se adapta ao tema escuro, à cor dinâmica e a mudanças da identidade visual; a cor fixa, não.
+  \end{respostas}
+\end{frame}
+
+\encerramento{Módulo 06 --- Kotlin assíncrono: coroutines, dispatchers, Flow e StateFlow.}
+
+\end{document}

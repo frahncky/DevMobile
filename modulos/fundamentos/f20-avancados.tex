@@ -1,0 +1,330 @@
+% =============================================================================
+%  Fundamentos compartilhados --- Módulo 20: IA, segurança e negócio de apps
+%  Incluído pelas trilhas Kotlin e Flutter com \input{../fundamentos/f20-avancados}
+% =============================================================================
+\section{Fundamentos de inteligência artificial}
+
+\begin{frame}{IA, aprendizado de máquina e aprendizado profundo}
+  \begin{columns}[c]
+    \begin{column}{0.44\textwidth}
+      \centering
+      \begin{tikzpicture}
+        \draw[fill=cinzaclaro,draw=azulpetroleo] (0,0) ellipse (2.6 and 1.75);
+        \draw[fill=azulpetroleo!25,draw=azulpetroleo] (0.35,-0.25) ellipse (1.95 and 1.3);
+        \draw[fill=azulpetroleo!55,draw=azulpetroleo] (0.7,-0.45) ellipse (1.3 and 0.85);
+        \draw[fill=ambar,draw=ambar!70!black] (1.0,-0.6) ellipse (0.72 and 0.42);
+        \node[font=\scriptsize\bfseries,text=azulpetroleo] at (0,1.42) {IA};
+        \node[font=\scriptsize\bfseries,text=azulpetroleo] at (0.35,0.75) {Aprendizado de máquina};
+        \node[font=\tiny\bfseries,text=white] at (0.7,0.13) {Aprendizado profundo};
+        \node[font=\tiny\bfseries,text=azulpetroleo,align=center] at (1.0,-0.6) {IA\\generativa};
+      \end{tikzpicture}
+    \end{column}
+    \begin{column}{0.54\textwidth}
+      \begin{definicao}[Aprendizado de máquina (ML)]
+        Em vez de programar as regras, o sistema \textbf{aprende} padrões a partir de exemplos (dados) e os aplica a casos novos.
+      \end{definicao}
+      \scriptsize
+      \begin{tabularx}{\linewidth}{@{}l L@{}}
+        \toprule
+        \cabecalho{Paradigma} & \cabecalho{Aprende com} \\
+        \midrule
+        Supervisionado & exemplos rotulados (leitura $\rightarrow$ ``normal'' ou ``falha'') \\
+        Não supervisionado & dados sem rótulo, buscando grupos e anomalias \\
+        Por reforço & tentativa e erro, guiado por recompensas \\
+        \bottomrule
+      \end{tabularx}
+      \begin{conceito}[Aprendizado profundo]
+        ML com redes neurais de muitas camadas; base da visão computacional, da fala e dos modelos de linguagem.
+      \end{conceito}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Treinamento e inferência}
+  \centering
+  \begin{tikzpicture}[node distance=5mm,every node/.style={font=\scriptsize,align=center,minimum height=10mm}]
+    \node[caixa,text width=1.7cm] (d) {Dados\\ \tiny rotulados};
+    \node[caixapetroleo,right=of d,text width=2.1cm] (t) {Treinamento\\ \tiny servidor com GPU};
+    \node[caixaambar,right=of t,text width=1.7cm] (m) {Modelo\\ \tiny pesos};
+    \node[caixa,right=of m,text width=2.1cm] (q) {Conversão e quantização};
+    \node[caixaescura,right=of q,text width=2.1cm] (i) {Inferência\\ \tiny no app ou na nuvem};
+    \foreach \a/\b in {d/t,t/m,m/q,q/i} \draw[seta] (\a) -- (\b);
+  \end{tikzpicture}
+  \vspace{4pt}
+  \begin{columns}[T]
+    \begin{column}{0.33\textwidth}
+      \begin{definicao}[Treinamento]
+        Ajustar milhões de parâmetros (\textbf{pesos}) para que o modelo erre o mínimo nos exemplos. Caro e feito uma vez (ou de tempos em tempos).
+      \end{definicao}
+    \end{column}
+    \begin{column}{0.31\textwidth}
+      \begin{definicao}[Inferência]
+        Usar o modelo pronto para responder a uma entrada nova. É o que o app faz, milhares de vezes.
+      \end{definicao}
+    \end{column}
+    \begin{column}{0.32\textwidth}
+      \begin{pordentro}[Quantização]
+        Trocar pesos de 32 bits por inteiros de 8 bits: modelo cerca de 4 vezes menor e mais rápido, com pequena perda de precisão.
+      \end{pordentro}
+    \end{column}
+  \end{columns}
+  \begin{atencao}[Avaliar antes de confiar]
+    Em detecção de falhas, \textbf{precisão} (dos alertas, quantos eram reais) e \textbf{revocação} (das falhas reais, quantas foram alertadas) importam mais que a acurácia, porque falhas são raras.
+  \end{atencao}
+\end{frame}
+
+\begin{frame}{Modelos de linguagem (LLMs)}
+  \begin{columns}[T]
+    \begin{column}{0.5\textwidth}
+      \begin{definicao}[LLM --- \emph{Large Language Model}]
+        Rede neural treinada com enormes volumes de texto para prever o próximo \textbf{\emph{token}} (pedaço de palavra). Gerando um \emph{token} após o outro, escreve respostas, resume, traduz e segue instruções.
+      \end{definicao}
+      \scriptsize
+      \begin{tabularx}{\linewidth}{@{}l L@{}}
+        \toprule
+        \cabecalho{Termo} & \cabecalho{Significado} \\
+        \midrule
+        Janela de contexto & quanto texto o modelo considera de uma vez \\
+        Temperatura & grau de aleatoriedade da resposta \\
+        Alucinação & resposta fluente, mas falsa \\
+        RAG & buscar documentos relevantes e incluí-los na pergunta \\
+        Chamada de ferramentas & o modelo pede que o app execute uma função \\
+        \bottomrule
+      \end{tabularx}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \begin{analogia}
+        O corretor do teclado levado ao extremo: em vez da próxima palavra, continua parágrafos inteiros.
+      \end{analogia}
+      \begin{atencao}
+        O modelo não ``sabe'' se está certo: produz o texto mais provável. A resposta é uma \textbf{sugestão} que uma pessoa confere.
+      \end{atencao}
+      \begin{dica}
+        Com RAG, o LabMonitor responde com base nos manuais dos equipamentos, citando a fonte.
+      \end{dica}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}[fragile]{Engenharia de \emph{prompt} e uso responsável}
+  \begin{columns}[T]
+    \begin{column}{0.52\textwidth}
+\begin{codigo}[title=Estrutura de um bom \emph{prompt}]{bash}
+Papel:    Você é assistente técnico de um
+          laboratório de eletroeletrônica.
+Contexto: Leituras da bancada B3 (última hora):
+          {leituras}
+Tarefa:   Explique o alerta de temperatura.
+Formato:  No máximo 3 frases, em português,
+          e termine com uma ação recomendada.
+Limites:  Se os dados não bastarem, diga isso.
+\end{codigo}
+      \begin{dica}
+        Dê exemplos de entrada e saída esperadas (\emph{few-shot}) e peça respostas em JSON quando o app precisar processá-las.
+      \end{dica}
+    \end{column}
+    \begin{column}{0.46\textwidth}
+      \begin{erro}[Injeção de \emph{prompt}]
+        Texto vindo do usuário ou de documentos pode conter instruções (``ignore as regras anteriores\ldots''). Nunca dê ao modelo poder de executar ações sensíveis sem confirmação e validação no servidor.
+      \end{erro}
+      \begin{conceito}[Uso responsável]
+        \begin{itemize}
+          \item Informe que a resposta foi gerada por IA.
+          \item Minimize dados pessoais enviados (LGPD).
+          \item Limite custos: cada \emph{token} é cobrado.
+          \item Avalie com casos de teste, como qualquer código.
+        \end{itemize}
+      \end{conceito}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% =============================================================================
+\section{Fundamentos de segurança da informação}
+
+\begin{frame}{Princípios de segurança}
+  \begin{columns}[c]
+    \begin{column}{0.42\textwidth}
+      \centering
+      \begin{tikzpicture}
+        \draw[fill=azulpetroleo!8,draw=azulpetroleo,line width=1pt] (90:1.7) -- (210:1.7) -- (330:1.7) -- cycle;
+        \node[caixapetroleo,font=\scriptsize] at (90:1.95) {Confidencialidade};
+        \node[caixaambar,font=\scriptsize] at (210:2.0) {Integridade};
+        \node[caixaescura,font=\scriptsize] at (330:2.0) {Disponibilidade};
+        \node[font=\scriptsize\bfseries,text=azulpetroleo] at (0,0) {CIA};
+      \end{tikzpicture}
+      \\[2pt]{\tiny Tríade CID (em inglês, CIA).}
+    \end{column}
+    \begin{column}{0.56\textwidth}
+      \scriptsize
+      \begin{tabularx}{\linewidth}{@{}l L@{}}
+        \toprule
+        \cabecalho{Propriedade} & \cabecalho{Pergunta} \\
+        \midrule
+        Confidencialidade & só quem pode vê os dados? \\
+        Integridade & os dados não foram alterados indevidamente? \\
+        Disponibilidade & o serviço funciona quando precisam dele? \\
+        Autenticidade & quem diz ser é quem é? \\
+        \bottomrule
+      \end{tabularx}
+      \begin{conceito}[Princípios de projeto]
+        \textbf{Menor privilégio} (cada parte com o mínimo de acesso), \textbf{defesa em profundidade} (várias camadas), \textbf{seguro por padrão} e \textbf{nunca confiar no cliente}: o app pode ser modificado por quem o instala.
+      \end{conceito}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Criptografia essencial}
+  \footnotesize
+  \begin{tabularx}{\textwidth}{@{}p{2.5cm} L L L@{}}
+    \toprule
+    & \cabecalho{Hash} & \cabecalho{Simétrica} & \cabecalho{Assimétrica} \\
+    \midrule
+    Ideia & resumo de tamanho fixo, impossível de reverter & a mesma chave cifra e decifra & par de chaves: pública e privada \\
+    Exemplos & SHA-256; para senhas, Argon2 ou bcrypt & AES-GCM & RSA, curvas elípticas (ECDSA, X25519) \\
+    Uso no app & integridade de arquivos, armazenar senhas no servidor & dados locais cifrados, conteúdo do canal TLS & assinatura do app, troca de chaves, \emph{passkeys} \\
+    \bottomrule
+  \end{tabularx}
+  \vspace{4pt}
+  \begin{columns}[T]
+    \begin{column}{0.48\textwidth}
+      \begin{pordentro}[Como o HTTPS junta tudo]
+        O TLS usa criptografia assimétrica para autenticar o servidor (certificado) e combinar uma chave secreta; depois cifra o tráfego com criptografia simétrica, que é muito mais rápida.
+      \end{pordentro}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \begin{erro}[Criptografia caseira]
+        Inventar algoritmos, reutilizar vetores de inicialização ou guardar a chave junto com o dado cifrado. Use bibliotecas e o cofre de chaves do sistema (Keystore, Keychain).
+      \end{erro}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Modelagem de ameaças com STRIDE}
+  \begin{columns}[T]
+    \begin{column}{0.62\textwidth}
+      \scriptsize
+      \begin{tabularx}{\linewidth}{@{}l L L@{}}
+        \toprule
+        \cabecalho{Ameaça} & \cabecalho{Exemplo no LabMonitor} & \cabecalho{Defesa} \\
+        \midrule
+        \textbf{S}poofing (falsificação) & alguém se passa por um ESP32 e envia leituras falsas & autenticar dispositivos (certificados, MQTT com senha) \\
+        \textbf{T}ampering (adulteração) & alterar a reserva no tráfego & TLS, validação no servidor \\
+        \textbf{R}epudiation (repúdio) & aluno nega ter cancelado a reserva & registros de auditoria \\
+        \textbf{I}nformation disclosure & token salvo em texto puro & armazenamento seguro \\
+        \textbf{D}enial of service & app em laço enviando milhares de pedidos & limites de taxa no servidor \\
+        \textbf{E}levation of privilege & aluno vira administrador alterando o app & regras e papéis no servidor \\
+        \bottomrule
+      \end{tabularx}
+    \end{column}
+    \begin{column}{0.36\textwidth}
+      \begin{definicao}[Modelagem de ameaças]
+        Analisar sistematicamente o que pode dar errado, \textbf{antes} de construir: desenhar o fluxo de dados, listar ameaças, priorizar e definir defesas.
+      \end{definicao}
+      \begin{historia}
+        STRIDE foi criado na Microsoft no fim dos anos 1990 e virou uma das técnicas mais ensinadas.
+      \end{historia}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{OWASP Mobile Top 10 e MASVS}
+  \begin{columns}[T]
+    \begin{column}{0.5\textwidth}
+      \scriptsize
+      \begin{tabularx}{\linewidth}{@{}l L@{}}
+        \toprule
+        \multicolumn{2}{@{}l}{\cabecalho{OWASP Mobile Top 10 (2024)}} \\
+        \midrule
+        M1 & uso inadequado de credenciais \\
+        M2 & segurança insuficiente da cadeia de suprimentos \\
+        M3 & autenticação e autorização inseguras \\
+        M4 & validação insuficiente de entradas e saídas \\
+        M5 & comunicação insegura \\
+        M6 & controles de privacidade inadequados \\
+        M7 & proteção insuficiente do binário \\
+        M8 & configuração de segurança incorreta \\
+        M9 & armazenamento de dados inseguro \\
+        M10 & criptografia insuficiente \\
+        \bottomrule
+      \end{tabularx}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \begin{definicao}[OWASP]
+        Fundação aberta que publica guias de segurança. O \textbf{Top 10} lista os riscos mais comuns; o \textbf{MASVS} define os requisitos de segurança para apps, e o \textbf{MASTG} ensina a testá-los.
+      \end{definicao}
+      \begin{conceito}[Grupos do MASVS]
+        Armazenamento, criptografia, autenticação, rede, plataforma, código, resiliência e privacidade.
+      \end{conceito}
+      \begin{dica}
+        Use o MASVS como \emph{checklist} de revisão antes de cada versão importante.
+      \end{dica}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% =============================================================================
+\section{Fundamentos de produto e negócio}
+
+\begin{frame}{Do problema ao MVP}
+  \begin{columns}[c]
+    \begin{column}{0.4\textwidth}
+      \centering
+      \begin{tikzpicture}
+        \node[circle,fill=azulpetroleo,text=white,font=\scriptsize\bfseries,minimum size=1.3cm] (c) at (90:1.3) {Construir};
+        \node[circle,fill=ambar,text=azulpetroleo,font=\scriptsize\bfseries,minimum size=1.3cm] (m) at (-30:1.3) {Medir};
+        \node[circle,fill=azulprofundo,text=white,font=\scriptsize\bfseries,minimum size=1.3cm] (a) at (210:1.3) {Aprender};
+        \draw[setaambar] (c) to[bend left=25] node[rotulo,right,font=\tiny]{produto} (m);
+        \draw[setaambar] (m) to[bend left=25] node[rotulo,below,font=\tiny]{dados} (a);
+        \draw[setaambar] (a) to[bend left=25] node[rotulo,left,font=\tiny]{ideias} (c);
+      \end{tikzpicture}
+    \end{column}
+    \begin{column}{0.58\textwidth}
+      \begin{definicao}[MVP --- Produto Mínimo Viável]
+        A menor versão do produto que permite \textbf{aprender} com usuários reais se a solução resolve o problema. Não é um produto mal feito: é um produto pequeno.
+      \end{definicao}
+      \begin{conceito}[Métricas AARRR]
+        \textbf{A}quisição (chegam), \textbf{A}tivação (têm uma boa primeira experiência), \textbf{R}etenção (voltam), \textbf{R}eceita (pagam) e \textbf{R}ecomendação (indicam).
+      \end{conceito}
+      \begin{historia}
+        O ciclo construir--medir--aprender foi popularizado por Eric Ries no livro \emph{A Startup Enxuta} (2011).
+      \end{historia}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Modelos de receita e métricas do negócio}
+  \begin{columns}[T]
+    \begin{column}{0.46\textwidth}
+      \scriptsize
+      \begin{tabularx}{\linewidth}{@{}l L@{}}
+        \toprule
+        \cabecalho{Modelo} & \cabecalho{Como gera receita} \\
+        \midrule
+        Pago & paga-se para instalar \\
+        Freemium & grátis, com recursos pagos \\
+        Assinatura & cobrança recorrente \\
+        Anúncios & exibições e cliques \\
+        B2B / institucional & a organização paga pelo serviço \\
+        Público / acadêmico & financiado por projeto ou órgão \\
+        \bottomrule
+      \end{tabularx}
+    \end{column}
+    \begin{column}{0.52\textwidth}
+      \scriptsize
+      \begin{tabularx}{\linewidth}{@{}l L@{}}
+        \toprule
+        \cabecalho{Métrica} & \cabecalho{Definição} \\
+        \midrule
+        ARPU & receita média por usuário ativo no período \\
+        \emph{Churn} & \% de assinantes que cancelam por mês \\
+        LTV & receita esperada de um usuário durante toda a relação; aproximação: ARPU mensal $\times$ margem $\div$ \emph{churn} mensal \\
+        CAC & custo para adquirir um usuário (marketing $\div$ novos usuários) \\
+        \bottomrule
+      \end{tabularx}
+      \begin{exemplo}[Conta rápida]
+        ARPU de R\$\,10/mês, margem de 70\,\% e \emph{churn} de 5\,\%/mês: LTV $\approx 10 \times 0{,}7 \div 0{,}05 =$ R\$\,140. Gastar R\$\,200 para adquirir cada usuário dá prejuízo.
+      \end{exemplo}
+    \end{column}
+  \end{columns}
+\end{frame}

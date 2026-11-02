@@ -1,0 +1,280 @@
+% =============================================================================
+%  Fundamentos compartilhados --- Módulo 11: redes de computadores para apps
+%  Incluído pelas trilhas Kotlin e Flutter com \input{../fundamentos/f11-redes}
+% =============================================================================
+\section{Fundamentos: redes de computadores}
+
+\begin{frame}{Redes em camadas: o modelo TCP/IP}
+  \begin{columns}[c]
+    \begin{column}{0.5\textwidth}
+      \centering
+      \begin{tikzpicture}[every node/.style={font=\scriptsize}]
+        \foreach \y/\nome/\prot/\estilo in {2.4/Aplicação/{HTTP, MQTT, DNS, WebSocket}/caixaescura,1.6/Transporte/{TCP, UDP, QUIC}/caixapetroleo,0.8/Internet/{IP (endereços e rotas)}/caixa,0/Enlace e física/{Wi-Fi, 4G/5G, Ethernet}/caixa}{
+          \node[\estilo,minimum width=1.9cm,minimum height=6mm,font=\tiny\bfseries] at (0,\y) {\nome};
+          \node[caixa,minimum width=3.2cm,minimum height=6mm,fill=white,font=\tiny,anchor=west] at (1.05,\y) {\prot};
+        }
+        \draw[setaambar] (-1.25,2.55) -- node[rotulo,left,text width=1.1cm,align=right]{cada camada envolve a de cima} (-1.25,-0.15);
+      \end{tikzpicture}
+      \begin{historia}
+        Vint Cerf e Bob Kahn publicaram o TCP/IP em 1974; a ARPANET o adotou em 1983. O modelo OSI, de sete camadas, é a referência teórica.
+      \end{historia}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \begin{definicao}[Protocolo]
+        Conjunto de regras que define o formato das mensagens e a ordem da conversa entre dois computadores.
+      \end{definicao}
+      \begin{conceito}[Encapsulamento]
+        Cada camada acrescenta seu cabeçalho e entrega à de baixo: a mensagem HTTP vai dentro de um segmento TCP, que vai dentro de um pacote IP, que vai dentro de um quadro de Wi-Fi ou 4G.
+      \end{conceito}
+      \begin{dica}
+        O app só programa a camada de aplicação; o sistema operacional cuida do resto. Mas conhecer as de baixo explica lentidão e falhas.
+      \end{dica}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Endereços, portas, NAT e DNS}
+  \begin{columns}[T]
+    \begin{column}{0.5\textwidth}
+      \begin{definicao}[Endereço IP e porta]
+        O IP identifica a máquina (IPv4 tem 32 bits; IPv6, 128 bits). A porta identifica o programa: 443 para HTTPS, 8883 para MQTT seguro.
+      \end{definicao}
+      \begin{definicao}[DNS]
+        Sistema hierárquico que traduz nomes em IPs: o resolvedor consulta a raiz, depois o domínio de topo (\cod{.dev}) e por fim o servidor responsável. As respostas ficam em cache.
+      \end{definicao}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \centering
+      \begin{tikzpicture}[every node/.style={font=\tiny}]
+        \node (c) at (0,0) {\celular[0.25]{}};
+        \node[caixapetroleo,font=\tiny,minimum width=1.5cm,minimum height=10mm] (n) at (1.8,0) {NAT da\\ operadora};
+        \node[caixaescura,font=\tiny,minimum width=1.4cm,minimum height=10mm] (s) at (5.0,0) {servidor};
+        \draw[seta] (c.east |- 0,0.25) -- (n.west |- 0,0.25);
+        \draw[seta] (n.east |- 0,0.25) -- node[rotulo,above]{sai: ok} (s.west |- 0,0.25);
+        \draw[setaambar,dashed] (s.west |- 0,-0.25) -- node[rotulo,below]{entra: bloqueada} (n.east |- 0,-0.25);
+\end{tikzpicture}
+      \raggedright
+      \begin{pordentro}[Por que o servidor não ``chama'' o celular]
+        O celular fica atrás de um NAT da operadora, com endereço privado: ele abre conexões, mas não recebe conexões novas. Por isso existem as notificações \emph{push} e as conexões mantidas abertas pelo próprio app.
+      \end{pordentro}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{TCP e UDP}
+  \begin{columns}[c]
+    \begin{column}{0.4\textwidth}
+      \centering
+      \begin{tikzpicture}[x=1cm,y=0.55cm,every node/.style={font=\tiny}]
+        \node[rotulo] at (0,0.6) {\textbf{app}};
+        \node[rotulo] at (3,0.6) {\textbf{servidor}};
+        \draw[cinzamedio] (0,0.2) -- (0,-5.2); \draw[cinzamedio] (3,0.2) -- (3,-5.2);
+        \draw[seta] (0,-0.2) -- node[rotulo,above,sloped]{SYN} (3,-1);
+        \draw[setaambar] (3,-1.3) -- node[rotulo,above,sloped]{SYN-ACK} (0,-2.1);
+        \draw[seta] (0,-2.4) -- node[rotulo,above,sloped]{ACK + dados} (3,-3.2);
+        \draw[setaambar] (3,-3.6) -- node[rotulo,above,sloped]{resposta} (0,-4.4);
+        \node[rotulo,text width=3.4cm] at (1.5,-5.6) {aperto de mão em três vias: uma ida e volta antes dos dados};
+      \end{tikzpicture}
+    \end{column}
+    \begin{column}{0.58\textwidth}
+      \scriptsize
+      \begin{tabularx}{\linewidth}{@{}l L L@{}}
+        \toprule
+         & \cabecalho{TCP} & \cabecalho{UDP} \\
+        \midrule
+        Conexão & estabelecida antes dos dados & nenhuma: cada pacote é independente \\
+        Garantias & entrega, ordem e controle de congestionamento & nenhuma: pacotes podem se perder ou chegar fora de ordem \\
+        Custo & mais idas e voltas & mínimo \\
+        Usos & HTTP/1.1, HTTP/2, MQTT & DNS, voz, jogos, QUIC \\
+        \bottomrule
+      \end{tabularx}
+      \normalsize
+      \begin{definicao}[Latência e largura de banda]
+        \textbf{Latência}: tempo de ida e volta de uma mensagem (RTT). \textbf{Largura de banda}: quantos dados passam por segundo. Em apps, as requisições são pequenas: a latência pesa mais.
+      \end{definicao}
+      \begin{pordentro}[Bloqueio na fila]
+        No TCP, um pacote perdido segura todos os seguintes até ser reenviado, mesmo que pertençam a outras requisições.
+      \end{pordentro}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{TLS: como o HTTPS protege a conversa}
+  \begin{columns}[c]
+    \begin{column}{0.46\textwidth}
+      \centering
+      \begin{tikzpicture}[x=1cm,y=0.55cm,every node/.style={font=\tiny}]
+        \node[rotulo] at (0,0.6) {\textbf{app}};
+        \node[rotulo] at (3.2,0.6) {\textbf{servidor}};
+        \draw[cinzamedio] (0,0.2) -- (0,-4.4); \draw[cinzamedio] (3.2,0.2) -- (3.2,-4.4);
+        \draw[seta] (0,-0.2) -- node[rotulo,above,sloped]{olá + parte da chave} (3.2,-1);
+        \draw[setaambar] (3.2,-1.3) -- node[rotulo,above,sloped,text width=2.6cm,align=center]{olá + parte da chave\\ + certificado assinado} (0,-2.3);
+        \node[caixaambar,font=\tiny,text width=1.7cm] at (-0.2,-3.1) {confere o certificado};
+        \draw[seta,line width=1.4pt] (0,-3.9) -- node[rotulo,above]{dados cifrados} (3.2,-3.9);
+        \node[rotulo,text width=3.4cm] at (1.6,-4.9) {TLS 1.3: uma ida e volta para combinar as chaves};
+      \end{tikzpicture}
+    \end{column}
+    \begin{column}{0.52\textwidth}
+      \begin{definicao}[As três garantias do TLS]
+        \textbf{Confidencialidade}: ninguém no caminho lê. \textbf{Integridade}: ninguém altera sem ser notado. \textbf{Autenticidade}: o app fala mesmo com o servidor certo.
+      \end{definicao}
+      \begin{pordentro}[Duas criptografias juntas]
+        A criptografia assimétrica (pares de chaves) é usada só para combinar uma chave secreta; os dados seguem com criptografia simétrica, muito mais rápida (AES ou ChaCha20).
+      \end{pordentro}
+      \begin{conceito}[Cadeia de confiança]
+        O certificado do servidor é assinado por uma autoridade certificadora em que o sistema operacional já confia. Certificado vencido ou de outro domínio: conexão recusada.
+      \end{conceito}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{A evolução do HTTP}
+  \scriptsize
+  \begin{tabularx}{\textwidth}{@{}l l L L@{}}
+    \toprule
+    \cabecalho{Versão} & \cabecalho{Ano} & \cabecalho{Novidade} & \cabecalho{Efeito no app} \\
+    \midrule
+    HTTP/1.0 & 1996 & uma conexão TCP por requisição & lento: aperto de mão a cada pedido \\
+    HTTP/1.1 & 1997 & conexão reaproveitada (\emph{keep-alive}) & menos apertos de mão, mas um pedido por vez em cada conexão \\
+    HTTP/2 & 2015 & binário, vários pedidos simultâneos na mesma conexão, cabeçalhos comprimidos & muitas requisições pequenas ficam baratas \\
+    HTTP/3 & 2022 & roda sobre QUIC (UDP), sem bloqueio na fila do TCP & a conexão sobrevive à troca do Wi-Fi para o 4G \\
+    \bottomrule
+  \end{tabularx}
+  \normalsize
+  \vspace{4pt}
+  \begin{columns}[T]
+    \begin{column}{0.49\textwidth}
+      \begin{historia}
+        Tim Berners-Lee criou o HTTP e a Web no CERN, entre 1989 e 1991. Três décadas depois, o mesmo modelo de requisição e resposta move quase todos os apps.
+      \end{historia}
+    \end{column}
+    \begin{column}{0.49\textwidth}
+      \begin{pordentro}[Quem fala o quê]
+        OkHttp usa HTTP/2; o Cronet, motor de rede do Chrome, também HTTP/3. No Flutter, \cod{cronet\_http} e \cod{cupertino\_http} usam as pilhas nativas do Android e do iOS.
+      \end{pordentro}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Cache HTTP e requisições condicionais}
+  \begin{columns}[c]
+    \begin{column}{0.48\textwidth}
+      \centering
+      \begin{tikzpicture}[x=1cm,y=0.55cm,every node/.style={font=\tiny}]
+        \node[rotulo] at (0,0.6) {\textbf{app}};
+        \node[rotulo] at (3.6,0.6) {\textbf{servidor}};
+        \draw[cinzamedio] (0,0.2) -- (0,-4.6); \draw[cinzamedio] (3.6,0.2) -- (3.6,-4.6);
+        \draw[seta] (0,-0.2) -- node[rotulo,above,sloped]{\cod{GET /bancadas}} (3.6,-0.8);
+        \draw[setaambar] (3.6,-1.1) -- node[rotulo,above,sloped]{200 + \cod{ETag: "v7"}} (0,-1.7);
+        \node[rotulo] at (1.8,-2.2) {\ldots minutos depois\ldots};
+        \draw[seta] (0,-2.7) -- node[rotulo,above,sloped]{\cod{If-None-Match: "v7"}} (3.6,-3.3);
+        \draw[setaambar] (3.6,-3.6) -- node[rotulo,above,sloped]{304 Not Modified (sem corpo)} (0,-4.2);
+      \end{tikzpicture}
+    \end{column}
+    \begin{column}{0.5\textwidth}
+      \begin{definicao}[\emph{ETag}]
+        Identificador da versão de um recurso. Na próxima vez, o app pergunta ``mudou desde a v7?''; se não mudou, a resposta 304 vem vazia e o app usa a cópia que já tem.
+      \end{definicao}
+      \scriptsize
+      \begin{tabularx}{\linewidth}{@{}l L@{}}
+        \toprule
+        \cabecalho{\cod{Cache-Control}} & \cabecalho{Significado} \\
+        \midrule
+        \cod{max-age=60} & pode reutilizar por 60\,s sem perguntar \\
+        \cod{no-cache} & pode guardar, mas pergunte antes de usar \\
+        \cod{no-store} & não guarde (dados sensíveis) \\
+        \bottomrule
+      \end{tabularx}
+      \normalsize
+      \begin{dica}
+        OkHttp e Dio têm cache HTTP: configurá-lo economiza dados móveis e bateria.
+      \end{dica}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Serialização: de objetos a bytes}
+  \begin{columns}[T]
+    \begin{column}{0.52\textwidth}
+      \begin{definicao}[Serialização]
+        Converter objetos em bytes para enviar ou guardar; desserializar é o caminho de volta. Respostas comprimidas (gzip, brotli) reduzem muito o JSON.
+      \end{definicao}
+      \scriptsize
+      \begin{tabularx}{\linewidth}{@{}l L L@{}}
+        \toprule
+        \cabecalho{Formato} & \cabecalho{Características} & \cabecalho{Uso típico} \\
+        \midrule
+        JSON & texto legível, sem esquema obrigatório & APIs REST \\
+        Protocol Buffers & binário, com esquema, menor e mais rápido & gRPC, dados volumosos \\
+        CBOR, MessagePack & JSON em formato binário & IoT \\
+        \bottomrule
+      \end{tabularx}
+      \normalsize
+    \end{column}
+    \begin{column}{0.46\textwidth}
+      \begin{conceito}[Evolução sem quebrar]
+        Apps antigos continuam instalados por meses. O servidor só acrescenta campos; o app ignora campos desconhecidos e tem valores padrão para os que faltarem. Mudanças incompatíveis vão para uma nova versão da API (\cod{/v2}).
+      \end{conceito}
+      \begin{atencao}[JSON grande trava a tela]
+        Decodificar megabytes de JSON é trabalho de CPU: faça fora da \emph{thread} da interface (Módulo 06).
+      \end{atencao}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Redes móveis: latência, energia e falhas}
+  \begin{columns}[T]
+    \begin{column}{0.5\textwidth}
+      \begin{pordentro}[O rádio gasta mesmo parado]
+        Depois de cada transferência, o rádio celular fica alguns segundos em modo de alta potência antes de voltar ao repouso. Várias requisições espalhadas gastam mais bateria que as mesmas requisições agrupadas.
+      \end{pordentro}
+      \scriptsize
+      \begin{tabularx}{\linewidth}{@{}l L@{}}
+        \toprule
+        \cabecalho{Método} & \cabecalho{Repetir é seguro?} \\
+        \midrule
+        \cod{GET}, \cod{PUT}, \cod{DELETE} & sim: são idempotentes (repetir dá o mesmo resultado) \\
+        \cod{POST} & não: repetir pode criar duas reservas \\
+        \bottomrule
+      \end{tabularx}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \begin{conceito}[Defesas contra falhas]
+        \textbf{Tempo limite} em toda requisição; \textbf{novas tentativas} com espera exponencial e um pouco de aleatoriedade (\emph{jitter}); \textbf{disjuntor} que para de insistir num servidor fora do ar.
+      \end{conceito}
+      \begin{atencao}[``Conectado'' não é ``com internet'']
+        Wi-Fi de hotel com página de login, rede fraca ou servidor fora do ar: a única prova de rede é a requisição que funcionou.
+      \end{atencao}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Tempo real: \emph{polling}, SSE, WebSocket e \emph{push}}
+  \scriptsize
+  \begin{tabularx}{\textwidth}{@{}l L L L@{}}
+    \toprule
+    \cabecalho{Técnica} & \cabecalho{Como funciona} & \cabecalho{Custo} & \cabecalho{Quando usar} \\
+    \midrule
+    \emph{Polling} & o app pergunta de tempos em tempos & alto: muitas requisições vazias & dados que mudam pouco \\
+    \emph{Long polling} & o servidor segura a resposta até haver novidade & médio & quando nada melhor está disponível \\
+    SSE & o servidor envia eventos por uma resposta HTTP que não termina & baixo; só servidor $\rightarrow$ app & painéis e notícias ao vivo \\
+    WebSocket & canal aberto nos dois sentidos & baixo por mensagem; conexão aberta & chat, leituras ao vivo \\
+    MQTT & publicação e assinatura por tópicos & muito baixo & sensores e IoT (Módulo 13) \\
+    \emph{Push} (FCM, APNs) & o sistema entrega mesmo com o app fechado & quase zero para o app & avisos e alertas (Módulo 12) \\
+    \bottomrule
+  \end{tabularx}
+  \normalsize
+  \vspace{4pt}
+  \begin{columns}[T]
+    \begin{column}{0.49\textwidth}
+      \begin{conceito}[Uma conexão só, do sistema]
+        O \emph{push} usa uma única conexão mantida pelo sistema para todos os apps: é o jeito mais econômico de receber avisos.
+      \end{conceito}
+    \end{column}
+    \begin{column}{0.49\textwidth}
+      \begin{atencao}
+        Conexões abertas não sobrevivem ao segundo plano: o sistema as encerra. Para avisar um app fechado, só o \emph{push}.
+      \end{atencao}
+    \end{column}
+  \end{columns}
+\end{frame}

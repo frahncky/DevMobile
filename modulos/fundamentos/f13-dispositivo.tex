@@ -1,0 +1,276 @@
+% =============================================================================
+%  Fundamentos compartilhados --- Módulo 13: hardware, sensores e comunicação
+%  Incluído pelas trilhas Kotlin e Flutter com \input{../fundamentos/f13-dispositivo}
+% =============================================================================
+\section{Fundamentos: hardware, sensores e comunicação}
+
+\begin{frame}{Do mundo físico ao número}
+  \centering
+  \begin{tikzpicture}[node distance=4mm,every node/.style={font=\scriptsize}]
+    \node[caixaambar,minimum width=2cm,minimum height=11mm] (g) {grandeza física\\ \tiny temperatura, aceleração};
+    \node[caixa,minimum width=1.9cm,minimum height=11mm,right=of g] (t) {transdutor\\ \tiny vira tensão};
+    \node[caixa,minimum width=2cm,minimum height=11mm,right=of t] (c) {condicionamento\\ \tiny amplifica, filtra};
+    \node[caixapetroleo,minimum width=1.9cm,minimum height=11mm,right=of c] (a) {ADC\\ \tiny amostra e quantiza};
+    \node[caixaescura,minimum width=2.2cm,minimum height=11mm,right=of a] (n) {número + unidade\\ \tiny no app};
+    \draw[seta] (g) -- (t); \draw[seta] (t) -- (c); \draw[seta] (c) -- (a); \draw[seta] (a) -- (n);
+  \end{tikzpicture}
+  \raggedright
+  \begin{columns}[T]
+    \begin{column}{0.49\textwidth}
+      \begin{definicao}[Conversor analógico-digital (ADC)]
+        Mede a tensão em instantes regulares (\textbf{taxa de amostragem}) e a representa com um número de \textbf{bits}. Um ADC de 12 bits, como o do ESP32, distingue $2^{12} = 4096$ níveis.
+      \end{definicao}
+      \begin{pordentro}[Teorema da amostragem]
+        Para reconstruir um sinal, amostre a mais que o dobro da maior frequência presente nele (Nyquist). Abaixo disso surgem frequências falsas (\emph{aliasing}).
+      \end{pordentro}
+    \end{column}
+    \begin{column}{0.49\textwidth}
+      \begin{definicao}[Sensores MEMS]
+        Estruturas mecânicas microscópicas gravadas no silício. O \textbf{acelerômetro} mede aceleração (inclusive a da gravidade); o \textbf{giroscópio}, velocidade angular; o \textbf{magnetômetro}, o campo magnético; o \textbf{barômetro}, a pressão.
+      \end{definicao}
+      \begin{atencao}
+        Toda medida tem ruído, deriva e erro de calibração: exiba com a precisão que o sensor realmente tem.
+      \end{atencao}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Filtrando e combinando sensores}
+  \begin{columns}[c]
+    \begin{column}{0.48\textwidth}
+      \centering
+      \begin{tikzpicture}[x=0.55cm,y=0.9cm]
+        \draw[->,cinzamedio] (0,0) -- (10.3,0) node[rotulo,right]{t};
+        \draw[->,cinzamedio] (0,0) -- (0,2.2) node[rotulo,above]{°C};
+        \draw[cinzamedio!70,line width=0.5pt] plot coordinates {(0,0.9) (0.5,1.3) (1,0.7) (1.5,1.2) (2,0.8) (2.5,1.4) (3,0.9) (3.5,1.1) (4,0.6) (4.5,1.3) (5,1.7) (5.5,1.4) (6,1.9) (6.5,1.5) (7,1.8) (7.5,1.4) (8,1.9) (8.5,1.6) (9,1.8) (9.5,1.5) (10,1.7)};
+        \draw[ambar,line width=1.2pt] plot[smooth] coordinates {(0,0.95) (1,0.97) (2,0.98) (3,1.0) (4,0.98) (5,1.15) (6,1.4) (7,1.55) (8,1.64) (9,1.68) (10,1.68)};
+        \node[rotulo,text=cinzamedio] at (2.5,1.75) {leitura bruta};
+        \node[rotulo,text=ambar] at (7.6,1.0) {filtrada};
+      \end{tikzpicture}
+      \begin{definicao}[Média móvel exponencial]
+        $y \leftarrow y + \alpha\,(x - y)$, com $\alpha$ entre 0 e 1. Pouco código, pouca memória: ótima para suavizar leituras.
+      \end{definicao}
+    \end{column}
+    \begin{column}{0.5\textwidth}
+      \begin{conceito}[Passa-baixas e passa-altas]
+        Um filtro \textbf{passa-baixas} remove variações rápidas (ruído); um \textbf{passa-altas} remove variações lentas (deriva, gravidade). Quanto menor o $\alpha$, mais suave e mais atrasada fica a curva.
+      \end{conceito}
+      \begin{definicao}[Fusão de sensores]
+        Combinar sensores para compensar os defeitos de cada um. O giroscópio é preciso no curto prazo e deriva; o acelerômetro é ruidoso, mas não deriva. Juntos, dão a orientação do aparelho.
+      \end{definicao}
+      \begin{dica}
+        O sistema já entrega sensores fundidos, como o vetor de rotação. Prefira-os a reinventar a fusão.
+      \end{dica}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Como o GPS descobre onde você está}
+  \begin{columns}[c]
+    \begin{column}{0.44\textwidth}
+      \centering
+      \begin{tikzpicture}
+        \draw[azulpetroleo,line width=0.8pt] (0,0) circle (1.25);
+        \draw[ambar,line width=0.8pt] (1.6,0.3) circle (1.05);
+        \draw[cinzamedio,line width=0.8pt] (0.7,-1.3) circle (0.95);
+        \fill[vermelhoerro] (0.95,-0.42) circle (2.2pt);
+        \node[rotulo,text=vermelhoerro] at (1.45,-0.62) {você};
+        \foreach \x/\y in {0/0,1.6/0.3,0.7/-1.3}{\fill[azulpetroleo] (\x,\y) circle (1.5pt);}
+        \node[rotulo,text width=4cm] at (0.7,-2.6) {cada satélite define uma esfera de distância; a interseção é a posição};
+      \end{tikzpicture}
+    \end{column}
+    \begin{column}{0.54\textwidth}
+      \begin{definicao}[GNSS e trilateração]
+        Satélites transmitem a hora de seus relógios atômicos; o receptor calcula a distância pelo tempo de viagem do sinal. Com \textbf{quatro} satélites, resolve latitude, longitude, altitude e o erro do próprio relógio.
+      \end{definicao}
+      \begin{pordentro}[Várias constelações e ajuda da rede]
+        Celulares usam GPS (EUA), GLONASS (Rússia), Galileo (UE) e BeiDou (China). O A-GPS baixa pela internet a posição dos satélites e reduz o primeiro acerto de minutos para segundos.
+      \end{pordentro}
+      \begin{atencao}
+        Dentro de prédios o sinal some e o sistema recorre a Wi-Fi, torres e sensores. Ao ar livre, a precisão típica é de alguns metros.
+      \end{atencao}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Permissões e privacidade}
+  \begin{columns}[T]
+    \begin{column}{0.52\textwidth}
+      \scriptsize
+      \begin{tabularx}{\linewidth}{@{}l L L@{}}
+        \toprule
+        \cabecalho{Tipo} & \cabecalho{Concessão} & \cabecalho{Exemplos} \\
+        \midrule
+        Normal & automática, declarada no manifesto & internet, vibração \\
+        Em tempo de execução & o usuário decide num diálogo & câmera, localização, Bluetooth, notificações \\
+        Especial & tela própria nas configurações & alarmes exatos, sobrepor apps \\
+        \bottomrule
+      \end{tabularx}
+      \normalsize
+      \begin{historia}
+        O Android pede permissões em tempo de execução desde a versão 6.0 (2015). Vieram depois a permissão de uma só vez (11), a localização aproximada (12) e o seletor de fotos sem permissão (13).
+      \end{historia}
+    \end{column}
+    \begin{column}{0.46\textwidth}
+      \begin{definicao}[Menor privilégio e minimização]
+        Peça só o que o recurso exige, só quando ele for usado, e colete só os dados necessários. É boa engenharia e é exigência da LGPD (Módulo 15).
+      \end{definicao}
+      \begin{conceito}[No iOS]
+        Cada permissão precisa de um texto de justificativa no \cod{Info.plist}; sem ele, o app é encerrado ao pedir o recurso.
+      \end{conceito}
+      \begin{dica}
+        Um ponto colorido na barra de status avisa quando câmera ou microfone estão em uso, no Android e no iOS.
+      \end{dica}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Bluetooth Low Energy por dentro}
+  \begin{columns}[c]
+    \begin{column}{0.46\textwidth}
+      \centering
+      \begin{tikzpicture}[every node/.style={font=\tiny}]
+        \foreach \y/\n/\d/\estilo in {3/GAP/{papéis, anúncio e conexão}/caixaambar,2.35/GATT/{serviços e características}/caixaescura,1.7/ATT/{atributos com \emph{handle} e UUID}/caixapetroleo,1.05/L2CAP/{canais e fragmentação}/caixa,0.4/Enlace/{anúncios e eventos de conexão}/caixa,-0.25/Física/{2,4\,GHz, 40 canais}/caixa}{
+          \node[\estilo,minimum width=1.3cm,minimum height=5.5mm,font=\tiny\bfseries] at (0,\y) {\n};
+          \node[rotulo,anchor=west] at (0.75,\y) {\d};
+        }
+      \end{tikzpicture}
+      \begin{historia}
+        O BLE surgiu no Bluetooth 4.0 (2010) para sensores alimentados por baterias pequenas. O Bluetooth 5 (2016) trouxe o dobro de velocidade e um modo de longo alcance.
+      \end{historia}
+    \end{column}
+    \begin{column}{0.52\textwidth}
+      \begin{pordentro}[Por que gasta tão pouco]
+        O rádio fica quase sempre desligado. O periférico anuncia em 3 dos 40 canais e, conectado, acorda só a cada \textbf{intervalo de conexão} (de 7,5\,ms a 4\,s) para trocar alguns bytes.
+      \end{pordentro}
+      \begin{definicao}[MTU]
+        Tamanho máximo de um pacote ATT: 23 bytes por padrão (20 de dados úteis). Central e periférico podem negociar até 517 bytes.
+      \end{definicao}
+      \begin{dica}
+        Leituras frequentes: use \textbf{notify}. Mais dados por segundo: aumente o MTU e reduza o intervalo de conexão, sabendo que isso custa bateria.
+      \end{dica}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{MQTT por dentro}
+  \begin{columns}[c]
+    \begin{column}{0.46\textwidth}
+      \centering
+      \begin{tikzpicture}[x=1cm,y=0.5cm,every node/.style={font=\tiny}]
+        \node[rotulo] at (0,0.7) {\textbf{ESP32}};
+        \node[rotulo] at (3.2,0.7) {\textbf{broker}};
+        \draw[cinzamedio] (0,0.3) -- (0,-5.6); \draw[cinzamedio] (3.2,0.3) -- (3.2,-5.6);
+        \node[rotulo,anchor=west] at (3.3,-0.1) {QoS 1};
+        \draw[seta] (0,-0.2) -- node[rotulo,above,sloped]{PUBLISH} (3.2,-0.8);
+        \draw[setaambar] (3.2,-1.1) -- node[rotulo,above,sloped]{PUBACK} (0,-1.7);
+        \node[rotulo,anchor=west] at (3.3,-2.3) {QoS 2};
+        \draw[seta] (0,-2.4) -- node[rotulo,above,sloped]{PUBLISH} (3.2,-3.0);
+        \draw[setaambar] (3.2,-3.2) -- node[rotulo,above,sloped]{PUBREC} (0,-3.8);
+        \draw[seta] (0,-4.0) -- node[rotulo,above,sloped]{PUBREL} (3.2,-4.6);
+        \draw[setaambar] (3.2,-4.8) -- node[rotulo,above,sloped]{PUBCOMP} (0,-5.4);
+      \end{tikzpicture}
+    \end{column}
+    \begin{column}{0.52\textwidth}
+      \begin{historia}
+        Andy Stanford-Clark (IBM) e Arlen Nipper criaram o MQTT em 1999 para monitorar oleodutos via satélite. Virou padrão OASIS em 2014; a versão 5.0 é de 2019.
+      \end{historia}
+      \begin{pordentro}[Leve de propósito]
+        Roda sobre TCP (porta 1883, ou 8883 com TLS) e o cabeçalho fixo tem só 2 bytes. Mensagens de \emph{keep-alive} (PINGREQ e PINGRESP) mostram ao broker que a placa continua viva.
+      \end{pordentro}
+      \begin{conceito}[Sessão persistente]
+        Com sessão persistente, o broker guarda as assinaturas e as mensagens de QoS 1 e 2 enquanto o cliente está desconectado e as entrega na volta.
+      \end{conceito}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Comunicação serial e UART}
+  \begin{columns}[c]
+    \begin{column}{0.5\textwidth}
+      \centering
+      \begin{tikzpicture}[x=0.5cm,y=0.6cm]
+        \draw[cinzamedio,dashed] (0,1) -- (14,1);
+        \draw[azulpetroleo,line width=1pt] (0,1) -- (1,1) -- (1,0) -- (2,0) -- (2,1) -- (3,1) -- (3,0) -- (8,0) -- (8,1) -- (9,1) -- (9,0) -- (10,0) -- (10,1) -- (14,1);
+        \node[rotulo] at (1.5,-0.45) {início};
+        \foreach \b [count=\i from 0] in {1,0,0,0,0,0,1,0}{\node[rotulo] at (2.5+\i,1.35) {\b};}
+        \node[rotulo] at (6,-0.45) {letra A (0x41), bit menos significativo primeiro};
+        \node[rotulo] at (10.5,-0.45) {fim};
+        \node[rotulo] at (12.6,0.6) {repouso};
+      \end{tikzpicture}
+      \begin{definicao}[UART]
+        Comunicação serial \textbf{assíncrona}: não há fio de relógio. Os dois lados combinam a velocidade (\emph{baud rate}, como 115\,200) e o formato, quase sempre \textbf{8N1}: 8 bits de dados, sem paridade, 1 bit de parada.
+      \end{definicao}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \begin{conceito}[Ligação]
+        TX de um lado no RX do outro, e terra comum. Atenção aos níveis: o ESP32 trabalha em 3,3\,V, o Arduino Uno em 5\,V e o RS-232 em $\pm$12\,V.
+      \end{conceito}
+      \begin{pordentro}[Do USB à serial]
+        A placa aparece no celular como dispositivo USB; um conversor (CH340, CP2102, FTDI) ou o próprio microcontrolador traduz para UART.
+      \end{pordentro}
+      \begin{dica}[Monte um protocolo]
+        A serial só entrega bytes. Defina mensagens com delimitador (como \cod{\textbackslash n}) e, se o ambiente for ruidoso, uma soma de verificação.
+      \end{dica}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{NFC: comunicação por proximidade}
+  \begin{columns}[T]
+    \begin{column}{0.5\textwidth}
+      \begin{definicao}[NFC]
+        Comunicação a 13,56\,MHz por acoplamento indutivo, com alcance de poucos centímetros. A etiqueta passiva não tem bateria: é alimentada pelo campo do próprio leitor.
+      \end{definicao}
+      \scriptsize
+      \begin{tabularx}{\linewidth}{@{}l L@{}}
+        \toprule
+        \cabecalho{Modo} & \cabecalho{Uso} \\
+        \midrule
+        Leitura e escrita & etiquetas com URL, texto ou identificador \\
+        Emulação de cartão & o celular se passa por cartão (pagamentos, crachás) \\
+        \bottomrule
+      \end{tabularx}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \begin{definicao}[NDEF]
+        Formato padrão das mensagens gravadas em etiquetas: uma lista de registros, cada um com tipo (URI, texto, MIME) e conteúdo.
+      \end{definicao}
+      \begin{exemplo}[No LabMonitor]
+        Uma etiqueta colada na bancada guarda \cod{https://labmonitor.app/bancada/b3}: encostar o celular abre a tela da bancada por link profundo (Módulo 07).
+      \end{exemplo}
+      \begin{atencao}
+        A distância curta é uma proteção, mas não substitui a autenticação: qualquer um pode ler ou copiar uma etiqueta sem proteção.
+      \end{atencao}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Energia: o recurso mais escasso}
+  \scriptsize
+  \begin{tabularx}{\textwidth}{@{}l L L@{}}
+    \toprule
+    \cabecalho{Consumidor} & \cabecalho{Por que gasta} & \cabecalho{Como economizar} \\
+    \midrule
+    Tela & maior consumo do aparelho & tema escuro em telas OLED; nada de manter a tela ligada sem motivo \\
+    GPS & receptor ligado e cálculos contínuos & localização aproximada, intervalos maiores, cercas virtuais \\
+    Rede móvel & rádio de alta potência e tempo de cauda & agrupar requisições, \emph{push} em vez de \emph{polling} \\
+    CPU & despertares frequentes & agendadores do sistema em vez de temporizadores próprios \\
+    Bluetooth & varreduras longas & filtros por serviço e varreduras curtas \\
+    \bottomrule
+  \end{tabularx}
+  \normalsize
+  \vspace{4pt}
+  \begin{columns}[T]
+    \begin{column}{0.49\textwidth}
+      \begin{historia}
+        O Android criou o modo Doze (6.0, 2015), limitou serviços em segundo plano (8.0, 2017) e passou a classificar apps por frequência de uso (9.0, 2018). O iOS sempre restringiu o segundo plano a modos específicos.
+      \end{historia}
+    \end{column}
+    \begin{column}{0.49\textwidth}
+      \begin{conceito}[Regra geral]
+        Deixe o sistema decidir \textbf{quando} executar: WorkManager no Android, \cod{BGTaskScheduler} no iOS. Ele agrupa o trabalho de vários apps e acorda o aparelho menos vezes.
+      \end{conceito}
+    \end{column}
+  \end{columns}
+\end{frame}

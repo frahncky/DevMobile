@@ -1,0 +1,458 @@
+\documentclass[aspectratio=169,10pt]{beamer}
+\makeatletter\def\input@path{{../../estilo/}{../estilo/}{estilo/}}\makeatother
+\usepackage{devmobile}
+\modulo[Flutter]{01}{Ambiente de Desenvolvimento}{Flutter SDK, editores, emuladores e celular real, estrutura do projeto, pubspec, hot reload, DevTools e pacotes}
+
+\begin{document}
+\capa
+
+\begin{frame}{Objetivos do módulo}
+  \begin{conceito}[Ao final deste módulo você será capaz de]
+    \begin{itemize}
+      \item Explicar o que é o Flutter e como ele chega ao Android, ao iOS, à web e ao desktop.
+      \item Instalar o Flutter SDK e diagnosticar o ambiente com \cod{flutter doctor}.
+      \item Executar apps no emulador, no simulador iOS e no celular real.
+      \item Entender a estrutura de um projeto Flutter e o arquivo \arq{pubspec.yaml}.
+      \item Usar \emph{hot reload}, os modos de execução e o Flutter DevTools.
+      \item Encontrar, avaliar e adicionar pacotes do \textbf{pub.dev}.
+    \end{itemize}
+  \end{conceito}
+\end{frame}
+
+\sumario
+
+\input{../fundamentos/f01-ambiente}
+
+% =============================================================================
+\section{Flutter e Dart}
+
+\begin{frame}{O que é o Flutter}
+  \begin{columns}[c]
+    \begin{column}{0.52\textwidth}
+      \begin{itemize}
+        \item \termo{Flutter}: kit de desenvolvimento de interfaces do Google, de código aberto.
+        \item \textbf{Um único código} em \termo{Dart} gera apps para Android, iOS, web, Windows, macOS e Linux.
+        \item A interface é feita de \termo{widgets} desenhados pelo próprio motor do Flutter, idênticos em todas as plataformas.
+        \item Compilado para código nativo (AOT) em release: desempenho próximo ao nativo.
+        \item \emph{Hot reload}: mudanças aparecem no aparelho em menos de um segundo.
+      \end{itemize}
+    \end{column}
+    \begin{column}{0.46\textwidth}
+      \centering
+      \begin{tikzpicture}[node distance=1.5mm]
+        \node[caixaambarforte,minimum width=5cm] (app) {Seu app (Dart + widgets)};
+        \node[caixaescura,minimum width=5cm,below=of app] (fw) {Framework Flutter\\ \tiny Material, Cupertino, widgets, animação};
+        \node[caixapetroleo,minimum width=5cm,below=of fw] (eng) {Motor (Impeller)\\ \tiny desenha cada pixel, Dart runtime};
+        \node[caixa,minimum width=5cm,below=of eng] (emb) {\emph{Embedder} da plataforma\\ \tiny Android, iOS, web, desktop};
+        \node[caixa,fill=cinzaclaro,minimum width=5cm,below=of emb] (so) {Sistema operacional e hardware};
+      \end{tikzpicture}
+    \end{column}
+  \end{columns}
+  \begin{dica}[Por que Dart?]
+    JIT no desenvolvimento (\emph{hot reload}), AOT no release (desempenho), \emph{null safety} e sintaxe familiar a quem conhece Java, C\# ou JavaScript.
+  \end{dica}
+\end{frame}
+
+% =============================================================================
+\section{Instalação}
+
+\begin{frame}[fragile]{Instalando o Flutter SDK}
+  \begin{columns}[T]
+    \begin{column}{0.5\textwidth}
+      \begin{enumerate}
+        \item Instale o \textbf{VS Code} e a extensão \textbf{Flutter}; o comando \emph{Flutter: New Project} oferece baixar o SDK.
+        \item Ou baixe o SDK no site oficial e ponha \arq{flutter/bin} no \cod{PATH}.
+        \item Instale o \textbf{Android Studio} (Android SDK e emulador).
+        \item \cod{flutter doctor --android-licenses}.
+      \end{enumerate}
+      \begin{atencao}[iOS]
+        Compilar para iOS exige \textbf{macOS} com Xcode. No Windows e no Linux, teste no Android, na web e no desktop.
+      \end{atencao}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+\begin{terminal}[title=flutter doctor (saída resumida)]
+$ flutter doctor
+[ok] Flutter (Channel stable)
+[ok] Android toolchain - Android SDK
+[ x] Xcode (somente no macOS)
+[ok] Chrome - develop for the web
+[ok] Android Studio
+[ok] VS Code
+[ok] Connected device (2 available)
+[ok] Network resources
+\end{terminal}
+      \begin{dica}
+        \cod{flutter doctor -v} mostra o que falta corrigir. Use o canal \textbf{stable}; \cod{flutter upgrade} atualiza o SDK.
+      \end{dica}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}[fragile]{Onde executar o app}
+  \begin{columns}[T]
+    \begin{column}{0.5\textwidth}
+      \scriptsize
+      \begin{tabularx}{\linewidth}{@{}l L@{}}
+        \toprule
+        \cabecalho{Destino} & \cabecalho{Como} \\
+        \midrule
+        Emulador Android & Device Manager do Android Studio \\
+        Celular Android & opções do desenvolvedor + depuração USB ou Wi-Fi \\
+        Simulador iOS & Xcode (somente macOS) \\
+        iPhone real & Xcode + conta Apple (gratuita para testes) \\
+        Navegador & Chrome, sem configuração extra \\
+        Desktop & Windows, macOS ou Linux, com as ferramentas de C++ do sistema \\
+        \bottomrule
+      \end{tabularx}
+      \begin{atencao}[Hardware real]
+        Bluetooth, NFC, câmera de verdade e sensores (Módulo 13) exigem \textbf{celular físico}.
+      \end{atencao}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+\begin{terminal}[title=Dispositivos pelo terminal]
+flutter devices              # lista destinos
+flutter emulators            # lista AVDs
+flutter emulators --launch Pixel_8
+flutter run                  # escolhe o destino
+flutter run -d chrome        # roda na web
+flutter run -d emulator-5554
+\end{terminal}
+      \begin{dica}[Celular Android]
+        Ative as \textbf{Opções do desenvolvedor} (toque 7 vezes em \emph{Número da versão}) e a \textbf{Depuração USB}. O mesmo vale para a trilha Kotlin (Módulo 01).
+      \end{dica}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% =============================================================================
+\section{Estrutura do projeto}
+
+\begin{frame}[fragile]{Criando o projeto}
+  \begin{columns}[T]
+    \begin{column}{0.5\textwidth}
+\begin{terminal}[title=Criando pelo terminal]
+flutter create --org br.edu.ifma \
+  --platforms android,ios,web labmonitor
+cd labmonitor
+flutter run
+\end{terminal}
+\begin{codigo}[title=labmonitor/,listing options={style=dm,language=bash,basicstyle=\ttfamily\tiny}]{bash}
+labmonitor/
+|-- lib/
+|   `-- main.dart          ponto de entrada
+|-- test/
+|   `-- widget_test.dart   testes
+|-- android/               projeto Android (Gradle)
+|-- ios/                   projeto iOS (Xcode)
+|-- web/
+|-- pubspec.yaml           dependências e recursos
+|-- pubspec.lock           versões exatas
+`-- analysis_options.yaml  regras de análise
+\end{codigo}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \begin{conceito}[\cod{--org}]
+        Define o identificador do app: \cod{br.edu.ifma.labmonitor}. Ele vira o \cod{applicationId} no Android e o \emph{bundle identifier} no iOS, e não pode mudar depois de publicado.
+      \end{conceito}
+      \begin{itemize}
+        \item Quase todo o seu código fica em \arq{lib/}.
+        \item \arq{android/} e \arq{ios/} são projetos nativos completos: você mexe neles para permissões, ícones e assinatura.
+        \item \arq{pubspec.lock} vai para o Git; garante as mesmas versões para toda a equipe.
+      \end{itemize}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}[fragile]{\arq{pubspec.yaml}}
+  \begin{columns}[T]
+    \begin{column}{0.5\textwidth}
+\begin{codigo}[title=pubspec.yaml]{YAML}
+name: labmonitor
+version: 1.0.0+1          # nome+número do build
+
+environment:
+  sdk: ^3.9.0
+
+dependencies:
+  flutter:
+    sdk: flutter
+  go_router: ^16.0.0      # exemplo de pacote
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  assets: [assets/imagens/]
+\end{codigo}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \begin{itemize}
+        \item \cod{version}: \cod{1.0.0} é o nome exibido; \cod{+1} é o número do build (\cod{versionCode} no Android).
+        \item \cod{dependencies}: pacotes usados pelo app.
+        \item \cod{dev\_dependencies}: só para desenvolvimento e testes.
+        \item \cod{assets}: imagens e arquivos empacotados (as versões do exemplo são ilustrativas).
+      \end{itemize}
+      \begin{atencao}[Indentação]
+        YAML usa espaços para definir a hierarquia. Um espaço a mais ou a menos quebra o arquivo.
+      \end{atencao}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}[fragile]{\arq{lib/main.dart}: o primeiro app}
+  \begin{columns}[T]
+    \begin{column}{0.56\textwidth}
+\begin{codigo}[title=lib/main.dart]{Dart}
+import 'package:flutter/material.dart';
+
+void main() {
+  runApp(const LabMonitorApp());
+}
+
+class LabMonitorApp extends StatelessWidget {
+  const LabMonitorApp({super.key});
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      title: 'LabMonitor',
+      theme: ThemeData(
+        colorSchemeSeed: const Color(0xFF0D3052)),
+      home: Scaffold(
+        appBar: AppBar(title: const Text('LabMonitor')),
+        body: const Center(child: Text('Olá, laboratório!')),
+      ),
+    );
+  }
+}
+\end{codigo}
+    \end{column}
+    \begin{column}{0.42\textwidth}
+      \begin{itemize}
+        \item \cod{main()} chama \cod{runApp} com o widget raiz.
+        \item \cod{StatelessWidget}: widget sem estado próprio; descreve a tela no método \cod{build}.
+        \item \cod{MaterialApp}: tema, rotas e localização do app.
+        \item \cod{Scaffold}: estrutura de tela com barra superior e corpo.
+        \item \cod{const}: widget criado em tempo de compilação, sem custo de reconstrução.
+      \end{itemize}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% =============================================================================
+\section{Executando e depurando}
+
+\begin{frame}{\emph{Hot reload} e modos de execução}
+  \begin{columns}[T]
+    \begin{column}{0.5\textwidth}
+      \scriptsize
+      \begin{tabularx}{\linewidth}{@{}l L L@{}}
+        \toprule
+        \cabecalho{Ação} & \cabecalho{Tecla} & \cabecalho{Efeito} \\
+        \midrule
+        \emph{Hot reload} & \cod{r} & injeta o código novo e mantém o estado \\
+        \emph{Hot restart} & \cod{R} & reinicia o app, perde o estado \\
+        \emph{Full restart} & parar e rodar & necessário após mudar código nativo ou o \arq{pubspec} \\
+        \bottomrule
+      \end{tabularx}
+      \begin{dica}
+        No VS Code, salvar o arquivo já dispara o \emph{hot reload}.
+      \end{dica}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \scriptsize
+      \begin{tabularx}{\linewidth}{@{}l L@{}}
+        \toprule
+        \cabecalho{Modo} & \cabecalho{Uso} \\
+        \midrule
+        \textbf{debug} & desenvolvimento: JIT, \emph{hot reload}, asserções, mais lento \\
+        \textbf{profile} & medir desempenho num celular real (\cod{flutter run --profile}) \\
+        \textbf{release} & publicação: AOT, otimizado, sem ferramentas de depuração \\
+        \bottomrule
+      \end{tabularx}
+      \begin{atencao}
+        Nunca avalie desempenho em modo debug: ele pode ser várias vezes mais lento que o release.
+      \end{atencao}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}[fragile]{Flutter DevTools e logs}
+  \begin{columns}[T]
+    \begin{column}{0.5\textwidth}
+      \begin{conceito}[DevTools]
+        Ferramentas no navegador ou no editor:
+        \begin{itemize}
+          \item \textbf{Inspector}: árvore de widgets e depurador de layout.
+          \item \textbf{Performance}: quadros lentos (\emph{jank}).
+          \item \textbf{CPU} e \textbf{Memory}: perfis e vazamentos.
+          \item \textbf{Network}: requisições HTTP do app.
+          \item \textbf{Logging}: mensagens e erros.
+        \end{itemize}
+      \end{conceito}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+\begin{codigo}[title=Registrando logs]{Dart}
+import 'dart:developer' as dev;
+
+void lerSensor(double valor) {
+  debugPrint('Leitura: $valor');
+  if (valor > 80) {
+    dev.log('Temperatura alta: $valor',
+        name: 'LabMonitor', level: 900);
+  }
+}
+\end{codigo}
+      \begin{dica}[Depurador]
+        No VS Code: \emph{breakpoint} na margem e \textbf{F5} para depurar.
+      \end{dica}
+      \begin{atencao}
+        Nunca registre senhas, tokens ou dados pessoais.
+      \end{atencao}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% =============================================================================
+\section{Pacotes e comandos}
+
+\begin{frame}[fragile]{Pacotes do pub.dev}
+  \begin{columns}[T]
+    \begin{column}{0.5\textwidth}
+\begin{terminal}[title=Gerenciando dependências]
+flutter pub add go_router     # adiciona
+flutter pub add --dev mocktail
+flutter pub remove go_router
+flutter pub get               # baixa tudo
+flutter pub outdated          # o que tem versão nova
+flutter pub upgrade
+\end{terminal}
+      \begin{conceito}[Versões]
+        \cod{\^{}2.1.0} aceita qualquer \cod{2.x.y} a partir de \cod{2.1.0}, mas não \cod{3.0.0}, que pode quebrar a compatibilidade (versionamento semântico).
+      \end{conceito}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \begin{dica}[Como escolher um pacote]
+        \begin{itemize}
+          \item \textbf{Publisher verificado} (ex.: \cod{flutter.dev}, \cod{firebase.google.com}).
+          \item \textbf{Pub points} altos e atualizações recentes.
+          \item Plataformas suportadas (Android, iOS, web\ldots).
+          \item \textbf{Licença} compatível com o seu uso.
+        \end{itemize}
+      \end{dica}
+      \begin{atencao}
+        Pacote é código de terceiros no seu app: prefira poucos e bem mantidos.
+      \end{atencao}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Comandos do dia a dia}
+  \footnotesize
+  \begin{tabularx}{\textwidth}{@{}l L@{}}
+    \toprule
+    \cabecalho{Comando} & \cabecalho{Para que serve} \\
+    \midrule
+    \cod{flutter doctor} & diagnostica o ambiente \\
+    \cod{flutter create} & cria um projeto \\
+    \cod{flutter run} & compila, instala e executa com \emph{hot reload} \\
+    \cod{flutter analyze} & análise estática (erros e más práticas) \\
+    \cod{dart format .} & formata todo o código \\
+    \cod{flutter test} & roda os testes (Módulo 14) \\
+    \cod{flutter build apk} / \cod{appbundle} / \cod{ipa} / \cod{web} & gera os pacotes de publicação (Módulo 15) \\
+    \cod{flutter clean} & apaga a pasta \arq{build/} quando algo ``estranho'' acontecer \\
+    \cod{dart run build\_runner build} & executa geradores de código (JSON, Drift, Riverpod) \\
+    \bottomrule
+  \end{tabularx}
+  \begin{dica}[Git]
+    O \arq{.gitignore} gerado pelo \cod{flutter create} já exclui \arq{build/} e \arq{.dart\_tool/}. Faça o primeiro commit e publique no GitHub (Git em detalhes no Módulo 03).
+  \end{dica}
+\end{frame}
+
+% =============================================================================
+\section{Fechamento}
+
+\begin{frame}{Resumo}
+  \begin{resumo}
+    \begin{itemize}
+      \item Flutter desenha a interface com o próprio motor; um código Dart atende Android, iOS, web e desktop.
+      \item \cod{flutter doctor} confere o ambiente; iOS exige macOS e Xcode.
+      \item O código vive em \arq{lib/}; \arq{pubspec.yaml} declara versão, dependências e recursos.
+      \item \emph{Hot reload} (\cod{r}) mantém o estado; \emph{hot restart} (\cod{R}) reinicia.
+      \item Meça desempenho em modo \textbf{profile}; publique em \textbf{release}.
+      \item Escolha pacotes do pub.dev por publisher, manutenção, plataformas e licença.
+    \end{itemize}
+  \end{resumo}
+\end{frame}
+
+\begin{frame}{Glossário}
+  \begin{glossario}
+    SDK & conjunto de bibliotecas e ferramentas para desenvolver para uma plataforma \\
+    Flutter SDK & \emph{framework}, motor, Dart SDK e a ferramenta \cod{flutter} \\
+    \cod{flutter doctor} & diagnóstico do ambiente: SDKs, licenças, aparelhos \\
+    \cod{pubspec.yaml} & arquivo com nome, versão, dependências e recursos do projeto \\
+    pub.dev & repositório oficial de pacotes Dart e Flutter \\
+    \emph{Hot reload} & injeta o código alterado no app em execução mantendo o estado \\
+    \emph{Hot restart} & reinicia o app com o código novo, perdendo o estado \\
+    DevTools & ferramentas de inspeção, desempenho, memória e rede do Flutter \\
+    \emph{Breakpoint} & ponto em que o depurador pausa a execução \\
+  \end{glossario}
+\end{frame}
+
+\begin{frame}{Questões de revisão}
+  \begin{questoes}
+    \item Qual a diferença entre JIT e AOT? Como o Flutter usa cada um?
+    \item Por que o \emph{hot reload} é possível em modo \emph{debug} e não em \emph{release}?
+    \item O que o \cod{flutter doctor} verifica e por que rodá-lo depois de instalar?
+    \item Para que serve o \cod{pubspec.lock} e por que ele vai para o Git?
+    \item Explique a diferença entre emulador Android e simulador iOS.
+    \item Cite duas situações em que é preciso um aparelho real.
+    \item Quando usar \emph{hot restart} em vez de \emph{hot reload}?
+    \item Descreva o método para depurar um app que fecha ao tocar num botão.
+  \end{questoes}
+\end{frame}
+
+\begin{frame}{Exercícios}
+  \begin{exercicio}[Exercício 1 --- Ambiente]
+    Rode \cod{flutter doctor -v}, corrija todos os itens possíveis no seu sistema e execute o app padrão no emulador, no celular e no Chrome.
+  \end{exercicio}
+  \begin{exercicio}[Exercício 2 --- Hot reload]
+    Mude a cor-semente do tema e o texto da tela com o app rodando. Compare \emph{hot reload} e \emph{hot restart} usando o contador do app padrão.
+  \end{exercicio}
+  \begin{exercicio}[Exercício 3 --- Pacotes]
+    Pesquise no pub.dev três pacotes para gráficos. Compare publisher, pub points, plataformas e licença e justifique qual usaria.
+  \end{exercicio}
+  \begin{projeto}[LabMonitor --- Etapa 1]
+    Crie o projeto \cod{labmonitor} (\cod{--org br.edu.ifma}), troque o texto por ``LabMonitor --- DEE/IFMA'', adicione um \cod{debugPrint} no \cod{main} e publique o repositório no GitHub.
+  \end{projeto}
+\end{frame}
+
+\begin{frame}{Para aprofundar}
+  \small
+  \begin{itemize}
+    \item Instalação: \url{https://docs.flutter.dev/get-started}
+    \item Arquitetura do Flutter: \url{https://docs.flutter.dev/resources/architectural-overview}
+    \item Hot reload: \url{https://docs.flutter.dev/tools/hot-reload}
+    \item DevTools: \url{https://docs.flutter.dev/tools/devtools}
+    \item Usando pacotes: \url{https://docs.flutter.dev/packages-and-plugins/using-packages}
+    \item Repositório de pacotes: \url{https://pub.dev}
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{Respostas das questões de revisão}
+  \begin{respostas}
+    \item JIT compila durante a execução; AOT, antes. O Flutter usa JIT em \emph{debug} (para o \emph{hot reload}) e AOT em \emph{profile} e \emph{release} (código ARM rápido).
+    \item O \emph{hot reload} depende da VM do Dart com JIT, que aceita código novo em execução; em \emph{release} o código já foi compilado AOT.
+    \item Instalação do Flutter, Android SDK e licenças, Xcode (no macOS), IDE e aparelhos conectados; aponta o que falta configurar.
+    \item Registra as versões exatas resolvidas de todas as dependências, para que todos compilem o mesmo app.
+    \item O emulador Android imita o aparelho e roda o sistema completo numa máquina virtual; o simulador iOS executa o app compilado para o Mac, sem imitar o hardware.
+    \item Bluetooth, NFC e USB; medir desempenho e bateria; câmera e sensores reais.
+    \item Quando a mudança afeta o estado inicial (\cod{main}, \cod{initState}, variáveis globais) ou a estrutura de classes, que o \emph{hot reload} não reaplica.
+    \item Reproduzir o fechamento, ler a pilha no console, colocar um \emph{breakpoint} antes da linha suspeita, testar a hipótese, corrigir e criar um teste.
+  \end{respostas}
+\end{frame}
+
+\encerramento{Módulo 02 --- Dart essencial: tipos, null safety, funções, classes, coleções, records e padrões.}
+
+\end{document}

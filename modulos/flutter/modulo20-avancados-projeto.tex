@@ -1,0 +1,502 @@
+\documentclass[aspectratio=169,10pt]{beamer}
+\makeatletter\def\input@path{{../../estilo/}{../estilo/}{estilo/}}\makeatother
+\usepackage{devmobile}
+\modulo[Flutter]{20}{Tópicos Avançados e Projeto Final}{IA no aparelho e na nuvem, segurança, monetização, outras superfícies, carreira e o projeto integrador}
+
+\begin{document}
+\capa
+
+\begin{frame}{Objetivos do módulo}
+  \begin{conceito}[Ao final deste módulo você será capaz de]
+    \begin{itemize}
+      \item Explicar treinamento, inferência e o funcionamento dos modelos de linguagem.
+      \item Usar IA no app Flutter: ML Kit, modelos próprios com LiteRT e Gemini via Firebase.
+      \item Analisar ameaças com STRIDE e revisar o app com o OWASP MASVS.
+      \item Escolher e implementar um modelo de monetização.
+      \item Planejar, construir e apresentar o projeto final do curso.
+    \end{itemize}
+  \end{conceito}
+\end{frame}
+
+\sumario
+
+\input{../fundamentos/f20-avancados}
+
+% =============================================================================
+\section{IA no app Flutter}
+
+\begin{frame}{Onde roda o modelo?}
+  \begin{columns}[T]
+    \begin{column}{0.5\textwidth}
+      \scriptsize
+      \begin{tabularx}{\linewidth}{@{}l L L@{}}
+        \toprule
+        & \cabecalho{No aparelho} & \cabecalho{Na nuvem} \\
+        \midrule
+        Latência & muito baixa & depende da rede \\
+        Offline & sim & não \\
+        Privacidade & dados ficam no aparelho & dados saem do aparelho \\
+        Custo & nenhum por uso & por requisição (\emph{tokens}) \\
+        Modelo & pequeno (KB a centenas de MB) & muito grande \\
+        \bottomrule
+      \end{tabularx}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \scriptsize
+      \begin{tabularx}{\linewidth}{@{}l L@{}}
+        \toprule
+        \cabecalho{Pacote} & \cabecalho{O que oferece} \\
+        \midrule
+        \cod{google\_mlkit\_*} & modelos prontos: texto (OCR), códigos, rostos, rótulos, tradução \\
+        \cod{tflite\_flutter} & roda o \textbf{seu} modelo \cod{.tflite} (LiteRT) \\
+        \cod{firebase\_ai} & modelos Gemini na nuvem, sem expor chaves \\
+        \bottomrule
+      \end{tabularx}
+    \end{column}
+  \end{columns}
+  \vspace{4pt}
+  \begin{columns}[T]
+    \begin{column}{0.48\textwidth}
+      \begin{conceito}[LiteRT]
+        Novo nome do \textbf{TensorFlow Lite}: executa modelos treinados em Python, com aceleração por GPU ou NPU quando disponível.
+      \end{conceito}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \begin{dica}
+        Comece pelo mais simples que resolve: regra estatística, depois modelo pronto, depois modelo próprio, e só então um LLM.
+      \end{dica}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}[fragile]{Anomalias nas leituras e OCR}
+  \begin{columns}[T]
+    \begin{column}{0.54\textwidth}
+\begin{codigo}[title=1) Linha de base: z-score em uma janela]{Dart}
+Stream<double> anomalias(Stream<double> leituras,
+    {int janela = 60, double limiar = 3}) async* {
+  final buf = ListQueue<double>();
+  await for (final x in leituras) {
+    if (buf.length == janela) {
+      final m = buf.reduce((a, b) => a + b) / janela;
+      final v = buf.map((y) => (y - m) * (y - m))
+          .reduce((a, b) => a + b) / janela;
+      final dp = sqrt(v);
+      if (dp > 0 && (x - m).abs() / dp > limiar) yield x;
+      buf.removeFirst();
+    }
+    buf.addLast(x);
+  }
+}
+\end{codigo}
+      \begin{conceito}[z-score]
+        Distância da leitura à média recente, em desvios-padrão. Acima de 3, é muito improvável.
+      \end{conceito}
+    \end{column}
+    \begin{column}{0.44\textwidth}
+\begin{codigo}[title=2) Modelo próprio (tflite\_flutter)]{Dart}
+final it = await Interpreter.fromAsset(
+    'assets/anomalia.tflite');
+final saida = [List.filled(1, 0.0)];   // [1, 1]
+it.run([janelaNormalizada], saida);    // [1, 60]
+\end{codigo}
+\begin{codigo}[title=3) OCR da placa do equipamento]{Dart}
+final ocr = TextRecognizer(
+    script: TextRecognitionScript.latin);
+final r = await ocr.processImage(
+    InputImage.fromFilePath(foto.path));
+final patrimonio = RegExp(r'\d{6}')
+    .firstMatch(r.text)?.group(0);
+await ocr.close();
+\end{codigo}
+      \begin{dica}
+        Compare qualquer modelo com a linha de base: às vezes ela basta.
+      \end{dica}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}[fragile]{Gemini pelo Firebase AI Logic}
+  \begin{columns}[T]
+    \begin{column}{0.58\textwidth}
+\begin{codigo}[title=data/services/assistente\_service.dart]{Dart}
+import 'package:firebase_ai/firebase_ai.dart';
+
+final _modelo = FirebaseAI.googleAI().generativeModel(
+  model: nomeDoModelo,        // um modelo Gemini atual
+  systemInstruction: Content.system(
+    'Você é assistente técnico de um laboratório de '
+    'eletroeletrônica. Responda em até 3 frases e diga '
+    'quando os dados não forem suficientes.'),
+);
+
+Future<String> explicarAlerta(String leituras) async {
+  final r = await _modelo.generateContent([
+    Content.text('Leituras da bancada B3: $leituras. '
+        'Por que o alerta de temperatura disparou?'),
+  ]);
+  return r.text ?? 'Sem resposta do assistente.';
+}
+\end{codigo}
+    \end{column}
+    \begin{column}{0.4\textwidth}
+      \begin{conceito}[Por que pelo Firebase]
+        O app não guarda chave de API: o Firebase intermedeia a chamada, e o \textbf{App Check} (Play Integrity no Android, App Attest no iOS) garante que só o seu app consome a cota.
+      \end{conceito}
+      \begin{atencao}
+        Mostre a resposta como \textbf{sugestão}, identificada como gerada por IA, e trate falhas e limites de uso. Modelos e preços mudam: consulte a lista atual antes de escolher.
+      \end{atencao}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% =============================================================================
+\section{Segurança no app Flutter}
+
+\begin{frame}{Revisão MASVS de um app Flutter}
+  \footnotesize
+  \begin{tabularx}{\textwidth}{@{}l L@{}}
+    \toprule
+    \cabecalho{Grupo} & \cabecalho{O que fazer no Flutter} \\
+    \midrule
+    \textbf{Armazenamento} & segredos em \cod{flutter\_secure\_storage}; nada sensível em \cod{shared\_preferences}, logs ou capturas \\
+    \textbf{Criptografia} & bibliotecas padrão (\cod{cryptography}, cofres do sistema); nunca algoritmos próprios \\
+    \textbf{Autenticação} & tokens curtos e renováveis; biometria só para desbloquear segredos locais \\
+    \textbf{Rede} & HTTPS sempre; \emph{pinning} em apps sensíveis, com plano de troca do certificado \\
+    \textbf{Plataforma} & validar \emph{deep links} e dados de QR codes; WebView sem JavaScript desnecessário \\
+    \textbf{Código} & \cod{--obfuscate}; nenhum segredo no binário; dependências auditadas (\cod{dart pub outdated}) \\
+    \textbf{Resiliência} & Firebase App Check ou verificação de integridade no servidor \\
+    \textbf{Privacidade} & coletar o mínimo; declarações das lojas coerentes com o código \\
+    \bottomrule
+  \end{tabularx}
+  \vspace{4pt}
+  \begin{destaque}
+    O cliente nunca é confiável: toda regra importante é verificada também no servidor.
+  \end{destaque}
+\end{frame}
+
+\begin{frame}[fragile]{\emph{Pinning} de certificado}
+  \begin{columns}[T]
+    \begin{column}{0.56\textwidth}
+\begin{codigo}[title=Só aceitar o certificado da API do LabMonitor]{Dart}
+import 'dart:io';
+import 'package:flutter/services.dart';
+import 'package:http/io_client.dart';
+
+Future<IOClient> clienteComPinning() async {
+  final pem = await rootBundle.load('assets/certs/api.pem');
+  final ctx = SecurityContext(withTrustedRoots: false)
+    ..setTrustedCertificatesBytes(pem.buffer.asUint8List());
+  return IOClient(HttpClient(context: ctx));
+}
+\end{codigo}
+    \end{column}
+    \begin{column}{0.42\textwidth}
+      \begin{definicao}[\emph{Certificate pinning}]
+        O app confia apenas em um certificado (ou chave) específico, e não em qualquer autoridade certificadora instalada no aparelho. Dificulta interceptar o tráfego com um certificado falso.
+      \end{definicao}
+      \begin{atencao}
+        Certificados expiram. Fixe a chave da autoridade intermediária ou mantenha dois certificados válidos, e planeje a troca antes do vencimento, ou o app para de funcionar.
+      \end{atencao}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% =============================================================================
+\section{Monetização e outras superfícies}
+
+\begin{frame}[fragile]{Compras no app}
+  \begin{columns}[T]
+    \begin{column}{0.56\textwidth}
+\begin{codigo}[title=in\_app\_purchase (trechos)]{Dart}
+final iap = InAppPurchase.instance;
+iap.purchaseStream.listen((compras) async {
+  for (final c in compras) {
+    if (c.status == PurchaseStatus.purchased) {
+      final ok = await api.validarCompra(
+          c.verificationData.serverVerificationData);
+      if (ok) liberarRecursoPremium();
+    }
+    if (c.pendingCompletePurchase) {
+      await iap.completePurchase(c);
+    }
+  }
+});
+
+final r = await iap.queryProductDetails({'relatorios_pro'});
+await iap.buyNonConsumable(purchaseParam:
+    PurchaseParam(productDetails: r.productDetails.first));
+\end{codigo}
+    \end{column}
+    \begin{column}{0.42\textwidth}
+      \begin{conceito}[Regras das lojas]
+        Bens digitais usados no app passam pelo sistema de compras da loja, que retém uma comissão; bens físicos seguem outras regras.
+      \end{conceito}
+      \begin{atencao}
+        Valide cada compra \textbf{no servidor} com as APIs da Play e da App Store antes de liberar o conteúdo.
+      \end{atencao}
+      \begin{dica}
+        Anúncios: \cod{google\_mobile\_ads}. Serviços como RevenueCat simplificam assinaturas nas duas lojas.
+      \end{dica}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Além da tela do celular}
+  \begin{columns}[T]
+    \begin{column}{0.32\textwidth}
+      \centering
+      \begin{tikzpicture}
+        \draw[petroleo,rounded corners=4pt,fill=petroleo!6] (0,0) rectangle (2.6,1.4);
+        \node[font=\tiny\bfseries,text=petroleo] at (1.3,1.15) {LabMonitor};
+        \node[font=\large\bfseries,text=ambar] at (1.3,0.65) {24,8\,°C};
+        \node[font=\tiny,text=cinzamedio] at (1.3,0.25) {Bancada 3 $\cdot$ há 1 min};
+      \end{tikzpicture}
+      \begin{conceito}[Widgets da tela inicial]
+        O pacote \cod{home\_widget} envia dados do Flutter; o visual é nativo (Glance no Android, WidgetKit no iOS).
+      \end{conceito}
+    \end{column}
+    \begin{column}{0.32\textwidth}
+      \centering
+      \begin{tikzpicture}
+        \draw[petroleo,line width=1.4pt,fill=petroleoesc] (0,0) circle (0.72);
+        \node[font=\small\bfseries,text=white] at (0,0.1) {24,8°};
+        \node[font=\tiny,text=ambarclaro] at (0,-0.3) {B3};
+      \end{tikzpicture}
+      \begin{conceito}[Relógios]
+        Wear OS e Apple Watch costumam exigir apps ou extensões nativas; o app Flutter no celular envia os dados.
+      \end{conceito}
+    \end{column}
+    \begin{column}{0.32\textwidth}
+      \centering
+      \begin{tikzpicture}
+        \draw[petroleo,rounded corners=3pt,fill=petroleo!6] (0,0) rectangle (2.8,1.4);
+        \fill[petroleo] (0,1.1) rectangle (2.8,1.4);
+        \node[font=\tiny,white] at (1.4,1.25) {Android Auto / CarPlay};
+        \node[font=\tiny,text=cinzatexto] at (1.4,0.6) {lista simples, voz};
+      \end{tikzpicture}
+      \begin{conceito}[Carro e TV]
+        Usam \emph{templates} e regras de segurança próprias de cada sistema, com integração nativa.
+      \end{conceito}
+    \end{column}
+  \end{columns}
+  \begin{dica}
+    A arquitetura em camadas permite reaproveitar repositórios e serviços em todas essas superfícies; só a apresentação muda.
+  \end{dica}
+\end{frame}
+
+% =============================================================================
+\section{Carreira e portfólio}
+
+\begin{frame}{Do curso ao mercado}
+  \begin{columns}[T]
+    \begin{column}{0.48\textwidth}
+      \begin{conceito}[Portfólio que convence]
+        \begin{itemize}
+          \item Dois ou três apps completos no GitHub, com README, capturas e arquitetura explicada.
+          \item Pelo menos um app publicado (mesmo em teste aberto).
+          \item Testes e CI visíveis no repositório.
+          \item Um projeto com hardware (BLE, IoT) é um diferencial raro.
+        \end{itemize}
+      \end{conceito}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \begin{dica}[Continue aprendendo]
+        \begin{itemize}
+          \item Documentação oficial, \emph{Flutter samples} e o canal do Flutter no YouTube.
+          \item Notas de versão do Flutter e do Dart a cada lançamento.
+          \item Comunidades: GDG, Flutter Brasil, eventos locais.
+          \item Contribuir com pacotes de código aberto no pub.dev.
+        \end{itemize}
+      \end{dica}
+      \begin{atencao}[Assistentes de IA]
+        Use-os para acelerar, mas entenda e revise cada linha: você responde pelo código que publica.
+      \end{atencao}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% =============================================================================
+\section{Projeto final}
+
+\begin{frame}{Projeto final: requisitos}
+  \begin{columns}[T]
+    \begin{column}{0.5\textwidth}
+      \begin{conceito}[Requisitos mínimos]
+        \begin{enumerate}
+          \item Quatro ou mais telas com \cod{go\_router} e Material 3.
+          \item MVVM com repositórios, serviços e injeção de dependência.
+          \item Banco local (Drift) e preferências.
+          \item API REST própria ou BaaS (Módulos 16 e 17).
+          \item Funcionamento offline nas telas principais.
+          \item Um recurso do dispositivo (BLE, câmera, GPS\ldots).
+          \item Testes de unidade e de widget; CI no GitHub.
+          \item Acessibilidade, tema escuro e build de release.
+        \end{enumerate}
+      \end{conceito}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \begin{projeto}[Sugestões de tema]
+        \begin{itemize}
+          \item Concluir e publicar o \textbf{LabMonitor}.
+          \item Empréstimo de equipamentos do laboratório com QR code.
+          \item Medidor de consumo de energia com ESP32 e sensor de corrente.
+          \item Acompanhamento de estágio ou TCC.
+        \end{itemize}
+      \end{projeto}
+      \begin{dica}
+        Resolva um problema real de alguém que você conhece e valide o MVP com essa pessoa.
+      \end{dica}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Entregáveis, cronograma e avaliação}
+  \begin{columns}[T]
+    \begin{column}{0.48\textwidth}
+      \scriptsize
+      \begin{tabularx}{\linewidth}{@{}l L@{}}
+        \toprule
+        \cabecalho{Semana} & \cabecalho{Marco} \\
+        \midrule
+        1 & proposta: problema, público, protótipo no Figma, arquitetura e modelo de ameaças \\
+        2 & navegação, UI e dados locais \\
+        3 & backend, recurso do dispositivo e offline \\
+        4 & testes, acessibilidade, release e apresentação \\
+        \bottomrule
+      \end{tabularx}
+      \begin{conceito}[Entregáveis]
+        Repositório no GitHub com README, build de release (AAB ou link de teste), vídeo de 3 minutos e apresentação de 10 minutos.
+      \end{conceito}
+    \end{column}
+    \begin{column}{0.5\textwidth}
+      \scriptsize
+      \begin{tabularx}{\linewidth}{@{}L r@{}}
+        \toprule
+        \cabecalho{Critério de avaliação} & \cabecalho{Peso} \\
+        \midrule
+        Funcionalidades e requisitos atendidos & 25\,\% \\
+        Arquitetura e qualidade do código & 20\,\% \\
+        Experiência do usuário, UI e acessibilidade & 15\,\% \\
+        Testes automatizados e CI & 15\,\% \\
+        Recursos do dispositivo e integração & 10\,\% \\
+        Documentação (README, diagramas) & 5\,\% \\
+        Apresentação e demonstração & 10\,\% \\
+        \midrule
+        \textbf{Total} & \textbf{100\,\%} \\
+        \bottomrule
+      \end{tabularx}
+      \begin{dica}
+        Pesos sugeridos: ajuste ao plano de ensino.
+      \end{dica}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% =============================================================================
+\section{Fechamento do curso}
+
+\begin{frame}{A jornada completa}
+  \centering
+  \begin{tikzpicture}[x=1.0cm,
+      etapa/.style={minimum width=1.82cm,minimum height=11mm,font=\tiny,text width=1.62cm,inner sep=2pt,align=center}]
+    \foreach \i/\t/\s in {0/Ecossistema/caixa,1/Ambiente/caixa,2/Dart/caixa,3/Engenharia e Git/caixa,
+        4/Design e UX/caixa,5/Widgets/caixa,6/Assíncrono/caixa}{
+      \node[etapa,\s] (a\i) at (\i*1.98,0) {\textbf{M0\i}\\ \t};}
+    \foreach \i/\t/\s [count=\k from 7] in {0/Estado e navegação/caixa,1/Arquitetura/caixapetroleo,2/Banco de dados/caixapetroleo,
+        3/Persistência/caixapetroleo,4/Rede e APIs/caixapetroleo,5/Firebase/caixapetroleo,6/Dispositivo e IoT/caixapetroleo}{
+      \node[etapa,\s] (b\i) at (\i*1.98,-1.6) {\textbf{M\ifnum\k<10 0\fi\k}\\ \t};}
+    \foreach \i/\t/\s [count=\k from 14] in {0/Testes/caixapetroleo,1/Publicação/caixapetroleo,2/Backend BaaS/caixaescura,
+        3/Backend próprio/caixaescura,4/Engenharia avançada/caixaescura,5/Nativo e multi\-plataforma/caixaescura,6/Projeto final/caixaambar}{
+      \node[etapa,\s] (c\i) at (\i*1.98,-3.2) {\textbf{M\k}\\ \t};}
+    \foreach \i [evaluate=\i as \j using int(\i+1)] in {0,...,5}{
+      \draw[seta] (a\i) -- (a\j); \draw[seta] (b\i) -- (b\j); \draw[seta] (c\i) -- (c\j);}
+    \draw[seta,rounded corners] (a6.south) -- ++(0,-2mm) -| (b0.north);
+    \draw[seta,rounded corners] (b6.south) -- ++(0,-2mm) -| (c0.north);
+  \end{tikzpicture}
+  \vspace{2pt}
+  \begin{resumo}[O que você construiu]
+    Um app Flutter completo e publicado, com arquitetura profissional, dados locais e remotos, backend, integração com hardware, testes e entrega contínua, rodando no celular, na web e no desktop.
+  \end{resumo}
+\end{frame}
+
+\begin{frame}{Glossário}
+  \begin{glossario}
+    Aprendizado de máquina & técnica em que o sistema aprende padrões a partir de dados \\
+    Inferência & uso de um modelo treinado para responder a entradas novas \\
+    Quantização & redução da precisão dos pesos (ex.: 32 para 8 bits) para encolher o modelo \\
+    LLM & modelo de linguagem que gera texto prevendo o próximo \emph{token} \\
+    RAG & técnica que inclui documentos recuperados na pergunta ao LLM \\
+    STRIDE & classificação de ameaças: falsificação, adulteração, repúdio, vazamento, negação de serviço, elevação de privilégio \\
+    MASVS & padrão da OWASP com os requisitos de segurança de apps móveis \\
+    MVP & menor versão do produto que permite aprender com usuários reais \\
+    LTV / CAC & valor de um cliente ao longo da relação / custo para adquiri-lo \\
+  \end{glossario}
+\end{frame}
+
+\begin{frame}{Questões de revisão}
+  \begin{questoes}
+    \item Diferencie treinamento de inferência. Onde cada um costuma acontecer num app?
+    \item Por que precisão e revocação são mais úteis que a acurácia para avaliar um detector de falhas?
+    \item O que é alucinação em LLMs e como o app deve lidar com ela?
+    \item Por que a chave de API de um LLM não pode ficar dentro do app? Qual a alternativa?
+    \item Aplique STRIDE a uma funcionalidade do seu projeto final e proponha uma defesa por ameaça.
+    \item Por que a compra no app deve ser validada no servidor?
+    \item Qual o risco do \emph{certificate pinning} e como mitigá-lo?
+    \item Calcule o LTV com ARPU de R\$\,8/mês, margem de 60\,\% e \emph{churn} de 4\,\%/mês.
+  \end{questoes}
+\end{frame}
+
+\begin{frame}{Exercícios finais}
+  \begin{exercicio}[Exercício 1 --- IA]
+    Gere 24\,h de leituras simuladas com picos artificiais e compare o detector por z-score com um modelo treinado em Python e convertido para LiteRT: medir precisão e revocação de cada um.
+  \end{exercicio}
+  \begin{exercicio}[Exercício 2 --- Segurança]
+    Revise o LabMonitor com o \emph{checklist} MASVS e o STRIDE e registre ao menos três correções como \emph{issues} no GitHub.
+  \end{exercicio}
+  \begin{exercicio}[Exercício 3 --- Assistente]
+    Implemente ``explique este alerta'' com o Firebase AI Logic, marcando a resposta como gerada por IA.
+  \end{exercicio}
+  \begin{projeto}[Projeto final]
+    Escolha o tema, entregue a proposta na semana 1 e siga o cronograma de quatro semanas.
+  \end{projeto}
+\end{frame}
+
+\begin{frame}{Para aprofundar}
+  \small
+  \begin{itemize}
+    \item ML Kit para Flutter: \url{https://pub.dev/packages/google_ml_kit}
+    \item LiteRT: \url{https://ai.google.dev/edge/litert}
+    \item Firebase AI Logic: \url{https://firebase.google.com/docs/ai-logic}
+    \item OWASP MASVS e MASTG: \url{https://mas.owasp.org}
+    \item Compras no app: \url{https://pub.dev/packages/in_app_purchase}
+    \item Segurança no Flutter: \url{https://docs.flutter.dev/security}
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{Respostas das questões de revisão}
+  \begin{respostas}
+    \item Treinamento ajusta os pesos com muitos dados (servidor com GPU); inferência usa o modelo pronto para uma entrada nova (no aparelho ou na nuvem, a cada uso).
+    \item Falhas são raras: um detector que nunca alerta acerta quase sempre, mas é inútil. Precisão mede alarmes falsos; revocação mede falhas não detectadas.
+    \item É uma resposta fluente e falsa. O app deve apresentá-la como sugestão, citar fontes quando houver (RAG) e pedir confirmação humana para decisões.
+    \item O binário pode ser extraído e a chave, usada por terceiros às suas custas. A chamada deve passar por um backend ou serviço intermediário (Firebase AI Logic com App Check).
+    \item Exemplo para a reserva: falsificação de usuário (autenticação), adulteração da reserva (TLS e validação no servidor), elevação de privilégio (papéis verificados no servidor).
+    \item O app pode ser modificado para fingir a compra; só o servidor, consultando a loja, confirma que o pagamento existe.
+    \item Se o certificado mudar, o app para de se conectar. Mitigação: fixar a chave da autoridade intermediária, manter um certificado reserva e planejar a troca.
+    \item LTV $\approx 8 \times 0{,}6 \div 0{,}04 =$ R\$\,120.
+  \end{respostas}
+\end{frame}
+
+\begin{frame}[plain,noframenumbering]
+  \begin{tikzpicture}[remember picture,overlay]
+    \fill[azulpetroleo] (current page.north west) rectangle (current page.south east);
+    \draw[ambar,line width=3pt] ([xshift=1.2cm,yshift=1.6cm]current page.west) -- ++(3.5,0);
+    \node[anchor=west,text width=0.8\paperwidth] at ([xshift=1.2cm,yshift=0.6cm]current page.west)
+      {\color{white}\Huge\bfseries Obrigado!};
+    \node[anchor=west,text width=0.72\paperwidth] at ([xshift=1.25cm,yshift=-0.9cm]current page.west)
+      {\color{ambarclaro}\normalsize \autorcurso\\[2pt]
+       \color{white!75}\footnotesize Fim do curso \nomecurso{} --- trilha Flutter};
+  \end{tikzpicture}
+\end{frame}
+
+\end{document}

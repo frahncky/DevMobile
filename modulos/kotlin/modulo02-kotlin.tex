@@ -1,0 +1,751 @@
+\documentclass[aspectratio=169,10pt]{beamer}
+\makeatletter\def\input@path{{../../estilo/}{../estilo/}{estilo/}}\makeatother
+\usepackage{devmobile}
+\modulo[Kotlin]{02}{Kotlin Essencial}{Tipos, null safety, controle de fluxo, funções, orientação a objetos, coleções e funções de escopo}
+
+\begin{document}
+\capa
+
+\begin{frame}{Objetivos do módulo}
+  \begin{conceito}[Ao final deste módulo você será capaz de]
+    \begin{itemize}
+      \item Declarar variáveis e usar os tipos básicos e a inferência de tipos do Kotlin.
+      \item Escrever código seguro contra \cod{NullPointerException} com \emph{null safety}.
+      \item Usar \cod{if} e \cod{when} como expressões, além de \emph{ranges} e laços.
+      \item Criar funções com parâmetros padrão, funções de extensão e lambdas.
+      \item Modelar dados com \cod{data class}, \cod{enum}, \cod{sealed} e interfaces.
+      \item Manipular coleções com operações funcionais e funções de escopo.
+    \end{itemize}
+  \end{conceito}
+  \begin{dica}[Onde praticar]
+    \url{https://play.kotlinlang.org} roda Kotlin no navegador, sem instalar nada. Os \emph{Kotlin Koans} trazem exercícios guiados.
+  \end{dica}
+\end{frame}
+
+\sumario
+
+\input{../fundamentos/f02-linguagens}
+
+% =============================================================================
+\section{Primeiros passos}
+
+\begin{frame}{Por que Kotlin?}
+  \begin{columns}[T]
+    \begin{column}{0.55\textwidth}
+      \begin{itemize}
+        \item Criada pela JetBrains; linguagem preferencial do Android desde 2019.
+        \item \textbf{Concisa}: menos código repetitivo que Java.
+        \item \textbf{Segura}: o sistema de tipos distingue o que pode e o que não pode ser nulo.
+        \item \textbf{Interoperável}: usa qualquer biblioteca Java.
+        \item \textbf{Multiplataforma}: JVM, Android, iOS, web e desktop (Módulo 19).
+        \item Suporte nativo a programação assíncrona com \emph{coroutines} (Módulo 06).
+      \end{itemize}
+    \end{column}
+    \begin{column}{0.43\textwidth}
+      \begin{exemplo}[Java]
+        \ttfamily\scriptsize
+        public class Sensor \{\\
+        \ \ private final String nome;\\
+        \ \ public Sensor(String nome) \{\\
+        \ \ \ \ this.nome = nome;\\
+        \ \ \}\\
+        \ \ public String getNome() \{\\
+        \ \ \ \ return nome;\\
+        \ \ \}\\
+        \ \ // + equals, hashCode, toString\ldots\\
+        \}
+      \end{exemplo}
+      \begin{exemplo}[Kotlin]
+        \ttfamily\scriptsize data class Sensor(val nome: String)
+      \end{exemplo}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}[fragile]{Variáveis e tipos básicos}
+  \begin{columns}[T]
+    \begin{column}{0.54\textwidth}
+\begin{codigo}[title=Variaveis.kt]{Kotlin}
+fun main() {
+  val bancada = 3          // imutável (prefira!)
+  var temperatura = 24.5   // mutável
+  temperatura += 0.3
+
+  val nome: String = "Osciloscópio"  // tipo explícito
+  val ligado = true                  // Boolean
+  val leituras: Long = 1_000_000L    // separador _
+  val letra: Char = 'A'
+
+  // String templates
+  println("Bancada $bancada: $temperatura °C")
+  println("Nome tem ${nome.length} letras")
+
+  // Texto multilinha
+  val relatorio = """
+      |Equipamento: $nome
+      |Estado: ${if (ligado) "ON" else "OFF"}
+  """.trimMargin()
+}
+\end{codigo}
+    \end{column}
+    \begin{column}{0.44\textwidth}
+      \begin{conceito}[\cod{val} \emph{versus} \cod{var}]
+        \cod{val} cria uma referência que não pode ser reatribuída. \cod{var} pode. Use \cod{val} por padrão e só troque se precisar.
+      \end{conceito}
+      \footnotesize
+      \begin{tabular}{@{}l l@{}}
+        \toprule
+        \cabecalho{Tipo} & \cabecalho{Exemplo} \\
+        \midrule
+        \cod{Int} / \cod{Long} & \cod{42} / \cod{42L} \\
+        \cod{Double} / \cod{Float} & \cod{3.14} / \cod{3.14f} \\
+        \cod{Boolean} & \cod{true} / \cod{false} \\
+        \cod{Char} / \cod{String} & \cod{'a'} / \cod{"texto"} \\
+        \bottomrule
+      \end{tabular}
+      \begin{dica}
+        Conversões são explícitas: \cod{x.toInt()}, \cod{"12".toDouble()}, \cod{"abc".toIntOrNull()}.
+      \end{dica}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% =============================================================================
+\section{Controle de fluxo}
+
+\begin{frame}[fragile]{\cod{if} e \cod{when} são expressões}
+  \begin{columns}[T]
+    \begin{column}{0.49\textwidth}
+\begin{codigo}[title=if como expressão]{Kotlin}
+val status = if (temp > 80.0) "ALERTA" else "OK"
+
+val nivel = if (temp < 20) {
+  "frio"
+} else if (temp < 30) {
+  "normal"
+} else {
+  "quente"
+}
+\end{codigo}
+      \begin{dica}
+        Kotlin não tem operador ternário (\cod{a ? b : c}): o \cod{if} já devolve valor.
+      \end{dica}
+    \end{column}
+    \begin{column}{0.49\textwidth}
+\begin{codigo}[title=when: o switch turbinado]{Kotlin}
+fun classificar(t: Double) = when {
+  t < 0      -> "abaixo da faixa"
+  t in 0.0..35.0 -> "normal"
+  else       -> "acima da faixa"
+}
+
+fun descrever(x: Any): String = when (x) {
+  is Int    -> "inteiro $x"
+  is String -> "texto de ${x.length} letras"
+  1, 2, 3   -> "pequeno"
+  else      -> "desconhecido"
+}
+\end{codigo}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}[fragile]{Ranges e laços}
+  \begin{columns}[T]
+    \begin{column}{0.52\textwidth}
+\begin{codigo}[title=Laços]{Kotlin}
+for (i in 1..5) print(i)          // 1 2 3 4 5
+for (i in 0 until 5) print(i)     // 0 1 2 3 4
+for (i in 10 downTo 0 step 2) print(i)
+for (i in 0..<5) print(i)         // igual a until
+
+val sensores = listOf("DHT22", "BMP280", "LDR")
+for (s in sensores) println(s)
+for ((i, s) in sensores.withIndex()) println("$i: $s")
+
+var tentativas = 0
+while (tentativas < 3) {
+  tentativas++
+}
+repeat(3) { println("ping $it") }
+\end{codigo}
+    \end{column}
+    \begin{column}{0.46\textwidth}
+      \begin{conceito}[Ranges]
+        \cod{a..b} inclui \cod{b}; \cod{a until b} e \cod{a..<b} excluem \cod{b}. O operador \cod{in} testa se um valor pertence ao intervalo:\\[2pt]
+        \cod{if (tensao in 4.75..5.25) \{ \ldots \}}
+      \end{conceito}
+      \begin{dica}
+        Em código Android você raramente escreverá laços: operações como \cod{map} e \cod{filter} (seção 6) costumam ser mais claras.
+      \end{dica}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% =============================================================================
+\section{Null safety}
+
+\begin{frame}[fragile]{Tipos anuláveis}
+  \begin{columns}[T]
+    \begin{column}{0.52\textwidth}
+\begin{codigo}[title=Null safety]{Kotlin}
+var nome: String = "LDR"
+// nome = null          // ERRO de compilação
+
+var apelido: String? = null   // pode ser nulo
+// apelido.length       // ERRO: pode ser nulo
+// 1) chamada segura: devolve null se for null
+val tam: Int? = apelido?.length
+// 2) elvis: valor padrão quando null
+val tam2: Int = apelido?.length ?: 0
+
+// 3) smart cast após checagem
+if (apelido != null) {
+  println(apelido.length)    // aqui é String
+}
+
+// 4) let: executa só se não for null
+apelido?.let { println("Apelido: $it") }
+
+// 5) !! afirma que não é null (evite!)
+val tam3 = apelido!!.length  // lança NPE se null
+\end{codigo}
+    \end{column}
+    \begin{column}{0.46\textwidth}
+      \begin{conceito}[A ideia]
+        O compilador sabe se um valor pode ser nulo. \cod{String} nunca é nulo; \cod{String?} pode ser. Você é \textbf{obrigado} a tratar o caso nulo antes de usar.
+      \end{conceito}
+      \begin{center}
+      \begin{tikzpicture}[node distance=3mm]
+        \node[caixaambar] (a) {\cod{apelido?.length ?: 0}};
+        \node[caixa,below left=5mm and -8mm of a] (n) {null $\rightarrow$ \cod{0}};
+        \node[caixa,below right=5mm and -8mm of a] (v) {"Lu" $\rightarrow$ \cod{2}};
+        \draw[seta] (a) -- (n);
+        \draw[seta] (a) -- (v);
+      \end{tikzpicture}
+      \end{center}
+      \begin{erro}
+        Usar \cod{!!} para ``calar'' o compilador traz de volta o \cod{NullPointerException}.
+      \end{erro}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% =============================================================================
+\section{Funções e lambdas}
+
+\begin{frame}[fragile]{Funções}
+  \begin{columns}[T]
+    \begin{column}{0.53\textwidth}
+\begin{codigo}[title=Funcoes.kt]{Kotlin}
+// Forma completa
+fun media(valores: List<Double>): Double {
+  return valores.sum() / valores.size
+}
+
+// Corpo de expressão única
+fun celsiusParaF(c: Double) = c * 9 / 5 + 32
+
+// Parâmetros com valor padrão
+fun conectar(
+  host: String,
+  porta: Int = 1883,
+  tls: Boolean = false
+) { /* ... */ }
+
+conectar("broker.local")
+conectar("broker.local", tls = true)  // nomeado
+
+// Função sem retorno útil devolve Unit
+fun log(msg: String) { println(msg) }
+\end{codigo}
+    \end{column}
+    \begin{column}{0.45\textwidth}
+\begin{codigo}[title=Funções de extensão]{Kotlin}
+// "adiciona" um método a uma classe existente
+fun Double.emCelsius() = "%.1f °C".format(this)
+
+val MAC = Regex("([0-9A-F]{2}:){5}[0-9A-F]{2}")
+fun String.ehMacValido() = matches(MAC)
+
+println(24.567.emCelsius())   // 24.6 °C
+println("24:6F:28:AB:CD:EF".ehMacValido())
+\end{codigo}
+      \begin{conceito}[Extensões]
+        Não modificam a classe original: são funções comuns com uma sintaxe mais legível. São muito usadas no Android (\cod{Modifier.padding}, \cod{Context.getString}\ldots).
+      \end{conceito}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}[fragile]{Lambdas e funções de ordem superior}
+  \begin{columns}[T]
+    \begin{column}{0.53\textwidth}
+\begin{codigo}[title=Lambdas]{Kotlin}
+// Lambda: função anônima atribuída a uma variável
+val dobro: (Int) -> Int = { x -> x * 2 }
+val soma = { a: Int, b: Int -> a + b }
+
+// Com um único parâmetro, use "it"
+val ehPar: (Int) -> Boolean = { it % 2 == 0 }
+
+// Função de ordem superior: recebe uma função
+fun medir(n: Int, acao: () -> Unit): Long {
+  val inicio = System.nanoTime()
+  repeat(n) { acao() }
+  return System.nanoTime() - inicio
+}
+
+// "Trailing lambda": a última lambda sai dos ()
+val tempo = medir(1000) {
+  calcularFFT()
+}
+\end{codigo}
+    \end{column}
+    \begin{column}{0.45\textwidth}
+      \begin{conceito}[Tipos de função]
+        \cod{(Int) -> Int} lê-se ``recebe um \cod{Int} e devolve um \cod{Int}''. \cod{() -> Unit} não recebe nada e não devolve nada.
+      \end{conceito}
+      \begin{atencao}[Isto é Compose!]
+        Toda a interface do Compose usa \emph{trailing lambdas}:\\[2pt]
+        \cod{Button(onClick = \{ ligar() \}) \{}\\
+        \cod{\ \ Text("Ligar")}\\
+        \cod{\}}\\[2pt]
+        \cod{onClick} recebe uma lambda e o conteúdo do botão é outra lambda.
+      \end{atencao}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% =============================================================================
+\section{Orientação a objetos}
+
+\begin{frame}[fragile]{Classes, construtores e propriedades}
+  \begin{columns}[T]
+    \begin{column}{0.54\textwidth}
+\begin{codigo}[title=Classes]{Kotlin}
+class Equipamento(
+  val patrimonio: String,       // propriedade imutável
+  var descricao: String,        // propriedade mutável
+  private var horasDeUso: Int = 0
+) {
+  val precisaManutencao: Boolean   // calculada
+    get() = horasDeUso > 500
+
+  init {
+    require(patrimonio.isNotBlank()) { "Patrimônio obrigatório" }
+  }
+
+  fun registrarUso(horas: Int) { horasDeUso += horas }
+}
+
+val osc = Equipamento("IFMA-0042", "Osciloscópio")
+osc.registrarUso(12)
+println(osc.precisaManutencao)
+\end{codigo}
+    \end{column}
+    \begin{column}{0.44\textwidth}
+      \small
+      \begin{itemize}
+        \item O \termo{construtor primário} fica no cabeçalho da classe.
+        \item \cod{val}/\cod{var} no construtor já criam as propriedades.
+        \item \cod{init} roda na criação do objeto.
+        \item Não existe \cod{new}.
+        \item Visibilidade: \cod{public} (padrão), \cod{private}, \cod{protected}, \cod{internal} (mesmo módulo).
+      \end{itemize}
+      \begin{dica}
+        \cod{require} valida argumentos (lança \cod{IllegalArgumentException}); \cod{check} valida estado (lança \cod{IllegalStateException}).
+      \end{dica}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}[fragile]{Herança e interfaces}
+  \begin{columns}[T]
+    \begin{column}{0.53\textwidth}
+\begin{codigo}[title=Herança]{Kotlin}
+interface Medidor {
+  val unidade: String
+  fun ler(): Double
+  fun formatado() = "${ler()} $unidade"  // padrão
+}
+
+// classes são final por padrão: use open
+open class Sensor(val pino: Int) {
+  open fun calibrar() { println("calibrando $pino") }
+}
+
+class Termistor(pino: Int) : Sensor(pino), Medidor {
+  override val unidade = "°C"
+  override fun ler() = 25.0
+  override fun calibrar() {
+    super.calibrar()
+    println("ajustando curva beta")
+  }
+}
+\end{codigo}
+    \end{column}
+    \begin{column}{0.45\textwidth}
+      \centering
+      \begin{tikzpicture}[node distance=7mm and 4mm]
+        \node[caixaambar,minimum width=2.2cm] (m) {\textless\textless interface\textgreater\textgreater\\ \textbf{Medidor}};
+        \node[caixa,minimum width=2.2cm,left=of m] (s) {\textbf{Sensor}\\ \tiny open};
+        \node[caixaescura,minimum width=2.6cm,below=of $(s)!0.5!(m)$] (t) {\textbf{Termistor}};
+        \draw[-{Triangle[open,length=2.5mm]},thick,petroleo] (t) -- (s);
+        \draw[-{Triangle[open,length=2.5mm]},thick,dashed,ambar] (t) -- (m);
+      \end{tikzpicture}
+      \begin{conceito}[Regras]
+        \begin{itemize}
+          \item Classes e métodos são \textbf{final} por padrão; use \cod{open} para permitir herança.
+          \item Herança simples de classe; múltiplas interfaces.
+          \item Interfaces podem ter implementação padrão.
+        \end{itemize}
+      \end{conceito}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}[fragile]{\cod{data class}, \cod{object} e \cod{companion object}}
+  \begin{columns}[T]
+    \begin{column}{0.53\textwidth}
+\begin{codigo}[title=Data class]{Kotlin}
+data class Leitura(
+  val sensorId: String,
+  val valor: Double,
+  val instante: Long = System.currentTimeMillis()
+)
+
+val a = Leitura("t1", 24.5, 1000)
+val b = Leitura("t1", 24.5, 1000)
+println(a == b)            // true: compara conteúdo
+println(a)                 // Leitura(sensorId=t1, ...)
+val c = a.copy(valor = 25.1)  // cópia alterada
+val (id, valor) = a        // desestruturação
+\end{codigo}
+      \begin{conceito}[data class]
+        Gera \cod{equals}, \cod{hashCode}, \cod{toString}, \cod{copy} e \cod{componentN}. É a base dos modelos e estados de tela.
+      \end{conceito}
+    \end{column}
+    \begin{column}{0.45\textwidth}
+\begin{codigo}[title=object e companion]{Kotlin}
+// Singleton: uma única instância
+object Config {
+  const val BROKER = "mqtt.ifma.local"
+  var debug = false
+}
+
+class Leitor private constructor(val id: String) {
+  companion object {   // "estático"
+    fun criar(id: String) = Leitor(id.trim())
+  }
+}
+
+val l = Leitor.criar(" t1 ")
+println(Config.BROKER)
+\end{codigo}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}[fragile]{\cod{enum class} e \cod{sealed} para modelar estados}
+  \begin{columns}[T]
+    \begin{column}{0.47\textwidth}
+\begin{codigo}[title=Enum]{Kotlin}
+enum class StatusBancada(val cor: String) {
+  LIVRE("verde"),
+  RESERVADA("âmbar"),
+  MANUTENCAO("vermelho");
+
+  fun disponivel() = this == LIVRE
+}
+
+val s = StatusBancada.valueOf("LIVRE")
+StatusBancada.entries.forEach { println(it) }
+\end{codigo}
+      \begin{dica}
+        Use \cod{enum} quando os casos são fixos e \textbf{não carregam dados diferentes} entre si.
+      \end{dica}
+    \end{column}
+    \begin{column}{0.51\textwidth}
+\begin{codigo}[title=Sealed interface]{Kotlin}
+sealed interface Resultado {
+  data object Carregando : Resultado
+  data class Sucesso(val dados: List<Leitura>)
+    : Resultado
+  data class Erro(val msg: String) : Resultado
+}
+
+// when exaustivo: sem else
+fun render(r: Resultado) = when (r) {
+  Resultado.Carregando -> "Carregando..."
+  is Resultado.Sucesso -> "${r.dados.size} itens"
+  is Resultado.Erro    -> "Falha: ${r.msg}"
+}
+\end{codigo}
+      \begin{conceito}[Por que sealed?]
+        Cada caso carrega dados próprios e o \cod{when} exaustivo obriga a tratar todos: um caso novo vira erro de compilação onde faltar tratamento.
+      \end{conceito}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% =============================================================================
+\section{Coleções}
+
+\begin{frame}[fragile]{Listas, conjuntos e mapas}
+  \begin{columns}[T]
+    \begin{column}{0.52\textwidth}
+\begin{codigo}[title=Coleções]{Kotlin}
+// Somente leitura (preferível)
+val nomes = listOf("DHT22", "BMP280", "LDR")
+val ids = setOf(1, 2, 2, 3)          // {1, 2, 3}
+val pinos = mapOf("led" to 2, "rele" to 4)
+
+// Mutáveis
+val fila = mutableListOf<Leitura>()
+fila.add(Leitura("t1", 24.0))
+fila += Leitura("t1", 24.2)
+
+val cache = mutableMapOf<String, Double>()
+cache["t1"] = 24.2
+val v = cache["t2"] ?: 0.0     // get pode ser null
+
+println(nomes[0])              // DHT22
+println(nomes.getOrNull(9))    // null (sem exceção)
+println(pinos.getValue("led")) // 2
+\end{codigo}
+    \end{column}
+    \begin{column}{0.46\textwidth}
+      \begin{conceito}[Leitura \emph{versus} mutável]
+        \cod{List} não tem \cod{add}. \cod{MutableList} tem. Exponha sempre a versão de leitura e mantenha a mutável privada.
+      \end{conceito}
+      \footnotesize
+      \begin{tabularx}{\linewidth}{@{}l L@{}}
+        \toprule
+        \cabecalho{Tipo} & \cabecalho{Característica} \\
+        \midrule
+        \cod{List} & ordenada, aceita repetidos \\
+        \cod{Set} & sem repetidos \\
+        \cod{Map} & pares chave $\rightarrow$ valor \\
+        \bottomrule
+      \end{tabularx}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}[fragile]{Operações funcionais}
+  \begin{columns}[T]
+    \begin{column}{0.56\textwidth}
+\begin{codigo}[title=Pipeline de dados]{Kotlin}
+val leituras = listOf(
+  Leitura("t1", 24.1), Leitura("t2", 81.3),
+  Leitura("t1", 24.9), Leitura("t3", 19.0),
+  Leitura("t2", 79.8)
+)
+
+val alertas = leituras
+  .filter { it.valor > 75 }               // seleciona
+  .map { "${it.sensorId}: ${it.valor}" }  // transforma
+
+val mediaPorSensor = leituras
+  .groupBy { it.sensorId }
+  .mapValues { (_, l) -> l.map { it.valor }.average() }
+
+val maior = leituras.maxByOrNull { it.valor }
+val total = leituras.sumOf { it.valor }
+val desc = leituras.sortedByDescending { it.valor }
+val temAlerta = leituras.any { it.valor > 80 }
+val t3 = leituras.firstOrNull { it.sensorId == "t3" }
+\end{codigo}
+    \end{column}
+    \begin{column}{0.42\textwidth}
+      \scriptsize
+      \begin{tabular}{@{}l l@{}}
+        \toprule
+        \cabecalho{Função} & \cabecalho{Resultado} \\
+        \midrule
+        \cod{map} & transforma cada item \\
+        \cod{filter} & mantém os que passam \\
+        \cod{groupBy} & agrupa em um \cod{Map} \\
+        \cod{sortedBy} & nova lista ordenada \\
+        \cod{sumOf}, \cod{average} & agregações \\
+        \cod{any}, \cod{all}, \cod{none} & testes lógicos \\
+        \cod{firstOrNull} & primeiro que satisfaz \\
+        \cod{associateBy} & \cod{Map} por chave \\
+        \cod{chunked}, \cod{windowed} & blocos e janelas \\
+        \bottomrule
+      \end{tabular}
+      \begin{dica}
+        \cod{windowed(5)} calcula médias móveis de leituras de sensor em uma linha.
+      \end{dica}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% =============================================================================
+\section{Funções de escopo e erros}
+
+\begin{frame}[fragile]{Funções de escopo}
+  \begin{columns}[T]
+    \begin{column}{0.5\textwidth}
+      \footnotesize
+      \begin{tabularx}{\linewidth}{@{}l c c L@{}}
+        \toprule
+        \cabecalho{Função} & \cabecalho{Objeto} & \cabecalho{Retorna} & \cabecalho{Uso típico} \\
+        \midrule
+        \cod{let} & \cod{it} & lambda & tratar anuláveis \\
+        \cod{apply} & \cod{this} & objeto & configurar objeto \\
+        \cod{also} & \cod{it} & objeto & efeito extra (log) \\
+        \cod{run} & \cod{this} & lambda & calcular com o objeto \\
+        \cod{with} & \cod{this} & lambda & agrupar chamadas \\
+        \bottomrule
+      \end{tabularx}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+\begin{codigo}[title=Exemplos]{Kotlin}
+val cfg = ConfigMqtt().apply {
+  host = "broker.local"
+  porta = 1883
+}
+
+val leitura = ler().also {
+  Log.d(TAG, "lida: $it")
+}
+
+dispositivo?.let { conectar(it) }
+
+val resumo = with(leitura) {
+  "$sensorId = $valor"
+}
+\end{codigo}
+    \end{column}
+  \end{columns}
+  \begin{dica}
+    Use com moderação: muitas funções de escopo aninhadas prejudicam a leitura.
+  \end{dica}
+\end{frame}
+
+\begin{frame}[fragile]{Tratamento de erros}
+  \begin{columns}[T]
+    \begin{column}{0.5\textwidth}
+\begin{codigo}[title=try é expressão]{Kotlin}
+val valor: Double = try {
+  entrada.toDouble()
+} catch (e: NumberFormatException) {
+  Log.w(TAG, "valor inválido: $entrada")
+  0.0
+} finally {
+  fecharArquivo()
+}
+
+fun lerSensor(): Double {
+  if (!conectado) throw IllegalStateException("desconectado")
+  return 24.5
+}
+\end{codigo}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+\begin{codigo}[title=Result e runCatching]{Kotlin}
+val r: Result<Double> = runCatching { lerSensor() }
+
+r.onSuccess { println("ok: $it") }
+ .onFailure { println("falhou: ${it.message}") }
+
+val v = r.getOrDefault(Double.NaN)
+val txt = r.fold(
+  onSuccess = { "%.1f".format(it) },
+  onFailure = { "--" }
+)
+\end{codigo}
+      \begin{conceito}
+        Kotlin não tem \emph{checked exceptions}: o compilador não obriga a capturar nada. Por isso é importante documentar e tratar falhas de rede, arquivo e conversão.
+      \end{conceito}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% =============================================================================
+\section{Fechamento}
+
+\begin{frame}{Resumo}
+  \begin{resumo}
+    \begin{itemize}
+      \item Prefira \cod{val}; a inferência de tipos deixa o código enxuto sem perder segurança.
+      \item \cod{T?} marca valores anuláveis; use \cod{?.}, \cod{?:}, \cod{let} e \emph{smart casts}, e evite \cod{!!}.
+      \item \cod{if}, \cod{when} e \cod{try} são expressões que devolvem valor.
+      \item Parâmetros padrão e nomeados, extensões e lambdas são a base da API do Compose.
+      \item \cod{data class} para dados, \cod{sealed} para estados, \cod{object} para singletons.
+      \item Coleções somente leitura + \cod{map}/\cod{filter}/\cod{groupBy} substituem a maioria dos laços.
+    \end{itemize}
+  \end{resumo}
+\end{frame}
+
+\begin{frame}{Glossário}
+  \begin{glossario}
+    Paradigma & estilo de organizar o código (imperativo, objetos, funcional, declarativo) \\
+    Tipagem estática & tipos verificados na compilação \\
+    Inferência de tipos & o compilador deduz o tipo a partir do valor \\
+    \emph{Null safety} & distinção entre tipos anuláveis (\cod{String?}) e não anuláveis \\
+    \emph{Smart cast} & conversão automática após uma verificação de tipo ou de nulo \\
+    \cod{data class} & classe de dados com \cod{equals}, \cod{hashCode}, \cod{copy} e \cod{toString} gerados \\
+    \cod{sealed class} & hierarquia fechada: o \cod{when} sabe todos os casos \\
+    Função de ordem superior & função que recebe ou devolve outra função \\
+    Coleta de lixo & liberação automática de objetos sem referências \\
+  \end{glossario}
+\end{frame}
+
+\begin{frame}{Questões de revisão}
+  \begin{questoes}
+    \item Que vantagens a tipagem estática traz para um app que vai crescer?
+    \item Por que o nulo foi chamado de ``erro de um bilhão de dólares''? Como o Kotlin o trata?
+    \item Qual a diferença entre \cod{val} e \cod{var}, e por que preferir \cod{val}?
+    \item Dê um exemplo de encapsulamento e um de polimorfismo no LabMonitor.
+    \item O que é uma função pura? Por que ela é fácil de testar?
+    \item Para que serve uma \cod{sealed class} ao modelar o estado de uma tela?
+    \item Explique a diferença entre igualdade de valor e de identidade com \cod{data class}.
+    \item O que acontece com um objeto quando nenhuma variável aponta mais para ele?
+  \end{questoes}
+\end{frame}
+
+\begin{frame}{Exercícios}
+  \begin{exercicio}[Exercício 1 --- Conversões]
+    Crie funções de extensão \cod{Double.cParaF()}, \cod{Double.fParaC()} e \cod{Int.adcParaVolts(vref: Double = 3.3, bits: Int = 12)}, que converte uma leitura de ADC em tensão.
+  \end{exercicio}
+  \begin{exercicio}[Exercício 2 --- Coleções]
+    Dada uma lista de \cod{Leitura}, calcule: a média por sensor; o sensor com maior variância; a média móvel de 5 amostras do sensor \cod{"t1"}; as leituras fora da faixa 10--40\,°C.
+  \end{exercicio}
+  \begin{exercicio}[Exercício 3 --- Modelagem]
+    Modele com \cod{sealed interface} os estados de uma conexão BLE: \emph{Desconectado}, \emph{Procurando}, \emph{Conectando(endereco)}, \emph{Conectado(endereco, rssi)} e \emph{Falha(motivo)}. Escreva uma função que gere a mensagem de cada estado com um \cod{when} exaustivo.
+  \end{exercicio}
+  \begin{projeto}[LabMonitor --- Etapa 2]
+    Crie o pacote \cod{model} com \cod{Equipamento}, \cod{Bancada}, \cod{Leitura} e \cod{enum StatusBancada}, mais uma lista de dados fictícios em \cod{object DadosExemplo}.
+  \end{projeto}
+\end{frame}
+
+\begin{frame}{Para aprofundar}
+  \small
+  \begin{itemize}
+    \item Documentação oficial: \url{https://kotlinlang.org/docs/home.html}
+    \item Kotlin Koans: \url{https://play.kotlinlang.org/koans}
+    \item Kotlin para desenvolvedores Android: \url{https://developer.android.com/kotlin}
+    \item Convenções de código: \url{https://kotlinlang.org/docs/coding-conventions.html}
+    \item Livro gratuito: \emph{Kotlin Bootcamp for Programmers} (codelab do Google)
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{Respostas das questões de revisão}
+  \begin{respostas}
+    \item Erros de tipo aparecem na compilação, a IDE completa e refatora com segurança e os tipos documentam a intenção do código.
+    \item Porque referências nulas causaram incontáveis falhas e custos. O Kotlin separa \cod{String} de \cod{String?} e exige tratar o nulo (\cod{?.}, \cod{?:}, \emph{smart cast}) antes do uso.
+    \item \cod{val} não pode ser reatribuída; \cod{var} pode. \cod{val} evita mudanças inesperadas e facilita o raciocínio sobre o código.
+    \item Encapsulamento: \cod{Reserva} só muda por \cod{cancelar()}. Polimorfismo: \cod{FonteBle} e \cod{FonteFake} respondem a \cod{leituras()} cada uma do seu jeito.
+    \item Devolve sempre o mesmo resultado para a mesma entrada, sem efeitos colaterais; o teste só precisa conferir entrada e saída.
+    \item Lista todos os estados possíveis (carregando, sucesso, erro); o \cod{when} exaustivo obriga a tratar cada um.
+    \item Duas instâncias de \cod{Bancada("B3")} são iguais por valor (\cod{==} verdadeiro), mas não são o mesmo objeto (\cod{===} falso).
+    \item Ele se torna inalcançável e é liberado pelo coletor de lixo em algum momento.
+  \end{respostas}
+\end{frame}
+
+\encerramento{Módulo 03 (comum) --- Engenharia de software e Git: requisitos, métodos ágeis, versionamento e colaboração.}
+
+\end{document}

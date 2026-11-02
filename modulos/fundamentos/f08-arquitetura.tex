@@ -1,0 +1,215 @@
+% =============================================================================
+%  Fundamentos compartilhados --- Módulo 08: arquitetura de software
+%  Incluído pelas trilhas Kotlin e Flutter com \input{../fundamentos/f08-arquitetura}
+%  (coesão, acoplamento, SOLID e padrões de projeto estão no Módulo 03)
+% =============================================================================
+\section{Fundamentos: arquitetura de software}
+
+\begin{frame}{O que é arquitetura de software}
+  \begin{columns}[T]
+    \begin{column}{0.52\textwidth}
+      \begin{definicao}[Arquitetura]
+        As grandes estruturas de um sistema: seus elementos, as relações entre eles e as decisões \textbf{difíceis de mudar depois}. Ela existe para proteger atributos de qualidade.
+      \end{definicao}
+      \scriptsize
+      \begin{tabularx}{\linewidth}{@{}l L@{}}
+        \toprule
+        \cabecalho{Atributo} & \cabecalho{Pergunta no LabMonitor} \\
+        \midrule
+        Manutenibilidade & trocar a API exige mexer nas telas? \\
+        Testabilidade & dá para testar a regra de reserva sem um aparelho? \\
+        Desempenho & a lista de leituras rola sem engasgar? \\
+        Funcionamento \emph{offline} & o app mostra dados sem internet? \\
+        Segurança & o \emph{token} fica protegido? \\
+        \bottomrule
+      \end{tabularx}
+    \end{column}
+    \begin{column}{0.46\textwidth}
+      \begin{analogia}
+        A planta de uma casa decide por onde passam os canos antes da primeira parede. Pintar um quarto não é arquitetura; mudar a cozinha de lugar é.
+      \end{analogia}
+      \begin{conceito}[Boa arquitetura em um app]
+        Permite mudar a interface sem tocar nos dados, trocar a API sem tocar na interface e testar regras sem abrir o app.
+      \end{conceito}
+      \begin{dica}
+        Coesão, acoplamento, SOLID e padrões de projeto foram vistos no Módulo 03: aqui eles ganham escala.
+      \end{dica}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Padrões de apresentação: de MVC a MVI}
+  \centering
+  \begin{tikzpicture}[every node/.style={font=\tiny}]
+    \draw[seta] (0,0) -- (13.4,0);
+    \foreach \x/\t/\d in {1.2/MVC/{1979, Smalltalk\\ (Trygve Reenskaug)},4.6/MVP/{anos 1990 (Taligent);\\ comum no Android até 2017},8.1/MVVM/{2005, Microsoft (WPF);\\ padrão no Android e no Flutter},11.6/MVI/{anos 2010, inspirado\\ no Redux e no Cycle.js}}{
+      \fill[ambar] (\x,0) circle (2pt);
+      \node[font=\scriptsize\bfseries,text=azulpetroleo,above=1mm] at (\x,0) {\t};
+      \node[rotulo,below=1mm] at (\x,0) {\d};
+    }
+  \end{tikzpicture}
+  \raggedright
+  \scriptsize
+  \begin{tabularx}{\textwidth}{@{}l L L L@{}}
+    \toprule
+    \cabecalho{Padrão} & \cabecalho{Quem atualiza a tela} & \cabecalho{Ponto forte} & \cabecalho{Ponto fraco} \\
+    \midrule
+    MVC & o \emph{controller} manipula a \emph{view} & simples & no Android, a \cod{Activity} virava um \emph{controller} gigante \\
+    MVP & o \emph{presenter} chama métodos de uma interface da \emph{view} & testável sem a tela & muito código de interface; guarda referência à \emph{view} \\
+    MVVM & a \emph{view} observa o estado exposto pelo \emph{view model} & casa com UI declarativa e sobrevive à rotação & vários fluxos de estado podem se desencontrar \\
+    MVI & estado único e imutável; cada intenção gera um novo estado & previsível e fácil de depurar & cerimônia demais para telas simples \\
+    \bottomrule
+  \end{tabularx}
+  \normalsize
+  \begin{conceito}[Na prática atual]
+    Compose e Flutter usam MVVM com um estado único por tela (\cod{UiState}): uma mistura de MVVM com a disciplina do MVI.
+  \end{conceito}
+\end{frame}
+
+\begin{frame}{Arquitetura limpa e arquitetura hexagonal}
+  \begin{columns}[c]
+    \begin{column}{0.46\textwidth}
+      \centering
+      \begin{tikzpicture}[every node/.style={font=\tiny,align=center}]
+        \fill[cinzaclaro] (0,0) circle (2.15);
+        \fill[cinzafundo,draw=azulpetroleo!40] (0,0) circle (1.6);
+        \fill[ambarclaro!60,draw=ambar] (0,0) circle (1.05);
+        \fill[azulpetroleo] (0,0) circle (0.55);
+        \node[text=white,font=\tiny\bfseries] at (0,0) {Entidades};
+        \node at (0,0.8) {Casos de uso};
+        \node at (0,1.33) {Adaptadores};
+        \node at (0,1.88) {Frameworks e drivers};
+        \node[rotulo] at (0,-1.33) {\emph{view models}, repositórios};
+        \node[rotulo] at (0,-1.88) {UI, banco, HTTP, BLE};
+        \draw[setaambar] (2.6,-1.2) -- (1.2,-0.55);
+        \node[rotulo,text width=1.5cm] at (3.05,-1.5) {dependências apontam para dentro};
+      \end{tikzpicture}
+    \end{column}
+    \begin{column}{0.52\textwidth}
+      \begin{definicao}[Regra da dependência]
+        O código das camadas internas não conhece as externas: as regras de negócio não importam nada de Android, Flutter, HTTP ou SQL.
+      \end{definicao}
+      \begin{historia}
+        Alistair Cockburn propôs a arquitetura hexagonal, de portas e adaptadores, em 2005. Robert C. Martin reuniu ideias parecidas na Arquitetura Limpa, em 2012.
+      \end{historia}
+      \begin{dica}[Na medida certa]
+        Em apps pequenos, camadas de UI e de dados bastam. Crie a camada de domínio quando regras se repetirem ou precisarem de testes isolados, como recomendam o Android e o Flutter.
+      \end{dica}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}[fragile]{Inversão de dependência na prática}
+  \begin{columns}[T]
+    \begin{column}{0.5\textwidth}
+      \centering
+      \begin{tikzpicture}[every node/.style={font=\tiny}]
+        \node[rotulo,anchor=west] at (-1.1,0.55) {\textbf{sem inversão}};
+        \node[caixaescura,font=\tiny,minimum width=2cm] (r1) at (0,0) {regras de leitura};
+        \node[caixa,font=\tiny,minimum width=1.8cm] (b1) at (3.4,0) {\cod{FonteBle}};
+        \draw[seta] (r1) -- node[rotulo,above]{conhece} (b1);
+        \node[rotulo,anchor=west] at (-1.1,-0.75) {\textbf{com inversão}};
+        \node[caixaescura,font=\tiny,minimum width=2cm] (r2) at (0,-1.3) {regras de leitura};
+        \node[caixaambar,font=\tiny,minimum width=2.4cm] (i2) at (3.4,-1.3) {\emph{interface}\\ \cod{FonteLeituras}};
+        \node[caixa,font=\tiny,minimum width=1.35cm] (b2) at (1.95,-2.75) {\cod{FonteBle}};
+        \node[caixa,font=\tiny,minimum width=1.35cm] (m2) at (3.4,-2.75) {\cod{FonteMqtt}};
+        \node[caixa,font=\tiny,minimum width=1.35cm] (f2) at (4.85,-2.75) {\cod{FonteFake}};
+        \draw[seta] (r2) -- node[rotulo,above]{usa} (i2);
+        \foreach \n in {b2,m2,f2}{\draw[setaambar] (\n.north) -- (\n.north |- i2.south);}
+        \node[rotulo,below=1mm of m2] {implementam a interface};
+      \end{tikzpicture}
+\begin{codigo}[title=Dart]{Dart}
+abstract interface class FonteLeituras {
+  Stream<Leitura> leituras();
+}
+\end{codigo}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \begin{definicao}[Inversão de dependência]
+        Módulos de alto nível não dependem de detalhes; ambos dependem de abstrações. Quem precisa define a interface; a camada de dados a implementa.
+      \end{definicao}
+\begin{codigo}[title=Kotlin]{Kotlin}
+interface FonteLeituras {
+  fun leituras(): Flow<Leitura>
+}
+\end{codigo}
+      \begin{conceito}[O que se ganha]
+        Trocar BLE por MQTT sem mexer nas regras, testar com uma fonte falsa e fazer a tela antes de o hardware existir.
+      \end{conceito}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Injeção de dependência e localizador de serviços}
+  \begin{columns}[T]
+    \begin{column}{0.5\textwidth}
+      \begin{definicao}[Inversão de controle]
+        A classe não cria o que usa: alguém de fora monta os objetos e os entrega. É o princípio de Hollywood: ``não nos chame, nós chamamos você''.
+      \end{definicao}
+      \centering
+      \begin{tikzpicture}[every node/.style={font=\tiny}]
+        \node[caixaambarforte,font=\tiny\bfseries,minimum width=5.6cm] (raiz) at (0,0) {raiz de composição (\cod{Application}, \cod{main})};
+        \node[caixa,font=\tiny,minimum width=1.7cm] (h) at (-1.9,-1) {cliente HTTP};
+        \node[caixa,font=\tiny,minimum width=1.7cm] (b) at (0,-1) {banco};
+        \node[caixapetroleo,font=\tiny,minimum width=1.9cm] (r) at (-0.95,-2) {repositório};
+        \node[caixaescura,font=\tiny,minimum width=1.7cm] (v) at (1.9,-2) {\emph{view model}};
+        \draw[setatrac] (raiz.south -| h) -- (h); \draw[setatrac] (raiz.south -| b) -- (b);
+        \draw[seta] (h) -- (r); \draw[seta] (b) -- (r);
+        \draw[seta] (r) -- node[rotulo,above]{injeta} (v);
+        \node[rotulo] at (1.9,-1.05) {tracejado: cria};
+      \end{tikzpicture}
+      \raggedright
+      \begin{historia}
+        Martin Fowler batizou o padrão de injeção de dependência em 2004.
+      \end{historia}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \scriptsize
+      \begin{tabularx}{\linewidth}{@{}l L@{}}
+        \toprule
+        \cabecalho{Abordagem} & \cabecalho{Como funciona} \\
+        \midrule
+        Construtor & recebe tudo pronto; dependências explícitas e fáceis de trocar em testes \\
+        Contêiner & uma biblioteca monta o grafo: Hilt, Koin; Provider, Riverpod \\
+        Localizador & a classe pede a um registro global (\cod{get\_it}): prático, mas esconde dependências e só falha em execução \\
+        \bottomrule
+      \end{tabularx}
+      \normalsize
+      \begin{pordentro}[Tempo de vida (escopo)]
+        \textbf{Único no app}: cliente HTTP, banco. \textbf{Por tela}: \emph{view model}. \textbf{Por uso}: objeto novo a cada pedido. Escopo errado causa vazamento ou estado compartilhado por engano.
+      \end{pordentro}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Decisões de arquitetura: trocas e registros}
+  \begin{columns}[T]
+    \begin{column}{0.5\textwidth}
+      \begin{conceito}[Toda decisão é uma troca]
+        Mais camadas trazem isolamento e testabilidade, mas também mais arquivos e indireção. Pese o tamanho do time, a vida esperada do app e o custo de errar.
+      \end{conceito}
+      \scriptsize
+      \begin{tabularx}{\linewidth}{@{}l L@{}}
+        \toprule
+        \cabecalho{Princípio} & \cabecalho{Significado} \\
+        \midrule
+        YAGNI & não construa o que ainda não é necessário \\
+        KISS & prefira a solução mais simples que funciona \\
+        DRY & cada conhecimento em um só lugar \\
+        Regra de três & abstraia na terceira repetição, não na primeira \\
+        \bottomrule
+      \end{tabularx}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \begin{definicao}[ADR (\emph{Architecture Decision Record})]
+        Texto curto, versionado com o código, que registra uma decisão: contexto, opções, decisão e consequências. Responde no futuro: ``por que fizemos assim?''.
+      \end{definicao}
+      \begin{exemplo}[ADR 007 --- Estado das telas]
+        \textbf{Contexto}: leituras do sensor em tempo real. \textbf{Decisão}: um \cod{UiState} imutável por tela, exposto como fluxo observável. \textbf{Consequência}: telas testáveis sem interface.
+      \end{exemplo}
+      \begin{historia}
+        Michael Nygard propôs os ADRs em 2011.
+      \end{historia}
+    \end{column}
+  \end{columns}
+\end{frame}

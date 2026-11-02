@@ -1,0 +1,201 @@
+% =============================================================================
+%  Fundamentos compartilhados --- Módulo 02: linguagens de programação
+%  Incluído pelas trilhas Kotlin e Flutter com \input{../fundamentos/f02-linguagens}
+% =============================================================================
+\section{Fundamentos: linguagens de programação}
+
+\begin{frame}{Paradigmas de programação}
+  \begin{columns}[T]
+    \begin{column}{0.54\textwidth}
+      \scriptsize
+      \begin{tabularx}{\linewidth}{@{}l L@{}}
+        \toprule
+        \cabecalho{Paradigma} & \cabecalho{Ideia central} \\
+        \midrule
+        Imperativo & sequência de comandos que alteram o estado (\emph{faça isto, depois aquilo}) \\
+        Orientado a objetos & dados e comportamentos agrupados em objetos que trocam mensagens \\
+        Funcional & funções puras, valores imutáveis, composição de funções \\
+        Declarativo & descreve \textbf{o que} se quer, não \textbf{como} obter (SQL, interfaces em Compose e Flutter) \\
+        \bottomrule
+      \end{tabularx}
+    \end{column}
+    \begin{column}{0.44\textwidth}
+      \begin{definicao}[Paradigma]
+        Estilo de organizar o raciocínio e o código. Linguagens modernas são \textbf{multiparadigma}: Kotlin e Dart misturam imperativo, objetos e funcional.
+      \end{definicao}
+      \begin{dica}
+        Use o paradigma que deixa cada parte mais clara: objetos para modelar o domínio, funções para transformar dados, declarativo para descrever a interface.
+      \end{dica}
+    \end{column}
+  \end{columns}
+  \begin{historia}
+    Fortran (1957) era imperativo; Lisp (1958), funcional; Simula (1967) e Smalltalk (anos 1970) criaram a orientação a objetos. Kotlin (2011, JetBrains) e Dart (2011, Google) herdaram ideias de todos.
+  \end{historia}
+\end{frame}
+
+\begin{frame}{Sistemas de tipos}
+  \begin{columns}[T]
+    \begin{column}{0.5\textwidth}
+      \begin{definicao}[Tipo]
+        Conjunto de valores possíveis e das operações permitidas sobre eles. Somar dois \cod{Int} faz sentido; somar um \cod{Int} a uma \cod{Bancada}, não.
+      \end{definicao}
+      \scriptsize
+      \begin{tabularx}{\linewidth}{@{}l L@{}}
+        \toprule
+        \cabecalho{Classificação} & \cabecalho{Significado} \\
+        \midrule
+        Estática & tipos verificados na compilação (Kotlin, Dart, Java) \\
+        Dinâmica & tipos verificados na execução (Python, JavaScript) \\
+        Forte & conversões perigosas são proibidas ou explícitas \\
+        Inferência & o compilador deduz o tipo (\cod{val x = 3}) \\
+        \bottomrule
+      \end{tabularx}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \begin{conceito}[Por que tipagem estática ajuda]
+        Muitos erros aparecem \textbf{antes} de o app rodar; a IDE completa código e refatora com segurança; o tipo documenta a intenção.
+      \end{conceito}
+      \begin{pordentro}[Solidez (\emph{soundness})]
+        Um sistema de tipos é sólido quando garante que, se o programa compila, uma variável nunca terá em execução um valor de outro tipo. O Dart 3 é sólido, inclusive quanto a nulos.
+      \end{pordentro}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{O ``erro de um bilhão de dólares'': o nulo}
+  \begin{columns}[T]
+    \begin{column}{0.5\textwidth}
+      \begin{historia}
+        Tony Hoare introduziu a referência nula na linguagem ALGOL W em 1965. Décadas depois, chamou-a de seu ``erro de um bilhão de dólares'', pelo custo das falhas que ela causou.
+      \end{historia}
+      \begin{definicao}[\emph{Null safety}]
+        O sistema de tipos separa tipos que \textbf{podem} ser nulos (\cod{String?}) dos que \textbf{não podem} (\cod{String}). Usar um valor possivelmente nulo sem tratar vira erro de compilação, não falha em produção.
+      \end{definicao}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \centering
+      \begin{tikzpicture}[node distance=3mm,every node/.style={font=\scriptsize,align=center}]
+        \node[caixa,minimum width=2.2cm] (a) {\cod{String?}\\ \tiny pode ser nulo};
+        \node[caixapetroleo,right=8mm of a,minimum width=2.2cm] (b) {\cod{String}\\ \tiny nunca nulo};
+        \draw[seta] (a) -- node[rotulo,above]{\tiny verificação} (b);
+        \node[below=3mm of a,font=\tiny,text width=2.2cm,align=center] {\cod{if (x != null)}\\ \cod{x ?: padrão}};
+      \end{tikzpicture}
+      \begin{pordentro}[Análise de fluxo]
+        Depois de um \cod{if (x != null)}, o compilador sabe que \cod{x} não é nulo naquele trecho e permite usá-lo diretamente (\emph{smart cast} no Kotlin, promoção de tipo no Dart).
+      \end{pordentro}
+      \begin{atencao}
+        O operador \cod{!!} (Kotlin) ou \cod{!} (Dart) desliga a proteção: só use quando tiver certeza.
+      \end{atencao}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Os pilares da orientação a objetos}
+  \begin{columns}[T]
+    \begin{column}{0.54\textwidth}
+      \scriptsize
+      \begin{tabularx}{\linewidth}{@{}l L@{}}
+        \toprule
+        \cabecalho{Pilar} & \cabecalho{Significado e exemplo} \\
+        \midrule
+        Encapsulamento & esconder o estado interno e expor operações: a \cod{Reserva} só muda pelo método \cod{cancelar()} \\
+        Abstração & mostrar o essencial e ocultar detalhes: \cod{FonteLeituras} sem dizer se é BLE ou MQTT \\
+        Herança & uma classe especializa outra: \cod{SensorTemperatura} herda de \cod{Sensor} \\
+        Polimorfismo & o mesmo comando, comportamentos diferentes: \cod{fonte.leituras()} em qualquer implementação \\
+        \bottomrule
+      \end{tabularx}
+    \end{column}
+    \begin{column}{0.44\textwidth}
+      \begin{definicao}[Objeto e classe]
+        A \textbf{classe} é o molde (atributos e métodos); o \textbf{objeto} é uma instância concreta, com estado próprio.
+      \end{definicao}
+      \begin{dica}[Composição em vez de herança]
+        Prefira montar objetos com outros objetos (``tem um'') a criar hierarquias profundas (``é um''): mudanças ficam localizadas e o código, mais flexível.
+      \end{dica}
+    \end{column}
+  \end{columns}
+  \begin{analogia}
+    Uma tomada é uma abstração: qualquer aparelho com o plugue certo funciona (polimorfismo), e ninguém precisa conhecer a fiação dentro da parede (encapsulamento).
+  \end{analogia}
+\end{frame}
+
+\begin{frame}{Programação funcional}
+  \begin{columns}[T]
+    \begin{column}{0.5\textwidth}
+      \begin{definicao}[Função pura]
+        Para a mesma entrada, devolve sempre a mesma saída e não causa efeitos colaterais (não altera variáveis externas, não grava em disco, não acessa a rede).
+      \end{definicao}
+      \begin{definicao}[Funções de primeira classe e de ordem superior]
+        Funções são valores: podem ser guardadas em variáveis, passadas como argumento e devolvidas. Uma função que recebe ou devolve outra é de \textbf{ordem superior} (\cod{map}, \cod{filter}).
+      \end{definicao}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \centering
+      \begin{tikzpicture}[node distance=4mm,every node/.style={font=\scriptsize,align=center}]
+        \node[caixa,minimum width=1.9cm] (l) {leituras};
+        \node[caixapetroleo,right=of l,minimum width=1.6cm] (f) {\cod{filter}\\ \tiny > 30\,°C};
+        \node[caixapetroleo,right=of f,minimum width=1.6cm] (m) {\cod{map}\\ \tiny para alerta};
+        \node[caixaambar,below=4mm of m,minimum width=1.6cm] (r) {alertas};
+        \draw[seta] (l) -- (f); \draw[seta] (f) -- (m); \draw[seta] (m) -- (r);
+      \end{tikzpicture}
+      \begin{conceito}[Por que importa no mobile]
+        Funções puras são fáceis de testar e seguras entre \emph{threads}; transformar listas com \cod{map}/\cod{filter} é mais legível que laços; interfaces declarativas tratam a tela como uma função do estado (Módulo 05).
+      \end{conceito}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Memória: pilha, \emph{heap} e coleta de lixo}
+  \begin{columns}[c]
+    \begin{column}{0.46\textwidth}
+      \centering
+      \begin{tikzpicture}[every node/.style={font=\tiny}]
+        \node[font=\scriptsize\bfseries,text=azulpetroleo] at (0.9,2.7) {Pilha};
+        \foreach \y/\t in {2.2/main(),1.7/carregar(),1.2/calcular()} \node[caixa,minimum width=1.8cm] at (0.9,\y) {\t};
+        \node[font=\scriptsize\bfseries,text=azulpetroleo] at (3.7,2.7) {\emph{Heap}};
+        \draw[cinzamedio,rounded corners] (2.6,0.3) rectangle (4.8,2.45);
+        \node[caixapetroleo,minimum width=1.3cm] (o1) at (3.3,1.95) {Bancada};
+        \node[caixapetroleo,minimum width=1.3cm] (o2) at (4.1,1.2) {Lista};
+        \node[caixa,minimum width=1.3cm,fill=cinzaclaro] (o3) at (3.3,0.65) {sem ref.};
+        \draw[seta] (1.8,2.2) -- (o1); \draw[seta] (1.8,1.7) -- (o2); \draw[seta] (o2) -- (o1);
+        \node[font=\tiny,text=vermelhoerro] at (3.7,0.2) {coletado};
+      \end{tikzpicture}
+    \end{column}
+    \begin{column}{0.52\textwidth}
+      \begin{definicao}[Pilha e \emph{heap}]
+        A \textbf{pilha} guarda as chamadas de função e suas variáveis locais, liberadas ao retornar. O \textbf{\emph{heap}} guarda os objetos, que vivem enquanto houver referências a eles.
+      \end{definicao}
+      \begin{definicao}[Coleta de lixo]
+        O \emph{runtime} encontra objetos que não são mais alcançáveis a partir das referências vivas e libera sua memória automaticamente.
+      \end{definicao}
+      \begin{pordentro}[Gerações]
+        A maioria dos objetos morre jovem. Por isso o ART e a VM do Dart separam objetos novos e antigos e coletam os novos com frequência e rapidez.
+      \end{pordentro}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Imutabilidade e igualdade}
+  \begin{columns}[T]
+    \begin{column}{0.5\textwidth}
+      \begin{definicao}[Imutável]
+        Objeto que não muda depois de criado. Para ``alterar'', cria-se uma cópia com o campo novo (\cod{copy} no Kotlin, \cod{copyWith} no Dart).
+      \end{definicao}
+      \begin{conceito}[Vantagens]
+        \begin{itemize}
+          \item Ninguém altera o objeto ``pelas costas''.
+          \item Seguro para compartilhar entre \emph{threads} e \emph{isolates}.
+          \item Comparar o antes e o depois de um estado fica trivial (Módulo 07).
+        \end{itemize}
+      \end{conceito}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \begin{definicao}[Igualdade de valor e de identidade]
+        \textbf{Identidade}: as duas variáveis apontam para o \textbf{mesmo} objeto. \textbf{Valor}: objetos diferentes com o mesmo conteúdo. \cod{data class} (Kotlin) e \emph{records} (Dart) comparam por valor.
+      \end{definicao}
+      \begin{erro}[Lista mutável compartilhada]
+        Dois componentes recebem a mesma lista; um a altera e o outro mostra dados que não esperava. Exponha listas somente leitura.
+      \end{erro}
+    \end{column}
+  \end{columns}
+\end{frame}

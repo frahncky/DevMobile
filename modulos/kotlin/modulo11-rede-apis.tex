@@ -1,0 +1,633 @@
+\documentclass[aspectratio=169,10pt]{beamer}
+\makeatletter\def\input@path{{../../estilo/}{../estilo/}{estilo/}}\makeatother
+\usepackage{devmobile}
+\modulo[Kotlin]{11}{Rede e Consumo de APIs}{HTTP, REST e JSON, Retrofit, OkHttp, tratamento de erros, offline-first, imagens e segurança}
+
+\begin{document}
+\capa
+
+\begin{frame}{Objetivos do módulo}
+  \begin{conceito}[Ao final deste módulo você será capaz de]
+    \begin{itemize}
+      \item Descrever o ciclo requisição/resposta do HTTP, seus métodos e códigos de status.
+      \item Ler a documentação de uma API REST e modelar seus dados em Kotlin.
+      \item Consumir APIs com \textbf{Retrofit} + \textbf{kotlinx.serialization} + \textbf{OkHttp}.
+      \item Tratar falhas de rede e representá-las no estado da tela.
+      \item Implementar a estratégia \emph{offline-first} com Room como fonte da verdade.
+      \item Carregar imagens e proteger chaves e dados em trânsito.
+    \end{itemize}
+  \end{conceito}
+\end{frame}
+
+\sumario
+
+\input{../fundamentos/f11-redes}
+
+% =============================================================================
+\section{Fundamentos de HTTP}
+
+\begin{frame}[fragile]{Requisição e resposta}
+  \begin{center}
+  \begin{tikzpicture}[node distance=30mm]
+    \node (cel) {\celular[0.5]{\tiny app}};
+    \node[caixaescura,minimum width=2.6cm,minimum height=16mm,right=40mm of cel] (srv) {Servidor\\ \tiny api.exemplo.com};
+    \draw[seta] ([yshift=5mm]cel.east) -- node[above,font=\scriptsize,align=center]{\textbf{Requisição}\\ \cod{GET /bancadas/3} + cabeçalhos} ([yshift=5mm]srv.west);
+    \draw[setaambar] ([yshift=-5mm]srv.west) -- node[below,font=\scriptsize,align=center]{\textbf{Resposta}\\ \cod{200 OK} + JSON} ([yshift=-5mm]cel.east);
+  \end{tikzpicture}
+  \end{center}
+  \begin{columns}[T]
+    \begin{column}{0.49\textwidth}
+      \begin{codigo}[title=Requisição]{bash}
+GET /v1/bancadas/3 HTTP/1.1
+Host: api.labmonitor.ifma.edu.br
+Accept: application/json
+Authorization: Bearer eyJhbGciOi...
+      \end{codigo}
+    \end{column}
+    \begin{column}{0.49\textwidth}
+      \begin{codigo}[title=Resposta]{JSON}
+HTTP/1.1 200 OK
+Content-Type: application/json
+
+{ "id": 3, "nome": "Bancada 3",
+  "temp_c": 24.8, "livre": true }
+      \end{codigo}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Métodos e códigos de status}
+  \begin{columns}[T]
+    \begin{column}{0.46\textwidth}
+      \footnotesize
+      \begin{tabularx}{\linewidth}{@{}l L@{}}
+        \toprule
+        \cabecalho{Método} & \cabecalho{Semântica} \\
+        \midrule
+        \cod{GET} & ler um recurso (sem corpo) \\
+        \cod{POST} & criar um recurso ou disparar ação \\
+        \cod{PUT} & substituir um recurso inteiro \\
+        \cod{PATCH} & alterar parte de um recurso \\
+        \cod{DELETE} & remover um recurso \\
+        \bottomrule
+      \end{tabularx}
+      \begin{conceito}[Idempotência]
+        \cod{GET}, \cod{PUT} e \cod{DELETE} podem ser repetidos sem efeito extra, por isso é seguro tentar de novo após uma falha. \cod{POST}, em geral, não.
+      \end{conceito}
+    \end{column}
+    \begin{column}{0.52\textwidth}
+      \footnotesize
+      \begin{tabularx}{\linewidth}{@{}l L@{}}
+        \toprule
+        \cabecalho{Faixa} & \cabecalho{Significado e exemplos} \\
+        \midrule
+        \textcolor{verdeok}{\textbf{2xx}} & sucesso: \cod{200 OK}, \cod{201 Created}, \cod{204 No Content} \\
+        \textbf{3xx} & redirecionamento: \cod{301}, \cod{304 Not Modified} \\
+        \textcolor{ambar}{\textbf{4xx}} & erro do cliente: \cod{400} inválido, \cod{401} sem login, \cod{403} sem permissão, \cod{404} não existe, \cod{409} conflito, \cod{429} limite de requisições \\
+        \textcolor{vermelhoerro}{\textbf{5xx}} & erro do servidor: \cod{500}, \cod{502}, \cod{503} indisponível \\
+        \bottomrule
+      \end{tabularx}
+      \begin{dica}
+        4xx: o app precisa corrigir algo (login, dados). 5xx e falhas de conexão: vale tentar de novo mais tarde.
+      \end{dica}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% =============================================================================
+\section{APIs REST e JSON}
+
+\begin{frame}{Projetando a API do LabMonitor}
+  \footnotesize
+  \begin{tabularx}{\textwidth}{@{}l l L@{}}
+    \toprule
+    \cabecalho{Método} & \cabecalho{Endpoint} & \cabecalho{Ação} \\
+    \midrule
+    \cod{GET} & \cod{/v1/bancadas} & lista todas as bancadas \\
+    \cod{GET} & \cod{/v1/bancadas/\{id\}} & detalha uma bancada \\
+    \cod{GET} & \cod{/v1/bancadas/\{id\}/leituras?desde=...} & leituras a partir de uma data (query string) \\
+    \cod{POST} & \cod{/v1/reservas} & cria uma reserva (corpo JSON) \\
+    \cod{DELETE} & \cod{/v1/reservas/\{id\}} & cancela uma reserva \\
+    \bottomrule
+  \end{tabularx}
+  \vspace{4pt}
+  \begin{columns}[T]
+    \begin{column}{0.48\textwidth}
+      \begin{conceito}[REST em uma frase]
+        URLs identificam \textbf{recursos} (substantivos), métodos HTTP dizem \textbf{o que fazer} (verbos), e o estado trafega em JSON.
+      \end{conceito}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \begin{dica}[API pública para praticar]
+        A \textbf{Open-Meteo} não exige chave:\\
+        {\scriptsize\url{https://api.open-meteo.com/v1/forecast?latitude=-2.53&longitude=-44.30&current=temperature_2m}}\\
+        devolve a temperatura atual em São Luís.
+      \end{dica}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% =============================================================================
+\section{Configuração no Android}
+
+\begin{frame}[fragile]{Permissão e HTTPS}
+  \begin{columns}[T]
+    \begin{column}{0.5\textwidth}
+\begin{codigo}[title=AndroidManifest.xml]{XML}
+<uses-permission
+  android:name="android.permission.INTERNET" />
+
+<application
+  android:networkSecurityConfig=
+    "@xml/network_security_config" ... >
+\end{codigo}
+\begin{codigo}[title=res/xml/network\_security\_config.xml]{XML}
+<network-security-config>
+  <!-- HTTP liberado SÓ para o ESP32 na rede local -->
+  <domain-config cleartextTrafficPermitted="true">
+    <domain includeSubdomains="false">192.168.4.1</domain>
+  </domain-config>
+</network-security-config>
+\end{codigo}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \begin{conceito}[HTTPS por padrão]
+        Desde o Android 9, o tráfego em texto puro (\cod{http://}) é bloqueado. Use \cod{https://} sempre que possível.
+      \end{conceito}
+      \begin{atencao}[Dispositivos IoT]
+        Placas como o ESP32 muitas vezes servem HTTP simples na rede local. Libere \textbf{apenas aquele endereço}, nunca \cod{cleartextTrafficPermitted="true"} global.
+      \end{atencao}
+      \begin{dica}
+        No emulador, \cod{10.0.2.2} aponta para o \cod{localhost} do seu computador.
+      \end{dica}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% =============================================================================
+\section{Retrofit e kotlinx.serialization}
+
+\begin{frame}[fragile]{Modelando o JSON}
+  \begin{columns}[T]
+    \begin{column}{0.5\textwidth}
+\begin{codigo}[title=Resposta da Open-Meteo (resumo)]{JSON}
+{
+  "latitude": -2.53,
+  "longitude": -44.3,
+  "current": {
+    "time": "2026-11-01T15:00",
+    "temperature_2m": 30.4,
+    "relative_humidity_2m": 62
+  }
+}
+\end{codigo}
+      \begin{dica}
+        Ferramentas como o \emph{JSON to Kotlin Class} (plugin da IDE) geram os DTOs a partir de um exemplo.
+      \end{dica}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+\begin{codigo}[title=ClimaDto.kt]{Kotlin}
+@Serializable
+data class ClimaDto(
+  val latitude: Double,
+  val longitude: Double,
+  val current: AtualDto
+)
+
+@Serializable
+data class AtualDto(
+  val time: String,
+  @SerialName("temperature_2m")
+  val temperatura: Double,
+  @SerialName("relative_humidity_2m")
+  val umidade: Int? = null     // opcional
+)
+\end{codigo}
+      \begin{conceito}
+        \cod{@SerialName} liga o nome do JSON ao nome Kotlin. Valores padrão tornam campos opcionais.
+      \end{conceito}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}[fragile]{A interface da API}
+  \begin{columns}[T]
+    \begin{column}{0.54\textwidth}
+\begin{codigo}[title=LabApi.kt]{Kotlin}
+interface LabApi {
+  @GET("v1/bancadas")
+  suspend fun listarBancadas(): List<BancadaDto>
+
+  @GET("v1/bancadas/{id}")
+  suspend fun bancada(@Path("id") id: Int): BancadaDto
+
+  @GET("v1/bancadas/{id}/leituras")
+  suspend fun leituras(
+    @Path("id") id: Int,
+    @Query("desde") desde: String
+  ): List<LeituraDto>
+
+  @POST("v1/reservas")
+  suspend fun reservar(@Body r: NovaReservaDto): ReservaDto
+
+  @DELETE("v1/reservas/{id}")
+  suspend fun cancelar(@Path("id") id: Long): Response<Unit>
+}
+\end{codigo}
+    \end{column}
+    \begin{column}{0.44\textwidth}
+      \scriptsize
+      \begin{tabularx}{\linewidth}{@{}l L@{}}
+        \toprule
+        \cabecalho{Anotação} & \cabecalho{Função} \\
+        \midrule
+        \cod{@GET}, \cod{@POST}\ldots & método e caminho \\
+        \cod{@Path} & substitui \cod{\{id\}} na URL \\
+        \cod{@Query} & \cod{?chave=valor} \\
+        \cod{@Body} & objeto serializado no corpo \\
+        \cod{@Header} & cabeçalho específico \\
+        \bottomrule
+      \end{tabularx}
+      \begin{conceito}[Funções \cod{suspend}]
+        O Retrofit executa a chamada fora da thread principal e devolve o objeto já convertido. Status fora de 2xx lança \cod{HttpException}.
+      \end{conceito}
+      \begin{dica}
+        Use \cod{Response<T>} quando precisar ler o código de status ou os cabeçalhos.
+      \end{dica}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}[fragile]{Montando o cliente com OkHttp e Hilt}
+  \begin{columns}[T]
+    \begin{column}{0.58\textwidth}
+\begin{codigo}[title=di/NetworkModule.kt]{Kotlin}
+@Module @InstallIn(SingletonComponent::class)
+object NetworkModule {
+  @Provides @Singleton
+  fun okHttp(sessao: SessaoRepository) = OkHttpClient.Builder()
+    .connectTimeout(10, TimeUnit.SECONDS)
+    .addInterceptor { chain ->         // token em toda requisição
+      chain.proceed(chain.request().newBuilder()
+        .header("Authorization", "Bearer ${sessao.token()}")
+        .build())
+    }
+    .addInterceptor(HttpLoggingInterceptor().apply {
+      level = if (BuildConfig.DEBUG) Level.BODY else Level.NONE
+    }).build()
+  @Provides @Singleton
+  fun api(client: OkHttpClient): LabApi = Retrofit.Builder()
+    .baseUrl("https://api.labmonitor.ifma.edu.br/")
+    .client(client)
+    .addConverterFactory(Json { ignoreUnknownKeys = true }
+      .asConverterFactory("application/json".toMediaType()))
+    .build().create(LabApi::class.java)
+}
+\end{codigo}
+    \end{column}
+    \begin{column}{0.4\textwidth}
+      \begin{conceito}[Camadas]
+        \textbf{Retrofit} transforma a interface em chamadas HTTP; \textbf{OkHttp} faz a conexão (cache, timeouts, interceptadores); \textbf{kotlinx.serialization} converte JSON.
+      \end{conceito}
+      \begin{dica}[\cod{ignoreUnknownKeys}]
+        Se a API ganhar campos novos, o app antigo continua funcionando.
+      \end{dica}
+      \begin{atencao}
+        Log de corpo (\cod{BODY}) só em debug: ele mostra tokens e dados pessoais.
+      \end{atencao}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% =============================================================================
+\section{Erros e estados}
+
+\begin{frame}[fragile]{O que pode dar errado}
+  \begin{columns}[T]
+    \begin{column}{0.5\textwidth}
+      \scriptsize
+      \begin{tabularx}{\linewidth}{@{}l L@{}}
+        \toprule
+        \cabecalho{Exceção} & \cabecalho{Causa provável} \\
+        \midrule
+        \cod{UnknownHostException} & sem internet / DNS \\
+        \cod{SocketTimeoutException} & servidor lento \\
+        \cod{HttpException} (4xx/5xx) & resposta de erro \\
+        \cod{SerializationException} & JSON diferente do esperado \\
+        \cod{SSLHandshakeException} & certificado inválido \\
+        \bottomrule
+      \end{tabularx}
+      \begin{atencao}
+        Todas as de rede herdam de \cod{IOException}. Trate-as \textbf{no repositório} e entregue à UI um erro com significado.
+      \end{atencao}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+\begin{codigo}[title=Erros com significado]{Kotlin}
+sealed interface ErroRede {
+  data object SemConexao : ErroRede
+  data object NaoAutorizado : ErroRede
+  data class Servidor(val codigo: Int) : ErroRede
+  data object Desconhecido : ErroRede
+}
+
+suspend fun <T> chamarApi(
+  bloco: suspend () -> T
+): Result<T> = try {
+  Result.success(bloco())
+} catch (e: CancellationException) { throw e
+} catch (e: IOException) {
+  Result.failure(FalhaRede(ErroRede.SemConexao))
+} catch (e: HttpException) {
+  Result.failure(FalhaRede(when (e.code()) {
+    401, 403 -> ErroRede.NaoAutorizado
+    else -> ErroRede.Servidor(e.code()) }))
+}
+\end{codigo}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}[fragile]{Do erro à tela}
+  \begin{columns}[T]
+    \begin{column}{0.54\textwidth}
+\begin{codigo}[title=ClimaViewModel.kt]{Kotlin}
+fun carregar() = viewModelScope.launch {
+  _estado.update { it.copy(carregando = true, erro = null) }
+  chamarApi { api.clima(-2.53, -44.30) }
+    .onSuccess { dto ->
+      _estado.update {
+        it.copy(carregando = false,
+          temperatura = dto.current.temperatura)
+      }
+    }
+    .onFailure { e ->
+      _estado.update {
+        it.copy(carregando = false,
+          erro = (e as? FalhaRede)?.tipo?.mensagem()
+            ?: "Erro inesperado")
+      }
+    }
+}
+\end{codigo}
+    \end{column}
+    \begin{column}{0.44\textwidth}
+      \centering
+      \begin{tikzpicture}[node distance=3mm]
+        \node[caixa,minimum width=4.2cm] (c) {\textbf{Carregando}: indicador de progresso};
+        \node[caixaescura,minimum width=4.2cm,below=of c] (s) {\textbf{Sucesso}: dados na tela};
+        \node[caixaambar,minimum width=4.2cm,below=of s] (v) {\textbf{Vazio}: mensagem + ação};
+        \node[caixa,draw=vermelhoerro,fill=vermelhoerro!8,minimum width=4.2cm,below=of v] (e) {\textbf{Erro}: explicação + ``Tentar de novo''};
+      \end{tikzpicture}
+      \begin{dica}[Repetir com espera crescente]
+        Para falhas temporárias, tente de novo após 1\,s, 2\,s, 4\,s\ldots (\emph{exponential backoff}). O operador \cod{retryWhen} do Flow e o WorkManager fazem isso.
+      \end{dica}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% =============================================================================
+\section{Offline-first}
+
+\begin{frame}{Estratégia offline-first}
+  \begin{columns}[c]
+    \begin{column}{0.52\textwidth}
+      \centering
+      \begin{tikzpicture}[node distance=7mm]
+        \node[caixaescura,minimum width=2.6cm] (ui) {UI / ViewModel};
+        \node[caixapetroleo,minimum width=2.6cm,below=of ui] (repo) {Repositório};
+        \node[caixaambar,minimum width=2.2cm,below left=7mm and -6mm of repo] (db) {Room\\ \tiny fonte da verdade};
+        \node[caixa,minimum width=2.2cm,below right=7mm and -6mm of repo] (api) {API remota};
+        \node[caixa,minimum width=2.2cm,below=8mm of api,fill=cinzaclaro] (wm) {WorkManager\\ \tiny sincronização};
+        \draw[seta] (db) -- node[rotulo,left]{\cod{Flow}} (repo);
+        \draw[seta] (repo) -- node[rotulo,right]{\cod{StateFlow}} (ui);
+        \draw[setaambar] (api.west) -- node[rotulo,below]{grava} (db.east);
+        \draw[setatrac] (wm) -- node[rotulo,right]{agenda} (api);
+        \draw[setatrac] (db.south) |- node[rotulo,below,pos=0.75]{fila de envios} (wm.west);
+      \end{tikzpicture}
+    \end{column}
+    \begin{column}{0.46\textwidth}
+      \begin{conceito}[Leitura]
+        A UI lê \textbf{sempre} do banco local. A rede apenas atualiza o banco, e a tela reage sozinha.
+      \end{conceito}
+      \begin{conceito}[Escrita]
+        Grave localmente na hora (marcado como ``pendente'') e envie ao servidor quando houver conexão, com WorkManager (Módulo 13).
+      \end{conceito}
+      \begin{dica}[Resultado]
+        O app abre instantaneamente, funciona no laboratório sem Wi-Fi e economiza dados móveis.
+      \end{dica}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}[fragile]{Implementando no repositório}
+  \begin{columns}[T]
+    \begin{column}{0.56\textwidth}
+\begin{codigo}[title=BancadaRepositoryImpl.kt]{Kotlin}
+override fun bancadas(): Flow<List<Bancada>> =
+  dao.observarTodas()
+    .map { lista -> lista.map { it.paraModelo() } }
+    .onStart { atualizarSeAntigo() }   // dispara refresh
+
+private suspend fun atualizarSeAntigo() {
+  if (agora() - ajustes.ultimaSync() < 5.minutes) return
+  chamarApi { api.listarBancadas() }.onSuccess { dtos ->
+    dao.substituirTodas(dtos.map { it.paraEntidade() })
+    ajustes.registrarSync(agora())
+  } // em falha: a UI segue com os dados em cache
+}
+
+override suspend fun reservar(r: NovaReserva) {
+  dao.inserirReserva(r.paraEntidade(pendente = true))
+  agendador.agendarEnvioPendentes()   // WorkManager
+}
+\end{codigo}
+    \end{column}
+    \begin{column}{0.42\textwidth}
+      \begin{atencao}[Conflitos]
+        Reservas offline conflitantes: o servidor decide. Trate \cod{409 Conflict} avisando o usuário.
+      \end{atencao}
+      \begin{dica}[Mostre a idade dos dados]
+        ``Atualizado há 3 min'' e um ícone de offline deixam claro o que se vê.
+      \end{dica}
+      \begin{dica}
+        Monitore a conectividade com o \cod{ConnectivityManager} (\cod{registerDefault}\-\cod{NetworkCallback}) convertido em \cod{Flow} via \cod{callbackFlow}.
+      \end{dica}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% =============================================================================
+\section{Imagens, alternativas e segurança}
+
+\begin{frame}[fragile]{Imagens com Coil e alternativas ao Retrofit}
+  \begin{columns}[T]
+    \begin{column}{0.5\textwidth}
+\begin{codigo}[title=Coil em Compose]{Kotlin}
+AsyncImage(
+  model = ImageRequest.Builder(LocalContext.current)
+    .data(equipamento.fotoUrl)
+    .crossfade(true)
+    .build(),
+  placeholder = painterResource(R.drawable.carregando),
+  error = painterResource(R.drawable.sem_foto),
+  contentDescription = equipamento.descricao,
+  contentScale = ContentScale.Crop,
+  modifier = Modifier.size(72.dp)
+    .clip(RoundedCornerShape(8.dp))
+)
+\end{codigo}
+      \begin{conceito}[Coil]
+        Baixa, redimensiona e guarda imagens em cache (memória e disco) automaticamente.
+      \end{conceito}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \scriptsize
+      \begin{tabularx}{\linewidth}{@{}l L@{}}
+        \toprule
+        \cabecalho{Biblioteca} & \cabecalho{Quando considerar} \\
+        \midrule
+        \textbf{Retrofit} & padrão de mercado em apps Android \\
+        \textbf{Ktor Client} & projetos Kotlin Multiplatform (Módulo 19) \\
+        \textbf{OkHttp puro} & chamadas avulsas, download de arquivos \\
+        \textbf{WebSocket} (OkHttp/Ktor) & dados em tempo real bidirecionais \\
+        \textbf{MQTT} & telemetria IoT (Módulo 13) \\
+        \bottomrule
+      \end{tabularx}
+      \begin{dica}
+        A arquitetura em camadas permite trocar Retrofit por Ktor mexendo só na fonte remota.
+      \end{dica}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Segurança na comunicação}
+  \begin{columns}[T]
+    \begin{column}{0.48\textwidth}
+      \begin{erro}[Nunca coloque segredos no app]
+        Tudo o que vai no APK pode ser extraído: chaves de API, senhas de banco, tokens de serviços pagos. \textbf{Ofuscação não protege segredos.}
+      \end{erro}
+      \begin{conceito}[Solução: backend intermediário]
+        O app chama \textbf{o seu servidor} (ou uma Cloud Function), que guarda a chave e chama o serviço externo. O app se autentica com o token do usuário.
+      \end{conceito}
+    \end{column}
+    \begin{column}{0.5\textwidth}
+      \centering
+      \begin{tikzpicture}[node distance=7mm]
+        \node (a) {\celular[0.35]{}};
+        \node[caixaescura,right=of a] (b) {Seu backend\\ \tiny guarda a chave};
+        \node[caixa,right=of b] (c) {Serviço\\ externo};
+        \draw[seta] (a) -- node[rotulo,above]{token do usuário} (b);
+        \draw[seta] (b) -- node[rotulo,above]{chave secreta} (c);
+      \end{tikzpicture}
+      \begin{dica}[Checklist]
+        \begin{itemize}
+          \item HTTPS em tudo.
+          \item Tokens de curta duração, com renovação.
+          \item Valide tudo também no servidor.
+          \item Limite de requisições no backend.
+          \item Logs de rede desligados em release.
+        \end{itemize}
+      \end{dica}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% =============================================================================
+\section{Fechamento}
+
+\begin{frame}{Resumo}
+  \begin{resumo}
+    \begin{itemize}
+      \item HTTP = requisição (método, URL, cabeçalhos, corpo) + resposta (status, cabeçalhos, corpo).
+      \item DTOs \cod{@Serializable} espelham o JSON; Retrofit transforma a interface em chamadas \cod{suspend}.
+      \item OkHttp cuida de timeouts, interceptadores (token, log) e cache.
+      \item Converta exceções em erros com significado no repositório e mostre estados claros na UI.
+      \item Offline-first: a UI lê do Room, a rede atualiza o banco e as escritas entram numa fila.
+      \item Nada de segredos no app: use um backend intermediário e HTTPS.
+    \end{itemize}
+  \end{resumo}
+\end{frame}
+
+\begin{frame}{Glossário (1/2)}
+  \begin{glossario}
+    Protocolo & regras de formato e de ordem das mensagens entre computadores \\
+    TCP/IP & pilha de protocolos da internet: aplicação, transporte, internet e enlace \\
+    DNS & sistema que traduz nomes de domínio em endereços IP \\
+    NAT & tradução de endereços que esconde o celular atrás de um IP público \\
+    TCP & transporte com conexão, entrega garantida e ordem \\
+    UDP & transporte sem conexão nem garantias, de baixa latência \\
+    TLS & protocolo que cifra e autentica a conexão (o ``S'' do HTTPS) \\
+    Latência (RTT) & tempo de ida e volta de uma mensagem \\
+    HTTP/2 e HTTP/3 & vários pedidos na mesma conexão; o HTTP/3 roda sobre QUIC (UDP) \\
+  \end{glossario}
+\end{frame}
+
+\begin{frame}{Glossário (2/2)}
+  \begin{glossario}
+    REST & estilo de API com recursos em URLs e métodos HTTP \\
+    \emph{ETag} & identificador de versão que permite a resposta 304 sem corpo \\
+    Serialização & conversão de objetos em bytes (JSON, Protocol Buffers) \\
+    Idempotência & repetir a operação produz o mesmo resultado \\
+    Retrofit & cliente HTTP declarativo: a API vira uma interface Kotlin \\
+    OkHttp & motor HTTP do Retrofit, com interceptadores e cache \\
+    Interceptador & código que examina ou altera toda requisição e resposta \\
+    WebSocket & canal aberto nos dois sentidos para tempo real \\
+  \end{glossario}
+\end{frame}
+
+\begin{frame}{Questões de revisão}
+  \begin{questoes}
+    \item Descreva, camada por camada, o que acontece quando o app chama \cod{GET https://api.labmonitor.dev/v1/bancadas}.
+    \item Por que o servidor não consegue abrir uma conexão até o celular? Que soluções existem?
+    \item Por que, em apps, a latência costuma pesar mais que a largura de banda?
+    \item Que três garantias o TLS oferece e como o app sabe que fala com o servidor certo?
+    \item O que o HTTP/3 traz de especialmente útil para um celular em movimento?
+    \item Explique como \emph{ETag} e a resposta 304 economizam dados.
+    \item Que cuidados permitem mudar a API sem quebrar versões antigas do app?
+    \item Uma requisição \cod{POST /reservas} deu tempo limite esgotado. É seguro repetir? Como tornar seguro?
+  \end{questoes}
+\end{frame}
+
+\begin{frame}{Exercícios}
+  \begin{exercicio}[Exercício 1 --- Open-Meteo]
+    Crie uma tela que mostra temperatura e umidade atuais de São Luís usando a Open-Meteo, com os estados carregando, sucesso e erro, e um botão ``Atualizar''.
+  \end{exercicio}
+  \begin{exercicio}[Exercício 2 --- Falhas]
+    Teste o app em modo avião, com \emph{throttling} de rede no emulador e com uma URL inexistente. Cada caso mostra uma mensagem adequada?
+  \end{exercicio}
+  \begin{exercicio}[Exercício 3 --- ESP32 local]
+    Programe um ESP32 para servir \cod{GET /leitura} com JSON na rede local. Consuma-o no app com Retrofit, liberando HTTP só para o IP da placa.
+  \end{exercicio}
+  \begin{projeto}[LabMonitor --- Etapa 11]
+    Adicione a fonte remota (API real ou um servidor \emph{mock}) ao repositório de bancadas com estratégia offline-first, mostrando ``atualizado há X min'' no painel.
+  \end{projeto}
+\end{frame}
+
+\begin{frame}{Para aprofundar}
+  \small
+  \begin{itemize}
+    \item Conectar à rede: \url{https://developer.android.com/develop/connectivity/network-ops/connecting}
+    \item Network security config: \url{https://developer.android.com/privacy-and-security/security-config}
+    \item Retrofit: \url{https://square.github.io/retrofit/}
+    \item kotlinx.serialization: \url{https://github.com/Kotlin/kotlinx.serialization}
+    \item Apps offline-first: \url{https://developer.android.com/topic/architecture/data-layer/offline-first}
+    \item Coil: \url{https://coil-kt.github.io/coil/} \quad Open-Meteo: \url{https://open-meteo.com}
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{Respostas das questões de revisão}
+  \begin{respostas}
+    \item O DNS traduz o nome em IP; o TCP abre a conexão na porta 443; o TLS combina as chaves e confere o certificado; o HTTP envia a requisição cifrada; tudo viaja em pacotes IP por Wi-Fi ou rede móvel.
+    \item O celular fica atrás de NAT, com endereço privado, e não aceita conexões novas. Soluções: notificações \emph{push} (FCM, APNs) ou conexões abertas pelo próprio app (WebSocket, MQTT).
+    \item As requisições são pequenas: o tempo de ida e volta (aperto de mão, DNS, TLS) domina o tempo de transferência.
+    \item Confidencialidade, integridade e autenticidade. O certificado do servidor é assinado por uma autoridade em que o sistema confia e precisa valer para aquele domínio.
+    \item Roda sobre QUIC: sem bloqueio na fila do TCP e com conexão que sobrevive à troca de rede, como do Wi-Fi para o 4G.
+    \item O app envia a versão que tem (\cod{If-None-Match}); se nada mudou, o servidor responde 304 sem corpo e o app reutiliza a cópia local.
+    \item Só acrescentar campos, ignorar campos desconhecidos (\cod{ignoreUnknownKeys}), ter valores padrão e criar \cod{/v2} para mudanças incompatíveis.
+    \item Não, pois \cod{POST} não é idempotente e pode criar duas reservas. Envie uma chave de idempotência, para o servidor reconhecer a repetição.
+  \end{respostas}
+\end{frame}
+
+\encerramento{Módulo 12 --- Firebase: autenticação, Firestore, regras de segurança, armazenamento e notificações push.}
+
+\end{document}

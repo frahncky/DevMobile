@@ -1,0 +1,526 @@
+\documentclass[aspectratio=169,10pt]{beamer}
+\makeatletter\def\input@path{{../../estilo/}{../estilo/}{estilo/}}\makeatother
+\usepackage{devmobile}
+\modulo[Flutter]{07}{Estado, Navegação e Animações}{setState, ciclo de vida, elevação de estado, ChangeNotifier, ciclo de vida do app, Navigator, go\_router, diálogos e animações}
+
+\begin{document}
+\capa
+
+\begin{frame}{Objetivos do módulo}
+  \begin{conceito}[Ao final deste módulo você será capaz de]
+    \begin{itemize}
+      \item Diferenciar estado efêmero de estado do app e usar \cod{setState} corretamente.
+      \item Explicar o ciclo de vida de um \cod{State} e do próprio app.
+      \item Elevar o estado e compartilhá-lo com \cod{ValueNotifier} e \cod{ChangeNotifier}.
+      \item Navegar entre telas com \cod{Navigator} e com \textbf{go\_router} (rotas, parâmetros, abas e proteção por login).
+      \item Mostrar diálogos, \emph{snackbars} e \emph{bottom sheets}.
+      \item Criar animações implícitas, explícitas e transições com \cod{Hero}.
+    \end{itemize}
+  \end{conceito}
+\end{frame}
+
+\sumario
+
+\input{../fundamentos/f07-estado-navegacao}
+
+% =============================================================================
+\section{Estado}
+
+\begin{frame}{Estado efêmero e estado do app}
+  \begin{columns}[T]
+    \begin{column}{0.48\textwidth}
+      \begin{conceito}[Estado efêmero (local)]
+        Pertence a um único widget e pode ser perdido sem problema: aba selecionada, campo expandido, progresso de uma animação.\\[2pt]
+        \textbf{Ferramenta}: \cod{StatefulWidget} + \cod{setState}.
+      \end{conceito}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \begin{conceito}[Estado do app (compartilhado)]
+        Usado por várias telas ou que precisa sobreviver: usuário logado, lista de bancadas, reservas, preferências.\\[2pt]
+        \textbf{Ferramenta}: \cod{ChangeNotifier}, \emph{view models} e gerência de estado (Módulo 08).
+      \end{conceito}
+    \end{column}
+  \end{columns}
+  \vspace{4pt}
+  \begin{center}
+  \begin{tikzpicture}[node distance=10mm]
+    \node[caixaambar,minimum width=2.6cm] (e) {\textbf{Estado}};
+    \node[caixaescura,minimum width=2.6cm,right=of e] (b) {\cod{build()}};
+    \node[caixa,minimum width=2.6cm,right=of b] (u) {\textbf{Tela}};
+    \draw[seta] (e) -- (b); \draw[seta] (b) -- (u);
+    \draw[setaambar,rounded corners] (u.south) -- ++(0,-5mm) -| node[rotulo,pos=0.25,below]{evento chama \cod{setState(\ldots)} e o \cod{build} roda de novo} (e.south);
+  \end{tikzpicture}
+  \end{center}
+  \begin{dica}
+    Comece com estado local e eleve-o só quando outra parte do app precisar dele.
+  \end{dica}
+\end{frame}
+
+\begin{frame}{Ciclo de vida de um \cod{State}}
+  \begin{columns}[c]
+    \begin{column}{0.5\textwidth}
+      \centering
+      \begin{tikzpicture}[node distance=2mm,cb/.style={caixa,minimum width=3.6cm,font=\scriptsize}]
+        \node[cb,caixaambar] (c) {\cod{createState()}};
+        \node[cb,below=of c] (i) {\cod{initState()}};
+        \node[cb,below=of i] (d) {\cod{didChangeDependencies()}};
+        \node[cb,caixaescura,below=of d] (b) {\cod{build()}};
+        \node[cb,below=of b] (u) {\cod{didUpdateWidget()} / \cod{setState()}};
+        \node[cb,below=of u] (x) {\cod{dispose()}};
+        \foreach \a/\bb in {c/i,i/d,d/b,u/x}{\draw[seta] (\a) -- (\bb);}
+        \draw[seta] (b) -- (u);
+        \draw[setaambar] (u.east) -- ++(4mm,0) |- (b.east);
+      \end{tikzpicture}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \scriptsize
+      \begin{tabularx}{\linewidth}{@{}l L@{}}
+        \toprule
+        \cabecalho{Método} & \cabecalho{Use para} \\
+        \midrule
+        \cod{initState} & criar controladores, iniciar inscrições (uma vez) \\
+        \cod{didChangeDependencies} & reagir a \cod{Theme}, \cod{MediaQuery}, \cod{Provider} \\
+        \cod{build} & descrever a tela (rápido, sem efeitos) \\
+        \cod{didUpdateWidget} & o pai mudou os parâmetros \\
+        \cod{dispose} & cancelar e liberar tudo \\
+        \bottomrule
+      \end{tabularx}
+      \begin{atencao}
+        \cod{build} pode rodar a cada quadro. Nada de requisições ou cálculos pesados dentro dele.
+      \end{atencao}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}[fragile]{Elevando o estado}
+  \begin{columns}[T]
+    \begin{column}{0.52\textwidth}
+\begin{codigo}[title=Componente sem estado]{Dart}
+class CampoLimite extends StatelessWidget {
+  const CampoLimite({super.key,
+      required this.valor, required this.onChanged});
+  final double valor;                   // estado desce
+  final ValueChanged<double> onChanged; // evento sobe
+
+  @override
+  Widget build(BuildContext context) => Slider(
+    value: valor, min: 20, max: 60, divisions: 40,
+    label: '${valor.round()} °C',
+    onChanged: onChanged,
+  );
+}
+
+// o pai é o dono do estado
+CampoLimite(
+  valor: _limite,
+  onChanged: (v) => setState(() => _limite = v),
+);
+\end{codigo}
+    \end{column}
+    \begin{column}{0.46\textwidth}
+      \centering
+      \begin{tikzpicture}[node distance=12mm]
+        \node[caixaescura,minimum width=3.4cm] (p) {\cod{TelaAjustes}\\ \tiny dona do estado};
+        \node[caixa,minimum width=3.4cm,below=of p] (f) {\cod{CampoLimite}\\ \tiny sem estado};
+        \draw[seta] ([xshift=-8mm]p.south) -- node[rotulo,left]{valor} ([xshift=-8mm]f.north);
+        \draw[setaambar] ([xshift=8mm]f.north) -- node[rotulo,right]{onChanged} ([xshift=8mm]p.south);
+      \end{tikzpicture}
+      \begin{conceito}[Fluxo unidirecional]
+        O estado desce como parâmetro e os eventos sobem como funções. Há uma única fonte da verdade.
+      \end{conceito}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}[fragile]{\cod{ValueNotifier} e \cod{ChangeNotifier}}
+  \begin{columns}[T]
+    \begin{column}{0.52\textwidth}
+\begin{codigo}[title=Estado observável]{Dart}
+class CarrinhoReservas extends ChangeNotifier {
+  final _itens = <Reserva>[];
+  List<Reserva> get itens => List.unmodifiable(_itens);
+
+  void adicionar(Reserva r) {
+    _itens.add(r);
+    notifyListeners();          // avisa quem ouve
+  }
+}
+
+final carrinho = CarrinhoReservas();
+
+ListenableBuilder(
+  listenable: carrinho,
+  builder: (context, _) =>
+      Badge(label: Text('${carrinho.itens.length}'),
+            child: const Icon(Icons.event)),
+);
+\end{codigo}
+    \end{column}
+    \begin{column}{0.46\textwidth}
+\begin{codigo}[title=Um único valor]{Dart}
+final tema = ValueNotifier(ThemeMode.system);
+
+ValueListenableBuilder(
+  valueListenable: tema,
+  builder: (context, modo, _) =>
+      MaterialApp(themeMode: modo, ...),
+);
+tema.value = ThemeMode.dark;   // reconstrói
+\end{codigo}
+      \begin{conceito}
+        Só o \cod{builder} é reconstruído quando o objeto notifica. É a base dos \emph{view models} recomendados pela documentação do Flutter.
+      \end{conceito}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}[fragile]{Ciclo de vida do app}
+  \begin{columns}[T]
+    \begin{column}{0.54\textwidth}
+\begin{codigo}[title=Pausando o sensor em segundo plano]{Dart}
+class _MonitorState extends State<Monitor> {
+  late final AppLifecycleListener _ouvinte;
+
+  @override
+  void initState() {
+    super.initState();
+    _ouvinte = AppLifecycleListener(
+      onResume: () => sensor.retomar(),
+      onPause: () => sensor.pausar(),
+    );
+  }
+
+  @override
+  void dispose() {
+    _ouvinte.dispose();
+    super.dispose();
+  }
+}
+\end{codigo}
+    \end{column}
+    \begin{column}{0.44\textwidth}
+      \scriptsize
+      \begin{tabularx}{\linewidth}{@{}l L@{}}
+        \toprule
+        \cabecalho{Estado} & \cabecalho{Significado} \\
+        \midrule
+        \cod{resumed} & visível e recebendo toques \\
+        \cod{inactive} & visível, sem foco (chamada, multitarefa) \\
+        \cod{hidden} & não visível \\
+        \cod{paused} & em segundo plano \\
+        \cod{detached} & motor ativo sem tela \\
+        \bottomrule
+      \end{tabularx}
+      \begin{atencao}[Morte do processo]
+        Em segundo plano o sistema pode encerrar o app. Salve no banco ou no disco o que o usuário não pode perder (Módulo 10).
+      \end{atencao}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% =============================================================================
+\section{Navegação}
+
+\begin{frame}[fragile]{\cod{Navigator}: a pilha de telas}
+  \begin{columns}[T]
+    \begin{column}{0.54\textwidth}
+\begin{codigo}[title=Navegação imperativa]{Dart}
+// abrir uma tela
+Navigator.of(context).push(MaterialPageRoute(
+  builder: (_) => TelaDetalhe(id: eq.patrimonio),
+));
+
+// voltar devolvendo um resultado
+Navigator.of(context).pop(true);
+
+// esperar o resultado
+final salvou = await Navigator.of(context).push<bool>(
+    MaterialPageRoute(builder: (_) => const TelaNova()));
+if (salvou == true) recarregar();
+\end{codigo}
+      \begin{dica}
+        Ótimo para fluxos simples. Para apps com URLs, \emph{deep links}, abas e login, use o \textbf{go\_router}.
+      \end{dica}
+    \end{column}
+    \begin{column}{0.44\textwidth}
+      \centering
+      \begin{tikzpicture}[node distance=1mm]
+        \node[caixa,minimum width=3cm] (a) {\cod{TelaLista}};
+        \node[caixa,minimum width=3cm,above=of a] (b) {\cod{TelaDetalhe}};
+        \node[caixaambarforte,minimum width=3cm,above=of b] (c) {\cod{TelaReserva}};
+        \node[rotulo,right=2mm of c] {topo: visível};
+        \node[pontilhado,fit=(a)(b)(c)] {};
+        \node[rotulo,above=3mm of c] {\cod{push} empilha \quad \cod{pop} desempilha};
+      \end{tikzpicture}
+      \begin{conceito}
+        O botão ou gesto voltar do sistema faz \cod{pop}. \cod{PopScope} permite interceptar (ex.: ``descartar alterações?'').
+      \end{conceito}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}[fragile]{go\_router: rotas declarativas}
+  \begin{columns}[T]
+    \begin{column}{0.58\textwidth}
+\begin{codigo}[title=lib/routing/router.dart]{Dart}
+final router = GoRouter(
+  initialLocation: '/painel',
+  refreshListenable: auth,                // reavalia o login
+  redirect: (context, state) =>
+      auth.logado ? null : '/login',      // proteção
+  routes: [
+    GoRoute(path: '/login',
+        builder: (_, __) => const TelaLogin()),
+    GoRoute(path: '/painel',
+        builder: (_, __) => const TelaPainel()),
+    GoRoute(path: '/equipamentos',
+      builder: (_, __) => const TelaEquipamentos(),
+      routes: [
+        GoRoute(path: ':id', builder: (_, state) =>
+            TelaDetalhe(id: state.pathParameters['id']!)),
+      ]),
+  ],
+);
+
+MaterialApp.router(routerConfig: router);
+\end{codigo}
+    \end{column}
+    \begin{column}{0.4\textwidth}
+      \scriptsize
+      \begin{tabularx}{\linewidth}{@{}l L@{}}
+        \toprule
+        \cabecalho{Chamada} & \cabecalho{Efeito} \\
+        \midrule
+        \cod{context.go('/painel')} & troca a pilha pela rota \\
+        \cod{context.push('/x')} & empilha por cima \\
+        \cod{context.pop()} & volta \\
+        \cod{context.go('/equipamentos/42')} & caminho com parâmetro \\
+        \bottomrule
+      \end{tabularx}
+      \begin{conceito}[Por que go\_router]
+        Pacote mantido pela equipe do Flutter: URLs na web, \emph{deep links} (abrir o app num link), proteção de rotas e navegação por abas.
+      \end{conceito}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}[fragile]{Abas com estado preservado}
+  \begin{columns}[T]
+    \begin{column}{0.58\textwidth}
+\begin{codigo}[title=StatefulShellRoute]{Dart}
+StatefulShellRoute.indexedStack(
+  builder: (context, state, shell) => Scaffold(
+    body: shell,
+    bottomNavigationBar: NavigationBar(
+      selectedIndex: shell.currentIndex,
+      onDestinationSelected: shell.goBranch,
+      destinations: const [
+        NavigationDestination(
+            icon: Icon(Icons.dashboard), label: 'Painel'),
+        NavigationDestination(
+            icon: Icon(Icons.memory), label: 'Equipamentos'),
+        NavigationDestination(
+            icon: Icon(Icons.settings), label: 'Ajustes'),
+      ]),
+  ),
+  branches: [
+    StatefulShellBranch(routes: [rotaPainel]),
+    StatefulShellBranch(routes: [rotaEquipamentos]),
+    StatefulShellBranch(routes: [rotaAjustes]),
+  ],
+);
+\end{codigo}
+    \end{column}
+    \begin{column}{0.4\textwidth}
+      \begin{conceito}[Uma pilha por aba]
+        Cada \cod{StatefulShellBranch} guarda sua própria navegação: ao voltar para a aba Equipamentos, o usuário reencontra o detalhe que estava aberto.
+      \end{conceito}
+      \begin{dica}[Diálogos e avisos]
+        \cod{showDialog}, \cod{showModalBottomSheet} e \cod{showSnackBar} (via \cod{ScaffoldMessenger}) também são camadas sobre a tela atual.
+      \end{dica}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% =============================================================================
+\section{Animações}
+
+\begin{frame}[fragile]{Animações implícitas}
+  \begin{columns}[T]
+    \begin{column}{0.54\textwidth}
+\begin{codigo}[title=Basta mudar o valor]{Dart}
+AnimatedContainer(
+  duration: const Duration(milliseconds: 300),
+  curve: Curves.easeOut,
+  height: expandido ? 160 : 72,
+  color: emAlerta ? Colors.orange : Colors.white,
+  child: conteudo,
+);
+
+AnimatedSwitcher(                   // troca com fade
+  duration: const Duration(milliseconds: 250),
+  child: Text('$temperatura °C',
+      key: ValueKey(temperatura)),
+);
+
+TweenAnimationBuilder<double>(
+  tween: Tween(begin: 0, end: nivel),
+  duration: const Duration(seconds: 1),
+  builder: (_, v, __) => LinearProgressIndicator(value: v),
+);
+\end{codigo}
+    \end{column}
+    \begin{column}{0.44\textwidth}
+      \begin{conceito}[Implícita]
+        Você muda uma propriedade e o widget anima sozinho do valor antigo ao novo. Cobre a maioria dos casos.
+      \end{conceito}
+      \scriptsize
+      \begin{tabular}{@{}l l@{}}
+        \toprule
+        \cabecalho{Widget} & \cabecalho{Anima} \\
+        \midrule
+        \cod{AnimatedContainer} & tamanho, cor, borda \\
+        \cod{AnimatedOpacity} & transparência \\
+        \cod{AnimatedAlign} & posição \\
+        \cod{AnimatedSwitcher} & troca de filho \\
+        \cod{TweenAnimationBuilder} & qualquer valor \\
+        \bottomrule
+      \end{tabular}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}[fragile]{Animações explícitas e Hero}
+  \begin{columns}[T]
+    \begin{column}{0.56\textwidth}
+\begin{codigo}[title=Indicador pulsando]{Dart}
+class _AlertaState extends State<Alerta>
+    with SingleTickerProviderStateMixin {
+  late final _ctrl = AnimationController(vsync: this,
+      duration: const Duration(seconds: 1))..repeat(reverse: true);
+  late final _escala = Tween(begin: 1.0, end: 1.3)
+      .animate(CurvedAnimation(parent: _ctrl,
+          curve: Curves.easeInOut));
+
+  @override
+  void dispose() { _ctrl.dispose(); super.dispose(); }
+
+  @override
+  Widget build(BuildContext context) => ScaleTransition(
+      scale: _escala,
+      child: const Icon(Icons.warning, color: Colors.orange));
+}
+\end{codigo}
+    \end{column}
+    \begin{column}{0.42\textwidth}
+      \begin{conceito}[Explícita]
+        Um \cod{AnimationController} controla o tempo (iniciar, repetir, inverter). Use quando precisar de laços, sequências ou controle fino.
+      \end{conceito}
+      \begin{dica}[Hero]
+        Envolva a foto do equipamento em \cod{Hero(tag: eq.patrimonio, \ldots)} na lista e no detalhe: ela ``voa'' entre as telas.
+      \end{dica}
+      \begin{dica}[Pacotes]
+        \cod{animations}, \textbf{Rive} e \textbf{Lottie}.
+      \end{dica}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% =============================================================================
+\section{Fechamento}
+
+\begin{frame}{Resumo}
+  \begin{resumo}
+    \begin{itemize}
+      \item Estado efêmero com \cod{setState}; estado compartilhado com \cod{ChangeNotifier} e \emph{view models}.
+      \item \cod{initState} cria, \cod{dispose} libera; \cod{build} só descreve a tela.
+      \item Eleve o estado: valor desce, evento sobe, uma fonte da verdade.
+      \item \cod{AppLifecycleListener} pausa recursos em segundo plano.
+      \item go\_router: rotas declarativas, parâmetros, \cod{redirect} para login e abas com \cod{StatefulShellRoute}.
+      \item Animações implícitas para o dia a dia; \cod{AnimationController} para controle fino; \cod{Hero} entre telas.
+    \end{itemize}
+  \end{resumo}
+\end{frame}
+
+\begin{frame}{Glossário (1/2)}
+  \begin{glossario}
+    Estado & valor que muda com o tempo e afeta o que a tela mostra \\
+    Estado efêmero & pertence a um widget e pode se perder sem prejuízo \\
+    Estado derivado & valor calculado a partir de outros; não se guarda \\
+    Fonte única da verdade & cada dado tem um único dono que pode alterá-lo \\
+    Fluxo unidirecional & o estado desce até a interface; os eventos sobem até o dono \\
+    \cod{setState} & avisa que o estado mudou e agenda um novo \cod{build} \\
+    \cod{initState}/\cod{dispose} & início e fim do ciclo de vida de um \cod{State} \\
+    \cod{ChangeNotifier} & objeto que avisa seus ouvintes quando muda \\
+    \cod{AppLifecycleState} & estado do app: \cod{resumed}, \cod{inactive}, \cod{hidden}, \cod{paused}, \cod{detached} \\
+  \end{glossario}
+\end{frame}
+
+\begin{frame}{Glossário (2/2)}
+  \begin{glossario}
+    Morte do processo & encerramento do app em segundo plano para liberar memória \\
+    \cod{RestorationMixin} & salva e devolve o estado depois da morte do processo \\
+    Pilha de retorno & histórico LIFO dos destinos visitados \\
+    go\_router & roteador declarativo baseado em caminhos de URL \\
+    Link profundo & endereço que abre o app direto em um destino \\
+    \cod{PopScope} & controla o voltar, inclusive o gesto preditivo do Android \\
+    \cod{Curve} & função de aceleração de uma animação \\
+    \cod{AnimationController} & controla tempo e direção de uma animação explícita \\
+  \end{glossario}
+\end{frame}
+
+\begin{frame}{Questões de revisão}
+  \begin{questoes}
+    \item Por que um contador guardado em uma variável dentro de \cod{build} não funciona?
+    \item Explique o fluxo unidirecional com um campo de busca e um \cod{ChangeNotifier}.
+    \item Modele a tela de equipamentos como máquina de estados. Por que uma \cod{sealed class} e não três booleanos?
+    \item O que acontece com o \cod{State} de um widget quando o Android encerra o processo em segundo plano? Como restaurar?
+    \item Que recursos liberar quando o app passa para \cod{paused}?
+    \item Desenhe a pilha depois de \cod{push} de Equipamentos e de Detalhe a partir do Painel, e de um \cod{pop}.
+    \item Como o go\_router trata o link \cod{/reserva/42}? Que validações fazer?
+    \item Por que preferir uma mola a uma curva de duração fixa quando o usuário pode interromper o gesto?
+  \end{questoes}
+\end{frame}
+
+\begin{frame}{Exercícios}
+  \begin{exercicio}[Exercício 1 --- Ciclo de vida]
+    Registre um \cod{debugPrint} em cada método do ciclo de vida de um \cod{State}. Navegue, gire a tela e volte; descreva a sequência.
+  \end{exercicio}
+  \begin{exercicio}[Exercício 2 --- Navegação]
+    Configure o go\_router com login, três abas e a rota \cod{/equipamentos/:id}. Abra o app pelo navegador já na URL de um equipamento.
+  \end{exercicio}
+  \begin{exercicio}[Exercício 3 --- Animação]
+    Faça o cartão da bancada mudar de cor com \cod{AnimatedContainer} quando a temperatura passar do limite e pulsar um ícone de alerta.
+  \end{exercicio}
+  \begin{projeto}[LabMonitor --- Etapa 7]
+    Implemente a navegação completa: login, Painel, Equipamentos (lista $\rightarrow$ detalhe $\rightarrow$ reserva) e Ajustes, com abas preservadas e animação de alerta.
+  \end{projeto}
+\end{frame}
+
+\begin{frame}{Para aprofundar}
+  \small
+  \begin{itemize}
+    \item Estado efêmero e de app: \url{https://docs.flutter.dev/data-and-backend/state-mgmt/ephemeral-vs-app}
+    \item Navegação: \url{https://docs.flutter.dev/ui/navigation}
+    \item go\_router: \url{https://pub.dev/packages/go_router}
+    \item Animações: \url{https://docs.flutter.dev/ui/animations}
+    \item Ciclo de vida do app: \url{https://api.flutter.dev/flutter/widgets/AppLifecycleListener-class.html}
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{Respostas das questões de revisão}
+  \begin{respostas}
+    \item \cod{build} roda de novo a cada reconstrução e a variável volta ao valor inicial. O estado deve ficar em um campo do \cod{State}, alterado com \cod{setState}, ou em um \cod{ChangeNotifier}.
+    \item O campo mostra o texto vindo do \emph{notifier} (estado que desce) e chama \cod{buscar(texto)} ao digitar (evento que sobe); o \emph{notifier} filtra a lista, chama \cod{notifyListeners} e a tela se reconstrói.
+    \item Estados \cod{Carregando}, \cod{Sucesso(itens)}, \cod{Vazio} e \cod{Erro(msg)}. A classe selada só admite esses quatro e o \cod{switch} obriga a tratar todos; booleanos permitem combinações impossíveis.
+    \item Ele se perde: o processo recomeça do zero. Com \cod{RestorationMixin} e \cod{restorationScopeId}, os valores registrados são salvos e devolvidos; dados importantes também podem ir para o disco.
+    \item Câmera, sensores, fluxos de localização e animações contínuas; também é hora de salvar rascunhos. Tudo é retomado em \cod{resumed}.
+    \item Depois dos \cod{push}: Painel, Equipamentos, Detalhe (topo). Depois do \cod{pop}: Painel, Equipamentos.
+    \item A rota \cod{/reserva/:id} recebe \cod{42} em \cod{state.pathParameters}, e rotas aninhadas deixam o Painel abaixo na pilha. Validar se a reserva existe e se o usuário pode vê-la, com \cod{redirect} para o login se preciso.
+    \item A mola parte da posição e da velocidade atuais e segue a física até o novo alvo; a curva recomeça com duração fixa e muda a velocidade de forma brusca.
+  \end{respostas}
+\end{frame}
+
+\encerramento{Módulo 08 --- Arquitetura e gerência de estado: MVVM, repositórios, Provider, Riverpod e Bloc.}
+
+\end{document}

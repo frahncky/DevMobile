@@ -1,0 +1,525 @@
+\documentclass[aspectratio=169,10pt]{beamer}
+\makeatletter\def\input@path{{../../estilo/}{../estilo/}{estilo/}}\makeatother
+\usepackage{devmobile}
+\modulo[Flutter]{19}{Código Nativo, Web, Desktop e Embarcados}{Canais de plataforma, Pigeon, FFI, criação de plugins, Flutter dentro de apps nativos, Flutter web, desktop e Raspberry Pi}
+
+\begin{document}
+\capa
+
+\begin{frame}{Objetivos do módulo}
+  \begin{conceito}[Ao final deste módulo você será capaz de]
+    \begin{itemize}
+      \item Comparar as abordagens multiplataforma e justificar uma escolha.
+      \item Chamar código Kotlin e Swift a partir do Dart com canais de plataforma e Pigeon.
+      \item Usar bibliotecas C com FFI.
+      \item Criar um plugin próprio e embutir telas Flutter em apps nativos.
+      \item Publicar o app na web e no desktop, adaptando o layout a cada tela.
+      \item Executar um painel Flutter num Raspberry Pi.
+    \end{itemize}
+  \end{conceito}
+\end{frame}
+
+\sumario
+
+\input{../fundamentos/f19-multiplataforma}
+
+% =============================================================================
+\section{A arquitetura do Flutter}
+
+\begin{frame}{Camadas: framework, motor e \emph{embedder}}
+  \begin{columns}[c]
+    \begin{column}{0.5\textwidth}
+      \centering
+      \begin{tikzpicture}[node distance=1.5mm,every node/.style={font=\scriptsize,minimum width=5.2cm}]
+        \node[caixa] (app) {Seu app (widgets)};
+        \node[caixapetroleo,below=of app] (fw) {\textbf{Framework} (Dart)\\ \tiny Material, Cupertino, widgets, renderização, animação};
+        \node[caixaambar,below=of fw] (en) {\textbf{Engine} (C++)\\ \tiny Impeller, Dart runtime, texto, canais};
+        \node[caixaescura,below=of en] (em) {\textbf{Embedder} (por plataforma)\\ \tiny Android, iOS, web, Windows, macOS, Linux};
+        \node[caixa,below=of em,fill=cinzaclaro] (so) {Sistema operacional e GPU};
+      \end{tikzpicture}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \begin{conceito}[Quem faz o quê]
+        \textbf{Framework}: tudo que você usa em Dart.\\
+        \textbf{Engine}: desenha, roda o Dart, faz o \emph{layout} de texto e transporta as mensagens dos canais.\\
+        \textbf{Embedder}: cria a janela ou superfície, entrega toques e teclado e integra com o ciclo de vida de cada sistema.
+      \end{conceito}
+      \begin{pordentro}[Portabilidade]
+        Para levar o Flutter a uma plataforma nova, basta escrever um \emph{embedder}. É assim que ele roda em painéis de carros e no Raspberry Pi.
+      \end{pordentro}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% =============================================================================
+\section{Canais de plataforma}
+
+\begin{frame}[fragile]{\cod{MethodChannel}: o lado Dart}
+  \begin{columns}[T]
+    \begin{column}{0.54\textwidth}
+\begin{codigo}[title=lib/data/services/bateria\_nativa.dart]{Dart}
+import 'package:flutter/services.dart';
+
+class BateriaNativa {
+  static const _canal =
+      MethodChannel('br.edu.ifma.labmonitor/bateria');
+
+  Future<int> nivel() async {
+    try {
+      final n = await _canal.invokeMethod<int>('nivel');
+      return n ?? -1;
+    } on PlatformException catch (e) {
+      throw BateriaIndisponivel(e.message);
+    } on MissingPluginException {
+      return -1;            // plataforma sem implementação
+    }
+  }
+}
+\end{codigo}
+    \end{column}
+    \begin{column}{0.44\textwidth}
+      \centering
+      \begin{tikzpicture}[node distance=6mm,every node/.style={font=\scriptsize}]
+        \node[caixaambar,minimum width=1.8cm] (d) {Dart};
+        \node[caixaescura,right=of d,minimum width=1.8cm,align=center] (n) {Kotlin\\ ou Swift};
+        \draw[seta] ([yshift=2mm]d.east) -- node[rotulo,above]{\tiny \texttt{'nivel'}} ([yshift=2mm]n.west);
+        \draw[setaambar] ([yshift=-2mm]n.west) -- node[rotulo,below]{\tiny 87} ([yshift=-2mm]d.east);
+      \end{tikzpicture}
+      \begin{conceito}[Canal]
+        Nome único + \emph{codec}. A mensagem (nome do método e argumentos) é convertida em bytes, atravessa para o nativo e a resposta volta como \cod{Future}.
+      \end{conceito}
+      \begin{dica}
+        Tipos suportados pelo \emph{codec} padrão: \cod{null}, \cod{bool}, números, \cod{String}, listas, mapas e \cod{Uint8List}.
+      \end{dica}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}[fragile]{\cod{MethodChannel}: os lados Kotlin e Swift}
+  \begin{columns}[T]
+    \begin{column}{0.52\textwidth}
+\begin{codigo}[title=android/.../MainActivity.kt]{Kotlin}
+class MainActivity : FlutterActivity() {
+  override fun configureFlutterEngine(
+      engine: FlutterEngine) {
+    super.configureFlutterEngine(engine)
+    MethodChannel(engine.dartExecutor.binaryMessenger,
+        "br.edu.ifma.labmonitor/bateria")
+      .setMethodCallHandler { call, result ->
+        if (call.method == "nivel") {
+          val bm = getSystemService(BATTERY_SERVICE)
+              as BatteryManager
+          result.success(bm.getIntProperty(
+              BatteryManager.BATTERY_PROPERTY_CAPACITY))
+        } else result.notImplemented()
+      }
+  }
+}
+\end{codigo}
+    \end{column}
+    \begin{column}{0.46\textwidth}
+\begin{codigo}[title=ios/Runner/CanalBateria.swift]{Swift}
+func registrarCanalBateria(
+    _ mensageiro: FlutterBinaryMessenger) {
+  let canal = FlutterMethodChannel(
+    name: "br.edu.ifma.labmonitor/bateria",
+    binaryMessenger: mensageiro)
+  canal.setMethodCallHandler { call, result in
+    guard call.method == "nivel" else {
+      return result(FlutterMethodNotImplemented)
+    }
+    UIDevice.current.isBatteryMonitoringEnabled = true
+    result(Int(UIDevice.current.batteryLevel * 100))
+  }
+}
+\end{codigo}
+      \begin{dica}
+        Registre o canal onde o \cod{AppDelegate} obtém o \emph{messenger} do motor.
+      \end{dica}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}[fragile]{\cod{EventChannel} e Pigeon}
+  \begin{columns}[T]
+    \begin{column}{0.46\textwidth}
+\begin{codigo}[title=Fluxo contínuo do nativo]{Dart}
+const _eventos = EventChannel(
+    'br.edu.ifma.labmonitor/luz');
+
+Stream<double> luminosidade() =>
+    _eventos.receiveBroadcastStream()
+        .map((v) => (v as num).toDouble());
+\end{codigo}
+      \begin{conceito}[\cod{EventChannel}]
+        O nativo envia valores quando quiser (sensor, conexão); no Dart, chegam como \cod{Stream}.
+      \end{conceito}
+    \end{column}
+    \begin{column}{0.52\textwidth}
+\begin{codigo}[title=pigeons/sensor\_api.dart]{Dart}
+import 'package:pigeon/pigeon.dart';
+class Leitura {
+  Leitura({required this.valor, required this.emMs});
+  double valor;
+  int emMs;
+}
+
+@HostApi()
+abstract class SensorNativoApi {
+  @async
+  Leitura ler(String sensor);
+}
+\end{codigo}
+\begin{terminal}
+$ dart run pigeon --input pigeons/sensor_api.dart
+\end{terminal}
+      \begin{dica}[Pigeon]
+        Gera Dart, Kotlin e Swift tipados a partir da interface.
+      \end{dica}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% =============================================================================
+\section{FFI: bibliotecas em C}
+
+\begin{frame}[fragile]{Chamando C a partir do Dart}
+  \begin{columns}[T]
+    \begin{column}{0.36\textwidth}
+\begin{codigo}[title=src/filtro.c]{C}
+double media_movel(const double *v,
+                   int n) {
+  double s = 0;
+  for (int i = 0; i < n; i++)
+    s += v[i];
+  return n > 0 ? s / n : 0;
+}
+\end{codigo}
+      \begin{conceito}[Quando usar]
+        Reaproveitar bibliotecas C/C++ ou acelerar cálculos chamados com muita frequência.
+      \end{conceito}
+      \begin{dica}
+        \cod{ffigen} gera as assinaturas a partir do \cod{.h}.
+      \end{dica}
+    \end{column}
+    \begin{column}{0.62\textwidth}
+\begin{codigo}[title=lib/utils/filtro.dart]{Dart}
+import 'dart:ffi';
+import 'package:ffi/ffi.dart';
+typedef _MediaC = Double Function(Pointer<Double>, Int32);
+typedef _MediaDart = double Function(Pointer<Double>, int);
+
+final _lib = DynamicLibrary.open('libfiltro.so');  // Android, Linux
+final _media = _lib.lookupFunction<_MediaC, _MediaDart>('media_movel');
+
+double mediaMovel(List<double> valores) {
+  final p = calloc<Double>(valores.length);   // memória nativa
+  try {
+    for (var i = 0; i < valores.length; i++) p[i] = valores[i];
+    return _media(p, valores.length);
+  } finally {
+    calloc.free(p);                           // o GC não libera
+  }
+}
+\end{codigo}
+      \begin{atencao}
+        Memória nativa não é coletada pelo GC: libere sempre.
+      \end{atencao}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% =============================================================================
+\section{Plugins e Flutter em apps nativos}
+
+\begin{frame}[fragile]{Criando um plugin}
+  \begin{columns}[T]
+    \begin{column}{0.48\textwidth}
+\begin{terminal}
+$ flutter create --template=plugin \
+    --platforms=android,ios \
+    --org br.edu.ifma labmonitor_sensor
+\end{terminal}
+      \centering
+      \begin{tikzpicture}[node distance=2mm,every node/.style={font=\scriptsize}]
+        \node[caixapetroleo,minimum width=4.6cm] (a) {\cod{labmonitor\_sensor}\\ \tiny API usada pelos apps};
+        \node[caixa,minimum width=4.6cm,below=of a] (i) {\cod{labmonitor\_sensor\_platform\_interface}\\ \tiny contrato comum};
+        \node[caixaambar,minimum width=1.45cm,below=4mm of i.south west,anchor=north west] (an) {\tiny \_android};
+        \node[caixaambar,minimum width=1.45cm,below=4mm of i] (io) {\tiny \_ios};
+        \node[caixaambar,minimum width=1.45cm,below=4mm of i.south east,anchor=north east] (w) {\tiny \_web};
+        \draw[seta] (a) -- (i);
+        \draw[seta] (i.south -| an) -- (an); \draw[seta] (i) -- (io); \draw[seta] (i.south -| w) -- (w);
+      \end{tikzpicture}
+    \end{column}
+    \begin{column}{0.5\textwidth}
+      \begin{definicao}[Plugin federado]
+        Divide o plugin em pacotes: a API pública, uma interface de plataforma e uma implementação por plataforma. Outras pessoas podem implementar plataformas novas sem mudar o pacote principal.
+      \end{definicao}
+      \begin{conceito}[Plugin $\times$ pacote]
+        \textbf{Pacote} contém só Dart. \textbf{Plugin} tem também código nativo para uma ou mais plataformas.
+      \end{conceito}
+      \begin{dica}
+        Antes de criar um plugin, procure no pub.dev: provavelmente alguém já resolveu o problema.
+      \end{dica}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}[fragile]{\emph{Add-to-app}: Flutter dentro do app Kotlin}
+  \begin{columns}[T]
+    \begin{column}{0.56\textwidth}
+\begin{terminal}
+$ flutter create --template=module relatorios_flutter
+\end{terminal}
+\begin{codigo}[title=App Android nativo (Kotlin)]{Kotlin}
+class LabApp : Application() {
+  override fun onCreate() {
+    super.onCreate()
+    // motor pré-aquecido: a tela abre sem atraso
+    val motor = FlutterEngine(this).apply {
+      dartExecutor.executeDartEntrypoint(
+        DartExecutor.DartEntrypoint.createDefault())
+    }
+    FlutterEngineCache.getInstance().put("relatorios", motor)
+  }
+}
+
+// ao tocar em "Relatórios"
+startActivity(FlutterActivity
+    .withCachedEngine("relatorios").build(this))
+\end{codigo}
+    \end{column}
+    \begin{column}{0.42\textwidth}
+      \begin{definicao}[\emph{Add-to-app}]
+        Incorporar telas Flutter a um app nativo existente, como módulo, em vez de reescrevê-lo inteiro.
+      \end{definicao}
+      \begin{conceito}[Cenário]
+        O LabMonitor em Kotlin ganha a tela de relatórios em Flutter, compartilhada com o iOS (onde se usa um \cod{FlutterViewController}).
+      \end{conceito}
+      \begin{atencao}
+        Cada motor ocupa memória: reaproveite motores em cache ou use \cod{FlutterEngineGroup}.
+      \end{atencao}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% =============================================================================
+\section{Flutter na web}
+
+\begin{frame}[fragile]{Compilando para o navegador}
+  \begin{columns}[T]
+    \begin{column}{0.5\textwidth}
+\begin{terminal}
+$ flutter run -d chrome
+$ flutter build web --wasm --release
+# publicar num subcaminho (GitHub Pages)
+$ flutter build web --base-href /LabMonitor/
+\end{terminal}
+      \begin{conceito}[Renderizadores]
+        \textbf{CanvasKit}: o Skia compilado para WebAssembly, desenhando num \emph{canvas}.\\
+        \textbf{skwasm}: versão mais rápida, usada com \cod{--wasm} quando o navegador suporta WebAssembly com coleta de lixo.
+      \end{conceito}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \begin{atencao}[Quando não usar]
+        Sites de conteúdo que dependem de busca (SEO), como blogs e páginas institucionais: o Flutter web desenha num \emph{canvas} e baixa um motor inteiro. Ele brilha em \textbf{aplicações}: painéis, ferramentas internas, versões web de apps.
+      \end{atencao}
+      \begin{dica}
+        Hospedagem simples: Firebase Hosting, GitHub Pages ou qualquer servidor de arquivos estáticos.
+      \end{dica}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}[fragile]{Código que roda em todo lugar}
+  \begin{columns}[T]
+    \begin{column}{0.54\textwidth}
+\begin{codigo}[title=Diferenças de plataforma]{Dart}
+import 'package:flutter/foundation.dart';
+// importação condicional: escolhe o arquivo na compilação
+import 'arquivos_io.dart'
+    if (dart.library.js_interop) 'arquivos_web.dart';
+
+// decisão em tempo de execução
+final suportaBle = !kIsWeb &&
+    (defaultTargetPlatform == TargetPlatform.android ||
+     defaultTargetPlatform == TargetPlatform.iOS);
+\end{codigo}
+      \begin{conceito}[Por que importação condicional]
+        \cod{dart:io} (arquivos, \emph{sockets}) não existe no navegador. Cada plataforma recebe o arquivo que sabe usar, com a mesma interface.
+      \end{conceito}
+    \end{column}
+    \begin{column}{0.44\textwidth}
+      \begin{definicao}[Política de mesma origem e CORS]
+        O navegador bloqueia requisições de \cod{labmonitor.dev} para \cod{api.outro.dev}, a menos que a API responda com o cabeçalho \cod{Access-Control-Allow-Origin} autorizando a origem.
+      \end{definicao}
+      \begin{erro}[Funciona no celular, falha na web]
+        Apps nativos não aplicam CORS; o navegador sim. A correção é \textbf{no servidor} (Módulo 17), não no app.
+      \end{erro}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% =============================================================================
+\section{Desktop e embarcados}
+
+\begin{frame}[fragile]{Desktop e layout adaptativo}
+  \begin{columns}[T]
+    \begin{column}{0.56\textwidth}
+\begin{terminal}
+$ flutter create --platforms=windows,macos,linux .
+$ flutter run -d linux
+$ flutter build linux --release
+\end{terminal}
+\begin{codigo}[title=Um painel para cada largura]{Dart}
+@override
+Widget build(BuildContext context) => LayoutBuilder(
+  builder: (context, c) => switch (c.maxWidth) {
+    < 600 => const PainelCompacto(),    // lista
+    < 840 => const PainelMedio(),       // grade
+    _ => const PainelExpandido(),       // lista + detalhe
+  },
+);
+\end{codigo}
+    \end{column}
+    \begin{column}{0.42\textwidth}
+      \begin{conceito}[O que muda no desktop]
+        \begin{itemize}
+          \item Mouse: \emph{hover}, clique direito, rolagem.
+          \item Teclado: atalhos (\cod{Shortcuts}, \cod{Actions}) e foco com Tab.
+          \item Janelas redimensionáveis e menus.
+          \item Instaladores próprios: MSIX, DMG, Snap ou DEB.
+        \end{itemize}
+      \end{conceito}
+      \begin{dica}
+        \cod{switch} com padrões relacionais (Dart 3) deixa as faixas de largura legíveis.
+      \end{dica}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}[fragile]{Painel do laboratório num Raspberry Pi}
+  \begin{columns}[T]
+    \begin{column}{0.5\textwidth}
+\begin{terminal}[]
+# no computador de desenvolvimento
+$ flutter pub global activate flutterpi_tool
+$ flutterpi_tool build --arch=arm64 --release
+# copiar build/flutter-pi para o Pi e rodar
+$ flutter-pi --release ~/labmonitor
+\end{terminal}
+      \begin{conceito}[\cod{flutter-pi}]
+        \emph{Embedder} leve que roda o Flutter direto na placa de vídeo do Raspberry Pi, sem ambiente gráfico: inicia rápido e ocupa a tela inteira, ideal para quiosques.
+      \end{conceito}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \begin{exemplo}[LabMonitor em modo quiosque]
+        Um Raspberry Pi 4 ou 5 com tela de toque fixado na parede mostra as bancadas, as reservas do dia e os alertas, recebendo dados por MQTT (Módulo 13).
+      \end{exemplo}
+      \begin{dica}[Hardware da placa]
+        GPIO, I\textsuperscript{2}C e SPI podem ser acessados via FFI ou pacotes como \cod{dart\_periphery}: o painel lê sensores ligados diretamente ao Pi.
+      \end{dica}
+      \begin{historia}
+        Montadoras já usam Flutter em centrais multimídia de carros, um dos usos mais conhecidos de embarcados.
+      \end{historia}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% =============================================================================
+\section{Fechamento}
+
+\begin{frame}{Resumo}
+  \begin{resumo}
+    \begin{itemize}
+      \item As abordagens vão do web/híbrido ao nativo; o Flutter compartilha tudo e desenha com motor próprio.
+      \item Framework, engine e \emph{embedder} separam o Flutter das plataformas.
+      \item Canais de plataforma trocam mensagens; Pigeon gera o código tipado; FFI chama C diretamente.
+      \item Plugins federados e \emph{add-to-app} integram Flutter e código nativo nos dois sentidos.
+      \item Web, desktop e embarcados reaproveitam o código, com layout adaptativo e atenção às diferenças (CORS, \cod{dart:io}).
+    \end{itemize}
+  \end{resumo}
+\end{frame}
+
+\begin{frame}{Glossário (1/2)}
+  \begin{glossario}
+    Multiplataforma & código escrito uma vez e executado em mais de um sistema \\
+    JIT / AOT & compilação durante a execução / antes da distribuição \\
+    \emph{Engine} & núcleo em C++ do Flutter: renderização, Dart \emph{runtime}, texto e canais \\
+    \emph{Embedder} & camada que integra o \emph{engine} a uma plataforma específica \\
+    Canal de plataforma & meio de troca de mensagens entre Dart e código nativo \\
+    \emph{Codec} & regra que converte valores em bytes e de volta para atravessar o canal \\
+    Pigeon & gerador de código tipado para os dois lados de um canal \\
+    FFI & interface para chamar funções C a partir do Dart, compartilhando memória \\
+  \end{glossario}
+\end{frame}
+
+\begin{frame}{Glossário (2/2)}
+  \begin{glossario}
+    Plugin federado & plugin dividido em API, interface de plataforma e implementações \\
+    \emph{Add-to-app} & incorporação de telas Flutter a um app nativo existente \\
+    PWA & site instalável, com manifesto e \emph{service worker} \\
+    WebAssembly & formato binário executado pelos navegadores com desempenho próximo ao nativo \\
+    CORS & mecanismo do navegador que controla requisições entre origens diferentes \\
+    Layout adaptativo & layouts distintos por classe de tamanho de janela e forma de entrada \\
+    Quiosque & aparelho dedicado a um único app, em tela cheia \\
+    Matriz ponderada & técnica de decisão que soma notas multiplicadas por pesos \\
+  \end{glossario}
+\end{frame}
+
+\begin{frame}{Questões de revisão}
+  \begin{questoes}
+    \item Compare React Native e Flutter quanto a quem desenha os componentes da tela. Que consequência isso tem para a aparência do app?
+    \item Por que o Flutter compila AOT no iOS?
+    \item Qual a diferença entre um canal de plataforma e o FFI? Dê um caso de uso para cada um.
+    \item Que problema o Pigeon resolve em relação ao \cod{MethodChannel} escrito à mão?
+    \item O que é um plugin federado e qual a vantagem dessa organização?
+    \item Por que uma chamada HTTP pode funcionar no app Android e falhar no Flutter web?
+    \item Quando o Flutter web \textbf{não} é uma boa escolha?
+    \item Monte uma matriz ponderada para decidir entre Flutter e PWA para um painel de consulta do laboratório.
+  \end{questoes}
+\end{frame}
+
+\begin{frame}{Exercícios}
+  \begin{exercicio}[Exercício 1 --- Canal de plataforma]
+    Crie um \cod{MethodChannel} que devolve o nome do modelo do aparelho no Android e no iOS, tratando a ausência de implementação.
+  \end{exercicio}
+  \begin{exercicio}[Exercício 2 --- FFI]
+    Compile a função \cod{media\_movel} em C, chame-a pelo Dart e compare o tempo com uma versão em Dart para 10\,000 amostras.
+  \end{exercicio}
+  \begin{exercicio}[Exercício 3 --- Web e desktop]
+    Gere as versões web e desktop do LabMonitor, tornando o painel adaptativo para as três classes de largura.
+  \end{exercicio}
+  \begin{projeto}[LabMonitor --- Etapa 19]
+    Painel em modo quiosque (web ou Raspberry Pi) recebendo leituras por MQTT, e um canal de plataforma próprio para uma função nativa que nenhum plugin oferece.
+  \end{projeto}
+\end{frame}
+
+\begin{frame}{Para aprofundar}
+  \small
+  \begin{itemize}
+    \item Arquitetura do Flutter: \url{https://docs.flutter.dev/resources/architectural-overview}
+    \item Canais de plataforma: \url{https://docs.flutter.dev/platform-integration/platform-channels}
+    \item FFI: \url{https://dart.dev/interop/c-interop}
+    \item \emph{Add-to-app}: \url{https://docs.flutter.dev/add-to-app}
+    \item Flutter web: \url{https://docs.flutter.dev/platform-integration/web}
+    \item flutter-pi: \url{https://github.com/ardera/flutter-pi}
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{Respostas das questões de revisão}
+  \begin{respostas}
+    \item O React Native usa os componentes nativos de cada sistema, que se parecem com os de outros apps; o Flutter desenha os próprios, com aparência idêntica nas plataformas e independente da versão do sistema.
+    \item A App Store não permite gerar e executar código de máquina novo em tempo de execução; com AOT, o código já chega compilado.
+    \item O canal troca mensagens serializadas e assíncronas com Kotlin/Swift (abrir uma API do sistema); o FFI chama funções C diretamente, inclusive de forma síncrona (filtro de sinais com muitas chamadas).
+    \item Elimina nomes de métodos em texto e conversões manuais: a interface declarada gera código tipado nos dois lados, e erros aparecem na compilação.
+    \item É um plugin dividido em API pública, interface comum e uma implementação por plataforma; novas plataformas podem ser adicionadas por pacotes separados.
+    \item O navegador aplica a política de mesma origem: sem o cabeçalho CORS na resposta da API, a requisição é bloqueada.
+    \item Em sites de conteúdo que dependem de SEO e de carregamento muito rápido da primeira página.
+    \item Exemplo de critérios: acesso a BLE (peso 1, pois o painel só consulta), instalação sem loja (3), custo de manutenção (2), desempenho de gráficos (2). A PWA tende a vencer se o painel apenas exibe dados.
+  \end{respostas}
+\end{frame}
+
+\encerramento{Módulo 20 --- Tópicos avançados e projeto final: IA, segurança, monetização e o projeto integrador.}
+
+\end{document}

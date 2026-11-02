@@ -1,0 +1,995 @@
+\documentclass[aspectratio=169,10pt]{beamer}
+\makeatletter\def\input@path{{../../estilo/}{../estilo/}{estilo/}}\makeatother
+\usepackage{devmobile}
+\modulo{09}{Fundamentos de Banco de Dados}{Modelagem, modelo relacional, normalização, SQL com SQLite, transações, índices, NoSQL e segurança}
+
+\begin{document}
+\capa
+
+\begin{frame}{Objetivos do módulo}
+  \begin{conceito}[Ao final deste módulo você será capaz de]
+    \begin{itemize}
+      \item Explicar o que é um banco de dados, um SGBD e os principais tipos de banco.
+      \item Modelar um problema com entidades, atributos e relacionamentos (diagrama ER).
+      \item Converter o modelo para tabelas com chaves primárias, estrangeiras e restrições.
+      \item Normalizar tabelas até a 3ª forma normal e saber quando desnormalizar.
+      \item Escrever SQL no SQLite: criar tabelas, inserir, alterar, apagar e consultar com filtros, agregações e \emph{joins}.
+      \item Entender transações, índices, bancos NoSQL e como evitar \emph{SQL injection}.
+    \end{itemize}
+  \end{conceito}
+  \begin{dica}[Por que antes do Room?]
+    O Room (Módulo 10) gera e verifica SQL para você, mas não pensa por você: tabelas mal modeladas e consultas mal escritas continuam lentas e confusas.
+  \end{dica}
+\end{frame}
+
+\sumario
+
+% =============================================================================
+\section{Conceitos}
+
+\begin{frame}{Dados, banco de dados e SGBD}
+  \begin{columns}[c]
+    \begin{column}{0.52\textwidth}
+      \begin{itemize}
+        \item \termo{Banco de dados}: coleção organizada de dados relacionados, com estrutura definida.
+        \item \termo{SGBD} (Sistema Gerenciador de Banco de Dados): software que armazena, consulta e protege esses dados. Ex.: SQLite, PostgreSQL, MySQL, Firestore.
+        \item O app nunca mexe no arquivo diretamente: ele pede ao SGBD, normalmente em \textbf{SQL}.
+      \end{itemize}
+      \begin{caixaambar}
+        \textbf{Por que não um arquivo de texto?} Com milhares de leituras de sensor, um banco permite \dest{buscar rápido}, \dest{evitar duplicação}, \dest{garantir integridade} e \dest{não corromper dados} se o app fechar no meio da gravação.
+      \end{caixaambar}
+    \end{column}
+    \begin{column}{0.46\textwidth}
+      \centering
+      \begin{tikzpicture}[node distance=5mm]
+        \node (cel) {\celular[0.4]{\tiny LabMonitor}};
+        \node[caixaescura,right=8mm of cel,minimum width=2.4cm] (sgbd) {SGBD\\ \tiny SQLite};
+        \node[caixa,right=8mm of sgbd,minimum width=1.6cm,minimum height=1.4cm] (arq) {arquivo\\ \arq{.db}};
+        \draw[seta] ([yshift=2mm]cel.east) -- node[rotulo,above]{SQL} ([yshift=2mm]sgbd.west);
+        \draw[setaambar] ([yshift=-2mm]sgbd.west) -- node[rotulo,below]{linhas} ([yshift=-2mm]cel.east);
+        \draw[seta,<->] (sgbd) -- (arq);
+      \end{tikzpicture}
+      \begin{conceito}[SQLite]
+        SGBD relacional \textbf{embutido}: uma biblioteca dentro do app, sem servidor, que guarda tudo em um único arquivo. Vem em todo Android e iOS e é a base do Room (Kotlin) e do Drift e do sqflite (Flutter).
+      \end{conceito}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Tipos de banco de dados}
+  \footnotesize
+  \begin{tabularx}{\textwidth}{@{}l L L L@{}}
+    \toprule
+    \cabecalho{Tipo} & \cabecalho{Como organiza} & \cabecalho{Exemplos} & \cabecalho{Uso típico} \\
+    \midrule
+    \textbf{Relacional (SQL)} & tabelas com linhas e colunas, ligadas por chaves & SQLite, PostgreSQL, MySQL & dados estruturados, consultas flexíveis, integridade \\
+    \textbf{Documentos} & documentos JSON agrupados em coleções & Firestore, MongoDB & dados hierárquicos, sincronização em tempo real \\
+    \textbf{Chave-valor} & pares chave $\rightarrow$ valor & DataStore, Redis & preferências, cache, sessões \\
+    \textbf{Séries temporais} & medições indexadas pelo tempo & InfluxDB, TimescaleDB & telemetria de sensores em grande volume \\
+    \textbf{Grafos} & nós e arestas & Neo4j & redes sociais, recomendações \\
+    \bottomrule
+  \end{tabularx}
+  \vspace{4pt}
+  \begin{caixadestaque}
+    No LabMonitor: \dest{SQLite} no aparelho (Room ou Drift, Módulo 10), \dest{chave-valor} para preferências, \dest{Firestore} (Módulo 12) e \dest{PostgreSQL} (Módulos 16 e 17) na nuvem.
+  \end{caixadestaque}
+\end{frame}
+
+\begin{frame}{Por dentro de um SGBD}
+  \begin{columns}[c]
+    \begin{column}{0.5\textwidth}
+      \centering
+      \begin{tikzpicture}[node distance=2mm,every node/.style={font=\scriptsize,minimum width=5cm,align=center}]
+        \node[caixa] (app) {App: \cod{SELECT \ldots{} WHERE \ldots}};
+        \node[caixapetroleo,below=4mm of app] (qp) {\textbf{Processador de consultas}\\ \tiny análise $\rightarrow$ otimizador (plano) $\rightarrow$ execução};
+        \node[caixaambar,below=3mm of qp.south west,anchor=north west,minimum width=2.45cm] (tx) {\textbf{Transações}\\ \tiny bloqueios, diário};
+        \node[caixaambar,below=3mm of qp.south east,anchor=north east,minimum width=2.45cm] (st) {\textbf{Armazenamento}\\ \tiny páginas, árvores B};
+        \node[caixaescura,below=11mm of qp] (disk) {Arquivo em disco (\arq{.db})};
+        \draw[seta] (app) -- (qp);
+        \draw[seta] (qp.south -| tx) -- (tx); \draw[seta] (qp.south -| st) -- (st);
+        \draw[seta] (tx) -- (tx |- disk.north); \draw[seta] (st) -- (st |- disk.north);
+      \end{tikzpicture}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \begin{pordentro}[O caminho de uma consulta]
+        O SQL é analisado, o \textbf{otimizador} escolhe o plano mais barato (usar um índice ou varrer a tabela?) e o executor lê as páginas necessárias. O gerenciador de transações garante ACID; o de armazenamento organiza os dados em páginas.
+      \end{pordentro}
+      \begin{historia}
+        Edgar F. Codd, da IBM, propôs o modelo relacional em 1970. A linguagem SEQUEL, depois SQL, surgiu na IBM em 1974 e virou padrão ANSI em 1986. O SQLite foi criado por D. Richard Hipp em 2000.
+      \end{historia}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% =============================================================================
+\section{Modelagem conceitual}
+
+\begin{frame}{Entidades, atributos e relacionamentos}
+  \begin{columns}[T]
+    \begin{column}{0.48\textwidth}
+      \begin{itemize}
+        \item \termo{Entidade}: ``coisa'' sobre a qual guardamos dados (Bancada, Equipamento, Usuário).
+        \item \termo{Atributo}: característica da entidade (nome, sala, limite de temperatura).
+        \item \termo{Identificador}: atributo que distingue cada ocorrência (número de patrimônio).
+        \item \termo{Relacionamento}: associação entre entidades (uma bancada \emph{possui} equipamentos).
+        \item \termo{Cardinalidade}: quantos de cada lado participam: \textbf{1:1}, \textbf{1:N} ou \textbf{N:N}.
+      \end{itemize}
+    \end{column}
+    \begin{column}{0.50\textwidth}
+      \begin{conceito}[Como descobrir as entidades]
+        Descreva o problema em frases e procure os \textbf{substantivos}:\\[2pt]
+        ``Um \textbf{usuário} faz \textbf{reservas} de \textbf{bancadas}. Cada bancada tem vários \textbf{equipamentos} e um \textbf{sensor} que gera \textbf{leituras} de temperatura.''
+      \end{conceito}
+      \begin{caixaambar}
+        Os \textbf{verbos} costumam virar relacionamentos (\emph{faz}, \emph{tem}, \emph{gera}) e os \textbf{adjetivos} e medidas, atributos.
+      \end{caixaambar}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Diagrama ER do LabMonitor}
+  \begin{center}
+  \begin{tikzpicture}[ent/.style={caixa,font=\scriptsize,align=left,text width=2.3cm,inner sep=3pt},
+                      tit/.style={caixaescura,font=\scriptsize\bfseries,text width=2.3cm,inner sep=2pt,minimum height=5mm}]
+    % Usuário
+    \node[tit] (tu) at (0,0) {Usuário};
+    \node[ent,below=0mm of tu] (u) {\underline{id}\\ nome\\ email};
+    % Reserva
+    \node[tit,draw=ambar,fill=ambar,text=azulpetroleo] (tr) at (3.6,0) {Reserva};
+    \node[ent,below=0mm of tr,draw=ambar,fill=ambarclaro!45] (r) {\underline{id}\\ usuário (FK)\\ bancada (FK)\\ início, fim};
+    % Bancada
+    \node[tit] (tb) at (7.2,0) {Bancada};
+    \node[ent,below=0mm of tb] (b) {\underline{id}\\ nome, sala\\ limite};
+    % Equipamento
+    \node[tit] (te) at (10.8,0.9) {Equipamento};
+    \node[ent,below=0mm of te] (e) {\underline{patrimônio}\\ descrição\\ bancada (FK)};
+    % Leitura
+    \node[tit] (tl) at (10.8,-1.7) {Leitura};
+    \node[ent,below=0mm of tl] (l) {\underline{id}\\ bancada (FK)\\ valor, instante};
+    \draw[seta,-] (u.east |- r.west) -- node[rotulo,above,pos=0.15]{1} node[rotulo,above,pos=0.85]{N} (r.west);
+    \draw[seta,-] (r.east) -- node[rotulo,above,pos=0.15]{N} node[rotulo,above,pos=0.85]{1} (r.east -| b.west);
+    \draw[seta,-] ([yshift=2mm]b.east) -- node[rotulo,above,pos=0.2]{1} node[rotulo,above,pos=0.85]{N} (e.west);
+    \draw[seta,-] ([yshift=-2mm]b.east) -- node[rotulo,below,pos=0.2]{1} node[rotulo,below,pos=0.85]{N} (tl.west);
+  \end{tikzpicture}
+  \end{center}
+  \begin{columns}[T]
+    \begin{column}{0.48\textwidth}
+      \begin{caixadestaque}
+        \textbf{Usuário N:N Bancada}: a entidade \dest{Reserva} resolve esse relacionamento e guarda seus próprios atributos (início, fim).
+      \end{caixadestaque}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \begin{dica}[Ferramentas]
+        draw.io, dbdiagram.io ou brModelo (muito usado no Brasil).
+      \end{dica}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% =============================================================================
+\section{Modelo relacional}
+
+\begin{frame}{Tabelas, chaves e restrições}
+  \begin{columns}[T]
+    \begin{column}{0.54\textwidth}
+      \centering
+      \scriptsize
+      \textbf{\textcolor{azulpetroleo}{tabela}} \cod{bancadas}\\[2pt]
+      \begin{tabular}{@{}c l l r@{}}
+        \toprule
+        \cabecalho{\underline{id}} & \cabecalho{nome} & \cabecalho{sala} & \cabecalho{limite} \\
+        \midrule
+        1 & Bancada 1 & L-12 & 30.0 \\
+        3 & Bancada 3 & L-12 & 32.0 \\
+        4 & Bancada 4 & L-14 & 30.0 \\
+        \bottomrule
+      \end{tabular}
+      \\[6pt]
+      \textbf{\textcolor{azulpetroleo}{tabela}} \cod{equipamentos}\\[2pt]
+      \begin{tabular}{@{}l l c@{}}
+        \toprule
+        \cabecalho{\underline{patrimonio}} & \cabecalho{descricao} & \cabecalho{bancada\_id} \\
+        \midrule
+        IFMA-0042 & Osciloscópio & 3 \\
+        IFMA-0107 & Fonte simétrica & 3 \\
+        IFMA-0211 & Gerador de funções & 1 \\
+        \bottomrule
+      \end{tabular}
+    \end{column}
+    \begin{column}{0.44\textwidth}
+      \begin{itemize}
+        \item \termo{Tabela} (relação), \termo{linha} (registro) e \termo{coluna} (atributo).
+        \item \termo{Chave primária (PK)}: identifica cada linha; única e não nula.
+        \item \termo{Chave estrangeira (FK)}: coluna que aponta para a PK de outra tabela (\cod{bancada\_id} $\rightarrow$ \cod{bancadas.id}).
+        \item \termo{Restrições}: \cod{NOT NULL}, \cod{UNIQUE}, \cod{CHECK}, \cod{DEFAULT}.
+      \end{itemize}
+      \begin{caixaambar}
+        A FK garante a \dest{integridade referencial}: não existe equipamento numa bancada que não existe.
+      \end{caixaambar}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Do diagrama ER para tabelas}
+  \begin{columns}[T]
+    \begin{column}{0.32\textwidth}
+      \begin{conceito}[1:N]
+        A tabela do lado \textbf{N} recebe uma FK para o lado \textbf{1}.\\[2pt]
+        \cod{equipamentos.bancada\_id}\\
+        \cod{leituras.bancada\_id}
+      \end{conceito}
+    \end{column}
+    \begin{column}{0.32\textwidth}
+      \begin{conceito}[N:N]
+        Cria-se uma \textbf{tabela associativa} com uma FK para cada lado.\\[2pt]
+        \cod{reservas(usuario\_id,}\\ \cod{\ \ bancada\_id, inicio, fim)}
+      \end{conceito}
+    \end{column}
+    \begin{column}{0.32\textwidth}
+      \begin{conceito}[1:1]
+        A FK vai em qualquer um dos lados, com \cod{UNIQUE}; muitas vezes as duas entidades viram uma só tabela.
+      \end{conceito}
+    \end{column}
+  \end{columns}
+  \footnotesize
+  \renewcommand{\arraystretch}{1.08}
+  \begin{tabularx}{\textwidth}{@{}l L L@{}}
+    \toprule
+    \cabecalho{Tipo SQLite} & \cabecalho{Guarda} & \cabecalho{No LabMonitor} \\
+    \midrule
+    \cod{INTEGER} & inteiros de até 8 bytes & ids, \cod{instante} em milissegundos (\emph{epoch}) \\
+    \cod{REAL} & ponto flutuante de 8 bytes & temperatura, limite \\
+    \cod{TEXT} & texto UTF-8 & nome, sala, patrimônio \\
+    \cod{BLOB} & bytes brutos & raramente: prefira guardar arquivos fora do banco \\
+    \cod{NULL} & ausência de valor & leitura ainda não recebida \\
+    \bottomrule
+  \end{tabularx}
+  \begin{dica}
+    O SQLite não tem tipo de data nem booleano: use \cod{INTEGER} (\emph{epoch} em ms; 0/1) e converta no app.
+  \end{dica}
+\end{frame}
+
+\begin{frame}{A base matemática: álgebra relacional}
+  \begin{columns}[T]
+    \begin{column}{0.52\textwidth}
+      \scriptsize
+      \begin{tabularx}{\linewidth}{@{}l c L@{}}
+        \toprule
+        \cabecalho{Operação} & \cabecalho{Símbolo} & \cabecalho{Em SQL} \\
+        \midrule
+        Seleção (filtra linhas) & $\sigma$ & \cod{WHERE} \\
+        Projeção (escolhe colunas) & $\pi$ & lista do \cod{SELECT} \\
+        Junção & $\bowtie$ & \cod{JOIN \ldots{} ON} \\
+        Produto cartesiano & $\times$ & \cod{CROSS JOIN} \\
+        União & $\cup$ & \cod{UNION} \\
+        Diferença & $-$ & \cod{EXCEPT} \\
+        \bottomrule
+      \end{tabularx}
+    \end{column}
+    \begin{column}{0.46\textwidth}
+      \begin{definicao}[Álgebra relacional]
+        Conjunto de operações sobre relações (tabelas) que produzem novas relações. É a teoria por trás do SQL e do otimizador de consultas.
+      \end{definicao}
+      \begin{exemplo}[Nome das bancadas livres da sala L-12]
+        $\pi_{\text{nome}}\big(\sigma_{\text{sala}=\text{'L-12'} \,\wedge\, \text{livre}=1}(\text{bancadas})\big)$\\[3pt]
+        \cod{SELECT nome FROM bancadas}\\
+        \cod{WHERE sala = 'L-12' AND livre = 1;}
+      \end{exemplo}
+    \end{column}
+  \end{columns}
+  \begin{pordentro}[Por que isso importa]
+    Como as operações têm propriedades algébricas (por exemplo, filtrar antes de juntar dá o mesmo resultado), o otimizador pode reescrever a consulta numa forma equivalente e muito mais rápida.
+  \end{pordentro}
+\end{frame}
+
+% =============================================================================
+\section{Normalização}
+
+\begin{frame}{O problema da ``planilha única''}
+  \scriptsize
+  \begin{tabular}{@{}c l l l l l@{}}
+    \toprule
+    \cabecalho{reserva} & \cabecalho{usuário} & \cabecalho{e-mail} & \cabecalho{bancada} & \cabecalho{sala} & \cabecalho{equipamentos} \\
+    \midrule
+    1 & Ana & ana@ifma.edu.br & Bancada 3 & L-12 & Osciloscópio, Fonte \\
+    2 & Ana & \textcolor{vermelhoerro}{ana.s@ifma.edu.br} & Bancada 1 & L-12 & Gerador \\
+    3 & Bruno & bruno@ifma.edu.br & Bancada 3 & \textcolor{vermelhoerro}{L-14} & Osciloscópio, Fonte \\
+    \bottomrule
+  \end{tabular}
+  \vspace{4pt}
+  \normalsize
+  \begin{columns}[T]
+    \begin{column}{0.32\textwidth}
+      \begin{erro}[Anomalia de atualização]
+        O e-mail da Ana está repetido e já divergiu. Qual é o certo?
+      \end{erro}
+    \end{column}
+    \begin{column}{0.32\textwidth}
+      \begin{erro}[Anomalia de inserção]
+        Não dá para cadastrar uma bancada nova sem inventar uma reserva.
+      \end{erro}
+    \end{column}
+    \begin{column}{0.32\textwidth}
+      \begin{erro}[Anomalia de exclusão]
+        Apagar a única reserva do Bruno apaga também o e-mail dele.
+      \end{erro}
+    \end{column}
+  \end{columns}
+  \begin{caixaambar}
+    \textbf{Normalizar} é dividir os dados em tabelas de modo que \dest{cada fato fique guardado uma única vez}.
+  \end{caixaambar}
+\end{frame}
+
+\begin{frame}{As três primeiras formas normais}
+  \begin{columns}[T]
+    \begin{column}{0.33\textwidth}
+      \begin{conceito}[1ª forma normal (1FN)]
+        Cada célula guarda \textbf{um único valor} atômico.\\[3pt]
+        \textcolor{vermelhoerro}{``Osciloscópio, Fonte''} viola a 1FN $\rightarrow$ uma linha por equipamento, em tabela própria.
+      \end{conceito}
+    \end{column}
+    \begin{column}{0.32\textwidth}
+      \begin{conceito}[2ª forma normal (2FN)]
+        Está na 1FN e todo atributo depende da \textbf{chave inteira}, não de parte dela.\\[3pt]
+        Em \cod{(reserva, equipamento)}, a data depende só da reserva $\rightarrow$ separar.
+      \end{conceito}
+    \end{column}
+    \begin{column}{0.33\textwidth}
+      \begin{conceito}[3ª forma normal (3FN)]
+        Está na 2FN e nenhum atributo depende de \textbf{outro atributo não-chave}.\\[3pt]
+        \cod{sala} depende de \cod{bancada}, não da reserva $\rightarrow$ vai para \cod{bancadas}.
+      \end{conceito}
+    \end{column}
+  \end{columns}
+  \vspace{4pt}
+  \begin{center}
+  \begin{tikzpicture}[node distance=4mm]
+    \node[caixa,fill=vermelhoerro!8,draw=vermelhoerro] (p) {planilha única};
+    \node[caixaescura,right=10mm of p] (u) {\cod{usuarios}};
+    \node[caixaescura,right=of u] (b) {\cod{bancadas}};
+    \node[caixaescura,right=of b] (e) {\cod{equipamentos}};
+    \node[caixaambar,right=of e] (r) {\cod{reservas}};
+    \draw[seta] (p) -- node[rotulo,above]{normalizar} (u);
+  \end{tikzpicture}
+  \end{center}
+  \begin{dica}[Regra de bolso da 3FN]
+    ``Cada atributo depende da chave, da chave inteira e de nada além da chave.''
+  \end{dica}
+\end{frame}
+
+\begin{frame}{Quando desnormalizar}
+  \begin{columns}[T]
+    \begin{column}{0.48\textwidth}
+      \begin{caixadestaque}
+        Normalização evita inconsistência, mas exige \emph{joins} para remontar a informação. Às vezes vale \dest{duplicar de propósito}.
+      \end{caixadestaque}
+      \begin{exemplo}[Desnormalizações aceitáveis]
+        \begin{itemize}
+          \item Guardar \cod{ultima\_temperatura} na tabela \cod{bancadas} para o painel abrir instantaneamente.
+          \item Cache local de dados vindos da API em uma tabela ``achatada''.
+          \item Em bancos de documentos (Firestore), copiar o nome da bancada dentro da reserva.
+        \end{itemize}
+      \end{exemplo}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \begin{atencao}[Condições]
+        \begin{itemize}
+          \item Exista uma \textbf{fonte da verdade} clara (a tabela normalizada).
+          \item A cópia seja atualizada junto, na mesma transação, ou aceite ficar levemente defasada.
+          \item O ganho seja medido, não suposto.
+        \end{itemize}
+      \end{atencao}
+      \begin{dica}
+        Regra prática: \textbf{normalize primeiro}, desnormalize depois e só onde a consulta realmente pesar.
+      \end{dica}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% =============================================================================
+\section{SQL: definindo e alterando dados}
+
+\begin{frame}[fragile]{DDL: criando as tabelas}
+  \begin{columns}[T]
+    \begin{column}{0.56\textwidth}
+\begin{codigo}[title=labmonitor.sql]{SQL}
+PRAGMA foreign_keys = ON;   -- liga a checagem de FKs
+CREATE TABLE bancadas (
+  id      INTEGER PRIMARY KEY,
+  nome    TEXT    NOT NULL UNIQUE,
+  sala    TEXT    NOT NULL,
+  limite  REAL    NOT NULL DEFAULT 30.0
+          CHECK (limite BETWEEN 0 AND 100)
+);
+CREATE TABLE leituras (
+  id         INTEGER PRIMARY KEY,
+  bancada_id INTEGER NOT NULL
+             REFERENCES bancadas(id) ON DELETE CASCADE,
+  valor      REAL    NOT NULL,
+  instante   INTEGER NOT NULL          -- epoch em ms
+);
+CREATE INDEX idx_leituras_bancada_instante
+  ON leituras (bancada_id, instante);
+ALTER TABLE bancadas ADD COLUMN responsavel TEXT;
+\end{codigo}
+    \end{column}
+    \begin{column}{0.42\textwidth}
+      \begin{conceito}[DDL --- \emph{Data Definition Language}]
+        Define a estrutura: \cod{CREATE}, \cod{ALTER} e \cod{DROP} de tabelas, índices e visões.
+      \end{conceito}
+      \begin{dica}[\cod{INTEGER PRIMARY KEY}]
+        No SQLite, essa coluna vira o \emph{rowid}: se você não informar o valor, ele é gerado automaticamente.
+      \end{dica}
+      \begin{atencao}[Chaves estrangeiras no SQLite]
+        Só são verificadas com \cod{PRAGMA foreign\_keys = ON} em cada conexão.
+      \end{atencao}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}[fragile]{DML: inserindo, alterando e apagando}
+  \begin{columns}[T]
+    \begin{column}{0.54\textwidth}
+\begin{codigo}[title=Manipulando dados]{SQL}
+INSERT INTO bancadas (id, nome, sala, limite)
+VALUES (3, 'Bancada 3', 'L-12', 30.0);
+
+-- várias linhas de uma vez
+INSERT INTO leituras (bancada_id, valor, instante)
+VALUES (3, 24.8, 1793548800000),
+       (3, 25.1, 1793548860000);
+
+UPDATE bancadas
+SET    limite = 32.0
+WHERE  id = 3;
+
+DELETE FROM leituras
+WHERE  instante < 1790000000000;
+\end{codigo}
+    \end{column}
+    \begin{column}{0.44\textwidth}
+      \begin{conceito}[DML --- \emph{Data Manipulation Language}]
+        \cod{INSERT}, \cod{UPDATE}, \cod{DELETE} e \cod{SELECT}: trabalham com as linhas, não com a estrutura.
+      \end{conceito}
+      \begin{erro}[O erro clássico]
+        \cod{UPDATE} ou \cod{DELETE} \textbf{sem} \cod{WHERE} altera ou apaga \textbf{a tabela inteira}. Escreva o \cod{WHERE} primeiro e teste-o com um \cod{SELECT}.
+      \end{erro}
+      \begin{dica}
+        Textos vão entre aspas simples (\cod{'L-12'}); aspas duplas servem para nomes de colunas e tabelas.
+      \end{dica}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% =============================================================================
+\section{SQL: consultas}
+
+\begin{frame}[fragile]{\cod{SELECT}: filtrando e ordenando}
+  \begin{columns}[T]
+    \begin{column}{0.54\textwidth}
+\begin{codigo}[title=Consultas básicas]{SQL}
+SELECT nome, sala
+FROM   bancadas
+WHERE  sala = 'L-12' AND limite >= 30
+ORDER  BY nome ASC
+LIMIT  10;
+
+SELECT * FROM equipamentos
+WHERE  descricao LIKE '%osciloscópio%';
+
+SELECT * FROM leituras
+WHERE  valor BETWEEN 20 AND 30;
+
+SELECT * FROM bancadas WHERE id IN (1, 3, 5);
+
+SELECT * FROM equipamentos
+WHERE  bancada_id IS NULL;   -- nunca "= NULL"
+\end{codigo}
+    \end{column}
+    \begin{column}{0.44\textwidth}
+      \centering
+      \begin{tikzpicture}[node distance=1.2mm]
+        \foreach \t/\d [count=\i] in {SELECT/colunas,FROM/tabela,WHERE/filtra linhas,GROUP BY/agrupa,HAVING/filtra grupos,ORDER BY/ordena,LIMIT/limita}{
+          \node[caixa,minimum width=1.8cm,anchor=east,font=\tiny\ttfamily\bfseries] (k\i) at (0,-\i*0.5) {\t};
+          \node[rotulo,anchor=west] at (0.15,-\i*0.5) {\d};}
+      \end{tikzpicture}
+      \begin{dica}[Ordem lógica de execução]
+        \cod{FROM} $\rightarrow$ \cod{WHERE} $\rightarrow$ \cod{GROUP BY} $\rightarrow$ \cod{HAVING} $\rightarrow$ \cod{SELECT} $\rightarrow$ \cod{ORDER BY} $\rightarrow$ \cod{LIMIT}.
+      \end{dica}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}[fragile]{Agregações e datas}
+  \begin{columns}[T]
+    \begin{column}{0.56\textwidth}
+\begin{codigo}[title=Resumo por bancada]{SQL}
+SELECT bancada_id,
+       COUNT(*)              AS qtd,
+       ROUND(AVG(valor), 1)  AS media,
+       MAX(valor)            AS maxima
+FROM   leituras
+WHERE  instante >= :inicioDoDia
+GROUP  BY bancada_id
+HAVING MAX(valor) > 30
+ORDER  BY media DESC;
+\end{codigo}
+\begin{codigo}[title=Média por hora do dia]{SQL}
+SELECT strftime('%H', instante / 1000,
+                'unixepoch', 'localtime') AS hora,
+       ROUND(AVG(valor), 1)               AS media
+FROM   leituras
+GROUP  BY hora
+ORDER  BY hora;
+\end{codigo}
+    \end{column}
+    \begin{column}{0.42\textwidth}
+      \scriptsize
+      \begin{tabular}{@{}l l@{}}
+        \toprule
+        \cabecalho{Função} & \cabecalho{Resultado} \\
+        \midrule
+        \cod{COUNT(*)} & número de linhas \\
+        \cod{SUM}, \cod{AVG} & soma e média \\
+        \cod{MIN}, \cod{MAX} & extremos \\
+        \cod{ROUND(x, n)} & arredonda \\
+        \bottomrule
+      \end{tabular}
+      \begin{conceito}[\cod{WHERE} \emph{versus} \cod{HAVING}]
+        \cod{WHERE} filtra \textbf{linhas} antes de agrupar; \cod{HAVING} filtra \textbf{grupos} depois, e pode usar agregações.
+      \end{conceito}
+      \begin{dica}
+        \cod{:inicioDoDia} é um \textbf{parâmetro}: o app fornece o valor. É assim que o Room escreve consultas.
+      \end{dica}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}[fragile]{Juntando tabelas: \cod{JOIN}}
+  \begin{columns}[T]
+    \begin{column}{0.56\textwidth}
+\begin{codigo}[title=INNER e LEFT JOIN]{SQL}
+-- só bancadas que têm equipamentos
+SELECT b.nome, e.descricao
+FROM   bancadas AS b
+INNER  JOIN equipamentos AS e
+       ON e.bancada_id = b.id;
+
+-- todas as bancadas, mesmo sem equipamento
+SELECT b.nome, COUNT(e.patrimonio) AS qtd
+FROM   bancadas AS b
+LEFT   JOIN equipamentos AS e
+       ON e.bancada_id = b.id
+GROUP  BY b.id;
+\end{codigo}
+    \end{column}
+    \begin{column}{0.42\textwidth}
+      \centering
+      \begin{tikzpicture}
+        \begin{scope}
+          \clip (0,0) circle (0.6);
+          \fill[ambar] (0.7,0) circle (0.6);
+        \end{scope}
+        \draw[azulpetroleo,thick] (0,0) circle (0.6) (0.7,0) circle (0.6);
+        \node[rotulo] at (0.35,-0.85) {\cod{INNER JOIN}};
+        \node[font=\tiny] at (-0.25,0) {B}; \node[font=\tiny] at (0.95,0) {E};
+        \begin{scope}[xshift=2.3cm]
+          \fill[ambar] (0,0) circle (0.6);
+          \draw[azulpetroleo,thick] (0,0) circle (0.6) (0.7,0) circle (0.6);
+          \node[rotulo] at (0.35,-0.85) {\cod{LEFT JOIN}};
+          \node[font=\tiny] at (-0.25,0) {B}; \node[font=\tiny] at (0.95,0) {E};
+        \end{scope}
+      \end{tikzpicture}
+      \begin{conceito}[Diferença]
+        \cod{INNER} devolve só as combinações que existem nas duas tabelas. \cod{LEFT} mantém todas as linhas da tabela da esquerda e preenche com \cod{NULL} o que faltar à direita.
+      \end{conceito}
+      \begin{dica}
+        Apelidos (\cod{AS b}) deixam a consulta curta e evitam ambiguidade entre colunas de mesmo nome.
+      \end{dica}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}[fragile]{Relacionamento N:N e subconsultas}
+  \begin{columns}[T]
+    \begin{column}{0.56\textwidth}
+\begin{codigo}[title=Agenda do dia (N:N)]{SQL}
+SELECT u.nome AS usuario, b.nome AS bancada,
+       r.inicio, r.fim
+FROM   reservas AS r
+JOIN   usuarios AS u ON u.id = r.usuario_id
+JOIN   bancadas AS b ON b.id = r.bancada_id
+WHERE  r.inicio >= :inicioDoDia
+  AND  r.inicio <  :fimDoDia
+ORDER  BY r.inicio;
+\end{codigo}
+\begin{codigo}[title=Bancadas livres agora (subconsulta)]{SQL}
+SELECT nome FROM bancadas
+WHERE  id NOT IN (
+  SELECT bancada_id FROM reservas
+  WHERE  :agora BETWEEN inicio AND fim
+);
+\end{codigo}
+    \end{column}
+    \begin{column}{0.42\textwidth}
+      \begin{conceito}[Atravessando a tabela associativa]
+        Para ir de usuários a bancadas, passa-se por \cod{reservas}: um \cod{JOIN} para cada FK.
+      \end{conceito}
+      \begin{conceito}[Subconsulta]
+        Um \cod{SELECT} dentro de outro. Útil para ``existe/não existe'' (\cod{IN}, \cod{NOT IN}, \cod{EXISTS}).
+      \end{conceito}
+      \begin{atencao}
+        \cod{NOT IN} com uma subconsulta que devolve \cod{NULL} retorna vazio. Prefira \cod{NOT EXISTS} quando a coluna puder ser nula.
+      \end{atencao}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% =============================================================================
+\section{Transações e índices}
+
+\begin{frame}[fragile]{Transações e ACID}
+  \begin{columns}[T]
+    \begin{column}{0.5\textwidth}
+\begin{codigo}[title=Empréstimo de componente]{SQL}
+BEGIN TRANSACTION;
+  UPDATE estoque
+  SET    qtd = qtd - 1
+  WHERE  item = 'resistor-1k' AND qtd > 0;
+
+  INSERT INTO emprestimos (item, usuario_id)
+  VALUES ('resistor-1k', 7);
+COMMIT;      -- ou ROLLBACK se algo falhar
+\end{codigo}
+      \begin{caixaambar}
+        Ou as duas operações acontecem, ou nenhuma. Sem transação, uma falha entre elas deixaria o estoque errado.
+      \end{caixaambar}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \scriptsize
+      \begin{tabularx}{\linewidth}{@{}l L@{}}
+        \toprule
+        \cabecalho{ACID} & \cabecalho{Garantia} \\
+        \midrule
+        \textbf{A}tomicidade & tudo ou nada \\
+        \textbf{C}onsistência & as restrições valem antes e depois \\
+        \textbf{I}solamento & transações simultâneas não se atrapalham \\
+        \textbf{D}urabilidade & após o \cod{COMMIT}, sobrevive a queda de energia \\
+        \bottomrule
+      \end{tabularx}
+      \begin{dica}[No app]
+        Room: \cod{withTransaction \{ \}}. Drift: \cod{transaction(() async \{ \})}. sqflite: \cod{db.transaction}. Firestore: \cod{runTransaction}. Milhares de inserções numa única transação são muito mais rápidas.
+      \end{dica}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}[fragile]{Índices e desempenho}
+  \begin{columns}[T]
+    \begin{column}{0.54\textwidth}
+\begin{codigo}[title=Sem índice: varre a tabela inteira]{SQL}
+EXPLAIN QUERY PLAN
+SELECT * FROM leituras
+WHERE  bancada_id = 3 AND instante > :desde;
+-- SCAN leituras
+\end{codigo}
+\begin{codigo}[title=Com índice composto: busca direta]{SQL}
+CREATE INDEX idx_leituras_bancada_instante
+  ON leituras (bancada_id, instante);
+-- SEARCH leituras USING INDEX
+--   idx_leituras_bancada_instante
+--   (bancada_id=? AND instante>?)
+\end{codigo}
+    \end{column}
+    \begin{column}{0.44\textwidth}
+      \begin{conceito}[Índice]
+        Estrutura ordenada (árvore B) que aponta para as linhas, como o índice remissivo de um livro. Transforma uma varredura em uma busca.
+      \end{conceito}
+      \begin{dica}[Quando criar]
+        Colunas de \cod{WHERE}, \cod{JOIN} e \cod{ORDER BY} frequentes; no composto, a de igualdade vem primeiro.
+      \end{dica}
+      \begin{atencao}
+        Índices ocupam espaço e deixam \cod{INSERT}/\cod{UPDATE} mais lentos: crie só os usados.
+      \end{atencao}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Por dentro: árvore B e diário de escrita}
+  \begin{columns}[c]
+    \begin{column}{0.5\textwidth}
+      \centering
+      \begin{tikzpicture}[n/.style={draw=azulpetroleo,fill=azulpetroleo!10,font=\tiny,minimum height=4mm,inner sep=2pt}]
+        \node[n] (r) at (0,0) {40 \;|\; 80};
+        \node[n] (a) at (-2.0,-1.0) {10 \;|\; 25};
+        \node[n] (b) at (0,-1.0) {50 \;|\; 65};
+        \node[n] (c) at (2.0,-1.0) {90 \;|\; 120};
+        \foreach \x in {-2.6,-2.0,-1.4} \node[n,fill=ambarclaro] at (\x,-2.0) {\phantom{0}};
+        \foreach \x in {-0.6,0,0.6} \node[n,fill=ambarclaro] at (\x,-2.0) {\phantom{0}};
+        \foreach \x in {1.4,2.0,2.6} \node[n,fill=ambarclaro] at (\x,-2.0) {\phantom{0}};
+        \draw[seta] (r) -- (a); \draw[seta] (r) -- (b); \draw[seta] (r) -- (c);
+        \foreach \x in {-2.6,-2.0,-1.4} \draw[cinzamedio] (a) -- (\x,-1.8);
+        \foreach \x in {-0.6,0,0.6} \draw[cinzamedio] (b) -- (\x,-1.8);
+        \foreach \x in {1.4,2.0,2.6} \draw[cinzamedio] (c) -- (\x,-1.8);
+        \node[font=\tiny,text=cinzatexto] at (0,-2.45) {folhas: páginas com as linhas (ou ponteiros)};
+      \end{tikzpicture}
+      \begin{definicao}[Árvore B]
+        Árvore balanceada em que cada nó é uma página com muitas chaves ordenadas. Com 100 chaves por página, três níveis já endereçam um milhão de linhas: poucas leituras de disco por busca.
+      \end{definicao}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \begin{definicao}[Diário de escrita antecipada (WAL)]
+        Antes de alterar o arquivo principal, o SGBD registra a mudança num diário. Se a energia cair no meio, o diário permite refazer ou descartar a operação: é assim que se garante a \textbf{durabilidade}.
+      \end{definicao}
+      \begin{pordentro}[WAL no SQLite]
+        No modo WAL, leitores continuam lendo enquanto um escritor grava, e o diário é incorporado ao banco de tempos em tempos (\emph{checkpoint}). O Room ativa esse modo por padrão em aparelhos com memória suficiente.
+      \end{pordentro}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% =============================================================================
+\section{Bancos NoSQL}
+
+\begin{frame}[fragile]{Modelando em documentos}
+  \begin{columns}[T]
+    \begin{column}{0.5\textwidth}
+\begin{codigo}[title=Firestore: bancadas/b3]{JSON}
+{
+  "nome": "Bancada 3",
+  "sala": "L-12",
+  "limite": 30,
+  "equipamentos": [
+    { "patrimonio": "IFMA-0042",
+      "descricao": "Osciloscópio" },
+    { "patrimonio": "IFMA-0107",
+      "descricao": "Fonte simétrica" }
+  ],
+  "ultimaLeitura": { "valor": 24.8,
+                     "instante": "2026-11-01T15:00" }
+}
+// leituras: subcoleção bancadas/b3/leituras
+\end{codigo}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \begin{conceito}[Modelagem orientada a consultas]
+        Em vez de normalizar, pergunta-se: \textbf{o que cada tela lê?} Os dados lidos juntos ficam no mesmo documento.
+      \end{conceito}
+      \begin{caixadestaque}
+        A lista curta de equipamentos fica \dest{embutida} no documento da bancada; as leituras, que crescem sem limite, ficam numa \dest{subcoleção}.
+      \end{caixadestaque}
+      \begin{atencao}
+        Sem \emph{joins}: dados duplicados precisam ser atualizados em todos os lugares (Módulo 12).
+      \end{atencao}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{SQL \emph{versus} NoSQL}
+  \footnotesize
+  \begin{tabularx}{\textwidth}{@{}l L L@{}}
+    \toprule
+    & \cabecalho{Relacional (SQLite, PostgreSQL)} & \cabecalho{Documentos (Firestore, MongoDB)} \\
+    \midrule
+    Estrutura & esquema fixo, definido antes & flexível, por documento \\
+    Relacionamentos & chaves estrangeiras e \emph{joins} & embutir ou duplicar dados \\
+    Consultas & SQL completo, ad hoc & limitadas, planejadas com índices \\
+    Integridade & garantida pelo banco (FK, \cod{CHECK}) & garantida pelo app e pelas regras \\
+    Escala & vertical (máquina maior), réplicas & horizontal, distribuída \\
+    Tempo real e offline & não nativo & nativo (Firestore) \\
+    \bottomrule
+  \end{tabularx}
+  \vspace{4pt}
+  \begin{caixaambar}
+    Não é ``um ou outro'': o LabMonitor usa \dest{SQLite no aparelho} como fonte da verdade local e \dest{Firestore na nuvem} para compartilhar reservas em tempo real.
+  \end{caixaambar}
+\end{frame}
+
+\begin{frame}{Bancos distribuídos: CAP, ACID e BASE}
+  \begin{columns}[c]
+    \begin{column}{0.42\textwidth}
+      \centering
+      \begin{tikzpicture}
+        \draw[fill=azulpetroleo!8,draw=azulpetroleo,line width=1pt] (90:1.6) -- (210:1.6) -- (330:1.6) -- cycle;
+        \node[caixapetroleo,font=\scriptsize] at (90:1.85) {Consistência};
+        \node[caixaambar,font=\scriptsize] at (210:1.95) {Disponibilidade};
+        \node[caixaescura,font=\scriptsize,align=center] at (330:1.95) {Tolerância a\\partição};
+        \node[font=\tiny,align=center,text=cinzatexto] at (0,-0.1) {com a rede\\partida, escolha\\C ou A};
+      \end{tikzpicture}
+    \end{column}
+    \begin{column}{0.56\textwidth}
+      \begin{definicao}[Teorema CAP]
+        Num sistema distribuído, quando a rede se divide (partição), não é possível garantir ao mesmo tempo \textbf{consistência} (todos leem o dado mais recente) e \textbf{disponibilidade} (toda requisição recebe resposta). Proposto por Eric Brewer (2000) e demonstrado em 2002.
+      \end{definicao}
+      \begin{definicao}[BASE e consistência eventual]
+        Alternativa ao ACID em sistemas distribuídos: sempre responder, aceitando que as réplicas fiquem iguais \textbf{depois} de um tempo.
+      \end{definicao}
+      \begin{exemplo}[No LabMonitor]
+        Uma reserva feita offline no Firestore aparece primeiro só no aparelho e é sincronizada quando a rede volta; conflitos precisam de uma regra (por exemplo, a última escrita vence).
+      \end{exemplo}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% =============================================================================
+\section{Segurança e prática}
+
+\begin{frame}[fragile]{\emph{SQL injection}}
+  \begin{columns}[T]
+    \begin{column}{0.56\textwidth}
+\begin{codigo}[title=ERRADO: concatenar texto digitado]{Kotlin}
+val sql = "SELECT * FROM usuarios " +
+          "WHERE email = '$email'"
+db.rawQuery(sql, null)
+// email digitado:  ' OR '1'='1
+// vira: ... WHERE email = '' OR '1'='1'
+//       -> devolve TODOS os usuários
+\end{codigo}
+\begin{codigo}[title=CERTO: parâmetros]{Kotlin}
+db.rawQuery(
+  "SELECT * FROM usuarios WHERE email = ?",
+  arrayOf(email))
+
+// Room: parâmetros sempre seguros
+@Query("SELECT * FROM usuarios WHERE email = :email")
+suspend fun porEmail(email: String): Usuario?
+\end{codigo}
+    \end{column}
+    \begin{column}{0.42\textwidth}
+      \begin{erro}[O ataque]
+        Texto do usuário colado no SQL pode mudar o comando: ler dados de outros, apagar tabelas, burlar o login.
+      \end{erro}
+      \begin{conceito}[A defesa]
+        Use sempre \textbf{parâmetros} (\cod{?} ou \cod{:nome}). O banco trata o valor como dado, nunca como código.
+      \end{conceito}
+\begin{codigo}[title=Dart (sqflite)]{Dart}
+db.rawQuery(
+    'SELECT * FROM usuarios WHERE email = ?', [email]);
+\end{codigo}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}[fragile]{Praticando com SQLite}
+  \begin{columns}[T]
+    \begin{column}{0.5\textwidth}
+\begin{terminal}[title=sqlite3 no terminal]
+sqlite3 labmonitor.db
+sqlite> .read labmonitor.sql     -- executa o script
+sqlite> .tables                  -- lista as tabelas
+sqlite> .schema leituras         -- mostra a estrutura
+sqlite> .headers on
+sqlite> .mode column
+sqlite> SELECT * FROM bancadas;
+sqlite> .quit
+\end{terminal}
+      \begin{dica}
+        No Linux: \cod{sudo apt install sqlite3}. No Windows e no macOS, baixe em \url{https://sqlite.org/download.html}.
+      \end{dica}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \begin{conceito}[Ferramentas gráficas]
+        \begin{itemize}
+          \item \textbf{DB Browser for SQLite}: gratuito, cria tabelas, edita dados e roda SQL.
+          \item \textbf{Database Inspector} do Android Studio: banco do app \emph{em execução}, ao vivo (Módulo 10).
+          \item Extensões de SQLite para o VS Code.
+        \end{itemize}
+      \end{conceito}
+      \scriptsize
+      \begin{tabular}{@{}l l l@{}}
+        \toprule
+        \cabecalho{SQL} & \cabecalho{Room} & \cabecalho{Drift} \\
+        \midrule
+        \cod{CREATE TABLE} & \cod{@Entity} & \cod{extends Table} \\
+        \cod{PRIMARY KEY} & \cod{@PrimaryKey} & \cod{autoIncrement()} \\
+        \cod{REFERENCES} & \cod{ForeignKey} & \cod{references()} \\
+        \cod{CREATE INDEX} & \cod{Index} & \cod{@TableIndex} \\
+        \cod{SELECT ... ?} & \cod{@Query} & \cod{select()} \\
+        \cod{BEGIN ... COMMIT} & \cod{@Transaction} & \cod{transaction()} \\
+        \bottomrule
+      \end{tabular}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% =============================================================================
+\section{Fechamento}
+
+\begin{frame}{Resumo}
+  \begin{resumo}
+    \begin{itemize}
+      \item Um SGBD organiza, protege e consulta dados; no celular, o SQLite embutido é a base do Room e do Drift.
+      \item Modele com entidades, atributos e relacionamentos; 1:N vira FK, N:N vira tabela associativa.
+      \item Normalize até a 3FN para guardar cada fato uma vez; desnormalize só com motivo medido.
+      \item DDL define a estrutura; DML manipula linhas. Nunca \cod{UPDATE}/\cod{DELETE} sem \cod{WHERE}.
+      \item \cod{SELECT} com \cod{WHERE}, \cod{GROUP BY}, \cod{HAVING}, \cod{JOIN} e subconsultas responde às perguntas do app.
+      \item Transações garantem ACID (com diário de escrita); índices em árvore B aceleram buscas; parâmetros evitam \emph{SQL injection}.
+      \item Bancos de documentos modelam pelas consultas; em sistemas distribuídos, o CAP obriga a escolher entre consistência e disponibilidade.
+    \end{itemize}
+  \end{resumo}
+\end{frame}
+
+\begin{frame}{Glossário (1/2)}
+  \begin{glossario}
+    SGBD & software que armazena, consulta e protege os dados \\
+    Entidade / atributo & coisa sobre a qual se guardam dados / característica dela \\
+    Chave primária (PK) & coluna que identifica cada linha de forma única \\
+    Chave estrangeira (FK) & coluna que aponta para a PK de outra tabela \\
+    Normalização & organizar tabelas para guardar cada fato uma única vez \\
+    Dependência funcional & quando o valor de uma coluna determina o de outra \\
+    Álgebra relacional & operações sobre tabelas (seleção, projeção, junção) por trás do SQL \\
+    DDL / DML & comandos que definem a estrutura / manipulam as linhas \\
+  \end{glossario}
+\end{frame}
+
+\begin{frame}{Glossário (2/2)}
+  \begin{glossario}
+    Transação & conjunto de operações executadas como uma unidade (tudo ou nada) \\
+    ACID & atomicidade, consistência, isolamento e durabilidade \\
+    Índice & estrutura ordenada (árvore B) que acelera buscas \\
+    WAL & diário de escrita antecipada que garante durabilidade \\
+    Plano de consulta & estratégia escolhida pelo otimizador para executar o SQL \\
+    Teorema CAP & com partição de rede, escolhe-se consistência ou disponibilidade \\
+    Consistência eventual & réplicas ficam iguais depois de algum tempo \\
+    SQL \emph{injection} & ataque que insere SQL em dados concatenados ao comando \\
+  \end{glossario}
+\end{frame}
+
+\begin{frame}{Questões de revisão}
+  \begin{questoes}
+    \item Por que usar um SGBD em vez de gravar as leituras num arquivo de texto?
+    \item Como um relacionamento N:N entre usuários e bancadas vira tabelas?
+    \item Que anomalias a ``planilha única'' provoca, e qual forma normal as resolve?
+    \item Escreva em álgebra relacional e em SQL: patrimônio dos equipamentos da Bancada 3.
+    \item O que garante a durabilidade de uma transação se a energia cair logo após o \cod{COMMIT}?
+    \item Por que um índice composto (\cod{bancada\_id}, \cod{instante}) acelera a consulta das últimas leituras?
+    \item Explique o teorema CAP com o exemplo de uma reserva feita offline.
+    \item Mostre por que concatenar o e-mail digitado no SQL é perigoso e como corrigir.
+  \end{questoes}
+\end{frame}
+
+\begin{frame}{Exercícios}
+  \begin{exercicio}[Exercício 1 --- Modelagem]
+    Acrescente ao diagrama ER o \textbf{empréstimo de componentes}: um usuário pega vários componentes, cada componente tem estoque e cada empréstimo tem data de retirada e de devolução. Converta para tabelas.
+  \end{exercicio}
+  \begin{exercicio}[Exercício 2 --- Normalização]
+    Normalize até a 3FN uma planilha de aulas práticas com as colunas: data, turma, professor, e-mail do professor, laboratório, bancadas usadas (lista).
+  \end{exercicio}
+  \begin{exercicio}[Exercício 3 --- Consultas]
+    Escreva SQL para: (a) as 3 bancadas com mais alertas no mês; (b) usuários sem nenhuma reserva; (c) a média diária de temperatura da Bancada 3 na última semana; (d) equipamentos de bancadas reservadas agora.
+  \end{exercicio}
+  \begin{projeto}[LabMonitor --- Etapa 9]
+    Entregue o diagrama ER e o script \arq{labmonitor.sql} (tabelas, índices, 20 linhas de exemplo e 10 consultas comentadas), testado no DB Browser for SQLite. Ele será a base das tabelas Room ou Drift no Módulo 10.
+  \end{projeto}
+\end{frame}
+
+\begin{frame}{Para aprofundar}
+  \small
+  \begin{itemize}
+    \item Linguagem SQL do SQLite: \url{https://www.sqlite.org/lang.html}
+    \item Tipos de dados no SQLite: \url{https://www.sqlite.org/datatype3.html}
+    \item Chaves estrangeiras no SQLite: \url{https://www.sqlite.org/foreignkeys.html}
+    \item \cod{EXPLAIN QUERY PLAN}: \url{https://www.sqlite.org/eqp.html}
+    \item DB Browser for SQLite: \url{https://sqlitebrowser.org}
+    \item Modelo de dados do Firestore: \url{https://firebase.google.com/docs/firestore/data-model}
+    \item OWASP --- SQL injection: \url{https://owasp.org/www-community/attacks/SQL_Injection}
+    \item Livro clássico: Elmasri e Navathe, \emph{Sistemas de Banco de Dados} (Pearson).
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{Respostas das questões de revisão}
+  \begin{respostas}
+    \item Busca rápida com índices, integridade (chaves e restrições), sem duplicação, transações que não corrompem os dados e consultas flexíveis em SQL.
+    \item Com uma tabela associativa (\cod{reservas}) que tem uma FK para \cod{usuarios} e outra para \cod{bancadas}, além dos próprios atributos (início, fim).
+    \item Anomalias de inserção, atualização e exclusão causadas por dados repetidos. A 3FN (com 1FN e 2FN) guarda cada fato uma vez, em tabelas separadas.
+    \item $\pi_{\text{patrimonio}}(\sigma_{\text{bancada\_id}=3}(\text{equipamentos}))$; \cod{SELECT patrimonio FROM equipamentos WHERE bancada\_id = 3;}
+    \item O diário de escrita (WAL ou \emph{journal}): a mudança é registrada antes de ser aplicada e pode ser refeita na reinicialização.
+    \item A árvore B ordena primeiro pela bancada e depois pelo instante: o banco vai direto à faixa da bancada 3 e percorre só as leituras mais recentes, sem varrer a tabela.
+    \item Sem rede (partição), o Firestore escolhe disponibilidade: aceita a reserva localmente; a consistência entre aparelhos só vem quando a sincronização acontece.
+    \item O texto digitado pode conter SQL (\cod{' OR '1'='1}) e mudar o comando. Correção: parâmetros (\cod{?} ou \cod{:email}), que tratam o valor como dado.
+  \end{respostas}
+\end{frame}
+
+\encerramento{Módulo 10 --- Persistência local: Room e DataStore (trilha Kotlin) ou Drift, sqflite e shared\_preferences (trilha Flutter).}
+
+\end{document}

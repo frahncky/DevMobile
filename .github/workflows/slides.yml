@@ -2,7 +2,7 @@ name: Compilar slides
 
 on:
   push:
-    paths: ["modulos/**", "estilo/**", ".github/workflows/slides.yml"]
+    paths: ["modulos/**", "estilo/**", "ferramentas/**", ".github/workflows/slides.yml"]
   pull_request:
   workflow_dispatch:
 
@@ -10,14 +10,29 @@ jobs:
   slides:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - name: Compilar todos os módulos
+      - uses: actions/checkout@v6
+
+      # Cada deck é compilado dentro da própria pasta (comum, kotlin, flutter),
+      # como no Makefile: o estilo e os fundamentos são achados por caminho relativo.
+      - name: Compilar os 35 decks
         uses: xu-cheng/latex-action@v3
         with:
-          working_directory: modulos
-          root_file: modulo*.tex
+          root_file: |
+            modulos/comum/modulo*.tex
+            modulos/kotlin/modulo*.tex
+            modulos/flutter/modulo*.tex
+          work_in_root_file_dir: true
+
+      - name: Verificar layout
+        # informativo: diferenças de versão do TeX Live podem mudar alguns milímetros
+        continue-on-error: true
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq poppler-utils
+          python3 -m pip install --quiet pillow
+          python3 ferramentas/verificar_layout.py modulos/*/modulo*.pdf
+
       - name: Publicar PDFs como artefato
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: slides-devmobile
-          path: modulos/*.pdf
+          path: modulos/*/modulo*.pdf

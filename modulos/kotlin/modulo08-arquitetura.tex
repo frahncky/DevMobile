@@ -1,0 +1,652 @@
+\documentclass[aspectratio=169,10pt]{beamer}
+\makeatletter\def\input@path{{../../estilo/}{../estilo/}{estilo/}}\makeatother
+\usepackage{devmobile}
+\modulo[Kotlin]{08}{Arquitetura de Apps}{Camadas, MVVM, UiState, repositórios, casos de uso, injeção de dependência com Hilt e organização do projeto}
+
+\begin{document}
+\capa
+
+\begin{frame}{Objetivos do módulo}
+  \begin{conceito}[Ao final deste módulo você será capaz de]
+    \begin{itemize}
+      \item Explicar os princípios da arquitetura recomendada para apps Android.
+      \item Separar o app em camadas de UI, domínio e dados.
+      \item Implementar o padrão MVVM com \cod{ViewModel}, \cod{UiState} e eventos.
+      \item Criar repositórios como fonte única da verdade.
+      \item Encapsular regras de negócio em casos de uso.
+      \item Configurar injeção de dependência com Hilt e organizar pacotes e módulos.
+    \end{itemize}
+  \end{conceito}
+\end{frame}
+
+\sumario
+
+\input{../fundamentos/f08-arquitetura}
+
+% =============================================================================
+\section{Por que arquitetura?}
+
+\begin{frame}{O problema da ``Activity faz-tudo''}
+  \begin{columns}[c]
+    \begin{column}{0.46\textwidth}
+      \centering
+      \begin{tikzpicture}
+        \node[caixaescura,minimum width=4.4cm,minimum height=3.6cm,align=center] (a) {};
+        \node[font=\small\bfseries,text=white] at ([yshift=-3mm]a.north) {MainActivity (2\,000 linhas)};
+        \foreach \t/\y in {UI e layout/0.85,chamadas HTTP/0.4,SQL e arquivos/-0.05,regras de negócio/-0.5,Bluetooth/-0.95}{
+          \node[caixaambar,minimum width=3.4cm,minimum height=4mm,font=\tiny] at (0,\y) {\t};}
+      \end{tikzpicture}
+    \end{column}
+    \begin{column}{0.52\textwidth}
+      \begin{erro}[Consequências]
+        \begin{itemize}
+          \item Rotação de tela refaz requisições e perde dados.
+          \item Impossível testar regras sem abrir o app.
+          \item Uma mudança na API quebra a tela inteira.
+        \end{itemize}
+      \end{erro}
+      \begin{conceito}[Princípios recomendados pelo Google]
+        \begin{itemize}
+          \item Separação de responsabilidades.
+          \item UI guiada por modelos de dados.
+          \item Fonte única da verdade.
+          \item Fluxo unidirecional de dados (UDF).
+        \end{itemize}
+      \end{conceito}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{A arquitetura em camadas}
+  \begin{columns}[c]
+    \begin{column}{0.58\textwidth}
+      \centering
+      \begin{tikzpicture}[node distance=3mm]
+        \node[caixa,minimum width=2.9cm,minimum height=8mm] (ui) {Elementos de UI\\ \tiny composables};
+        \node[caixaescura,minimum width=2.9cm,minimum height=8mm,right=4mm of ui] (vm) {State holders\\ \tiny ViewModel};
+        \node[pontilhado,fit=(ui)(vm),label={[rotulo,anchor=south west]north west:\textbf{Camada de UI}}] (cui) {};
+        \node[caixaambar,minimum width=6.2cm,minimum height=7mm,below=8mm of cui] (uc) {Casos de uso \tiny (opcional)};
+        \node[pontilhado,fit=(uc),label={[rotulo,anchor=south west]north west:\textbf{Camada de domínio}}] (cdom) {};
+        \node[caixapetroleo,minimum width=6.2cm,minimum height=7mm,below=8mm of cdom] (repo) {Repositórios};
+        \node[caixa,minimum width=2.9cm,below=3mm of repo.south west,anchor=north west] (loc) {Fonte local\\ \tiny Room, DataStore};
+        \node[caixa,minimum width=2.9cm,below=3mm of repo.south east,anchor=north east] (rem) {Fonte remota\\ \tiny API, Firebase, BLE};
+        \node[pontilhado,fit=(repo)(loc)(rem),label={[rotulo,anchor=south west]north west:\textbf{Camada de dados}}] (cdad) {};
+        \draw[seta] (ui) -- (vm);
+        \draw[seta] (vm.south) -- ++(0,-4mm) -| ([xshift=10mm]uc.north);
+        \draw[seta] (uc) -- (repo);
+        \draw[seta] (repo.south -| loc) -- (loc);
+        \draw[seta] (repo.south -| rem) -- (rem);
+      \end{tikzpicture}
+    \end{column}
+    \begin{column}{0.4\textwidth}
+      \small
+      \begin{itemize}
+        \item As setas indicam \textbf{dependência}: cada camada só conhece a de baixo.
+        \item A camada de dados \textbf{não sabe} que existe UI.
+        \item Os dados sobem como \cod{Flow}; os eventos descem como chamadas de função.
+      \end{itemize}
+      \begin{dica}
+        Comece com UI + dados. Crie a camada de domínio quando regras se repetirem em mais de um ViewModel.
+      \end{dica}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% =============================================================================
+\section{Camada de UI: MVVM}
+
+\begin{frame}{MVVM e fluxo unidirecional}
+  \begin{center}
+  \begin{tikzpicture}[node distance=24mm]
+    \node[caixa,minimum width=2.8cm,minimum height=11mm] (v) {\textbf{View}\\ \tiny composables (stateless)};
+    \node[caixaescura,minimum width=2.8cm,minimum height=11mm,right=of v] (vm) {\textbf{ViewModel}\\ \tiny estado + lógica de tela};
+    \node[caixapetroleo,minimum width=2.8cm,minimum height=11mm,right=of vm] (m) {\textbf{Model}\\ \tiny repositórios e dados};
+    \draw[setaambar] ([yshift=2mm]v.east) -- node[rotulo,above]{eventos: \cod{onReservar()}} ([yshift=2mm]vm.west);
+    \draw[seta] ([yshift=-2mm]vm.west) -- node[rotulo,below]{\cod{StateFlow<UiState>}} ([yshift=-2mm]v.east);
+    \draw[setaambar] ([yshift=2mm]vm.east) -- node[rotulo,above]{chamadas} ([yshift=2mm]m.west);
+    \draw[seta] ([yshift=-2mm]m.west) -- node[rotulo,below]{\cod{Flow<dados>}} ([yshift=-2mm]vm.east);
+  \end{tikzpicture}
+  \end{center}
+  \begin{columns}[T]
+    \begin{column}{0.32\textwidth}
+      \begin{conceito}[View]
+        Desenha o \cod{UiState} e repassa eventos. Não decide nada.
+      \end{conceito}
+    \end{column}
+    \begin{column}{0.32\textwidth}
+      \begin{conceito}[ViewModel]
+        Sobrevive à rotação, transforma dados em \cod{UiState} e trata eventos.
+      \end{conceito}
+    \end{column}
+    \begin{column}{0.32\textwidth}
+      \begin{conceito}[Model]
+        Dados e regras do app, sem nenhuma dependência de Android UI.
+      \end{conceito}
+    \end{column}
+  \end{columns}
+  \begin{atencao}
+    O ViewModel \textbf{nunca} guarda referência a \cod{Activity}, \cod{Context} de tela ou composables: ele vive mais que eles e causaria vazamento de memória.
+  \end{atencao}
+\end{frame}
+
+\begin{frame}[fragile]{Modelando o \cod{UiState}}
+  \begin{columns}[T]
+    \begin{column}{0.5\textwidth}
+\begin{codigo}[title=Estado como data class]{Kotlin}
+data class PainelUiState(
+  val carregando: Boolean = true,
+  val bancadas: List<BancadaUi> = emptyList(),
+  val filtro: String = "",
+  val mensagem: String? = null    // ex.: Snackbar
+) {
+  val vazio get() = !carregando && bancadas.isEmpty()
+}
+
+data class BancadaUi(
+  val id: Int,
+  val titulo: String,
+  val temperatura: String,       // já formatada
+  val emAlerta: Boolean
+)
+\end{codigo}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+\begin{codigo}[title=Ou como sealed interface]{Kotlin}
+sealed interface DetalheUiState {
+  data object Carregando : DetalheUiState
+  data class Pronto(val eq: Equipamento)
+    : DetalheUiState
+  data class Erro(val msg: String)
+    : DetalheUiState
+}
+\end{codigo}
+      \begin{dica}[Qual escolher?]
+        \textbf{sealed}: estados exclusivos (carregando, pronto ou erro). \textbf{data class}: aspectos que convivem (lista, filtro, mensagem).
+      \end{dica}
+      \begin{conceito}
+        O \cod{UiState} é \textbf{imutável}: cada mudança gera uma cópia com \cod{copy()}.
+      \end{conceito}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}[fragile]{O ViewModel}
+  \begin{columns}[T]
+    \begin{column}{0.58\textwidth}
+\begin{codigo}[title=PainelViewModel.kt]{Kotlin}
+class PainelViewModel(
+  private val repo: BancadaRepository
+) : ViewModel() {
+  private val filtro = MutableStateFlow("")
+  val uiState: StateFlow<PainelUiState> =
+    combine(repo.bancadas(), filtro) { lista, f ->
+      PainelUiState(
+        carregando = false,
+        bancadas = lista
+          .filter { f.isBlank() || f in it.nome }
+          .map { it.paraUi() },
+        filtro = f
+      )
+    }.stateIn(viewModelScope,
+      SharingStarted.WhileSubscribed(5_000),
+      PainelUiState())
+
+  fun onFiltroChange(novo: String) { filtro.value = novo }
+  fun onAtualizar() =
+    viewModelScope.launch { repo.sincronizar() }
+}
+\end{codigo}
+    \end{column}
+    \begin{column}{0.4\textwidth}
+      \small
+      \begin{itemize}
+        \item Entradas: fluxos do repositório e estado local (\cod{filtro}).
+        \item \cod{combine} gera um novo \cod{UiState} sempre que algo muda.
+        \item \cod{stateIn} entrega um \cod{StateFlow} pronto para a UI.
+        \item Eventos são funções públicas com nomes de intenção (\cod{onAtualizar}).
+      \end{itemize}
+      \begin{dica}
+        \cod{paraUi()} é uma função de mapeamento: formata números e datas \textbf{fora} da UI, o que facilita testar.
+      \end{dica}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}[fragile]{Tela: \emph{route} + conteúdo sem estado}
+  \begin{columns}[T]
+    \begin{column}{0.54\textwidth}
+\begin{codigo}[title=TelaPainel.kt]{Kotlin}
+@Composable  // liga o ViewModel à tela (sem lógica)
+fun PainelRoute(
+  onAbrir: (Int) -> Unit,
+  vm: PainelViewModel = hiltViewModel()
+) {
+  val estado by vm.uiState.collectAsStateWithLifecycle()
+  TelaPainel(
+    estado = estado,
+    onFiltroChange = vm::onFiltroChange,
+    onAtualizar = vm::onAtualizar,
+    onAbrir = onAbrir
+  )
+}
+@Composable  // só desenha: fácil de testar
+fun TelaPainel(
+  estado: PainelUiState,
+  onFiltroChange: (String) -> Unit,
+  onAtualizar: () -> Unit,
+  onAbrir: (Int) -> Unit
+) { /* Scaffold, campo de busca, LazyColumn... */ }
+\end{codigo}
+    \end{column}
+    \begin{column}{0.44\textwidth}
+      \begin{conceito}[Separação Route / Screen]
+        \textbf{Route}: obtém o ViewModel e coleta o estado.\\
+        \textbf{Screen}: recebe estado e lambdas; não conhece o ViewModel.
+      \end{conceito}
+      \begin{dica}[Preview com qualquer estado]
+        \cod{TelaPainel(PainelUiState(carregando = false,}\\
+        \cod{\ \ bancadas = exemplo), \{\}, \{\}, \{\})}\\[2pt]
+        Pré-visualize vazio, carregando, erro e lista cheia sem rodar o app.
+      \end{dica}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% =============================================================================
+\section{Camada de dados}
+
+\begin{frame}[fragile]{Repositório: fonte única da verdade}
+  \begin{columns}[T]
+    \begin{column}{0.52\textwidth}
+\begin{codigo}[title=BancadaRepository.kt]{Kotlin}
+interface BancadaRepository {
+  fun bancadas(): Flow<List<Bancada>>
+  suspend fun sincronizar()
+  suspend fun reservar(id: Int, ate: Instant)
+}
+
+class BancadaRepositoryImpl(
+  private val dao: BancadaDao,        // local (M10)
+  private val api: LabApi             // remota (M11)
+) : BancadaRepository {
+  // a UI sempre lê do banco local
+  override fun bancadas() = dao.observarTodas()
+    .map { lista -> lista.map { it.paraModelo() } }
+  // a rede só atualiza o banco
+  override suspend fun sincronizar() {
+    val remotas = api.listarBancadas()
+    dao.substituirTodas(remotas.map { it.paraEntidade() })
+  }
+  override suspend fun reservar(id: Int, ate: Instant) =
+    api.reservar(id, ate)
+}
+\end{codigo}
+    \end{column}
+    \begin{column}{0.46\textwidth}
+      \centering
+      \begin{tikzpicture}[node distance=6mm]
+        \node[caixaescura,minimum width=3.6cm] (vm) {ViewModel};
+        \node[caixapetroleo,minimum width=3.6cm,below=of vm] (r) {Repositório};
+        \node[caixaambar,below left=6mm and -14mm of r] (db) {Room\\ \tiny fonte da verdade};
+        \node[caixa,below right=6mm and -14mm of r] (api) {API\\ \tiny rede};
+        \draw[seta] (db) -- node[rotulo,left]{Flow} (r);
+        \draw[seta] (r) -- (vm);
+        \draw[setaambar] (api) -- node[rotulo,below,sloped]{grava} (db);
+      \end{tikzpicture}
+      \begin{conceito}[Por que interface?]
+        A UI depende da \textbf{abstração}. Nos testes trocamos a implementação por um \emph{fake} em memória.
+      \end{conceito}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}[fragile]{Um modelo para cada camada}
+  \begin{columns}[T]
+    \begin{column}{0.5\textwidth}
+\begin{codigo}[title=Modelos e mapeamentos]{Kotlin}
+// Rede (DTO): espelha o JSON da API
+@Serializable
+data class BancadaDto(
+  val id: Int, val nome: String,
+  @SerialName("temp_c") val temp: Double?)
+
+// Banco (Entity): espelha a tabela
+@Entity data class BancadaEntity(
+  @PrimaryKey val id: Int, val nome: String,
+  val temp: Double?)
+
+// Domínio: o que o app entende
+data class Bancada(val id: Int, val nome: String,
+  val temperatura: Double?)
+
+fun BancadaDto.paraEntidade() =
+  BancadaEntity(id, nome, temp)
+fun BancadaEntity.paraModelo() =
+  Bancada(id, nome, temp)
+\end{codigo}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \centering
+      \begin{tikzpicture}[node distance=5mm]
+        \node[caixa] (dto) {\cod{BancadaDto}};
+        \node[caixaambar,right=of dto] (ent) {\cod{BancadaEntity}};
+        \node[caixapetroleo,below=of ent] (mod) {\cod{Bancada}};
+        \node[caixaescura,left=of mod] (ui) {\cod{BancadaUi}};
+        \draw[seta] (dto) -- (ent); \draw[seta] (ent) -- (mod); \draw[seta] (mod) -- (ui);
+      \end{tikzpicture}
+      \begin{conceito}[Por que tantos modelos?]
+        Se a API renomear um campo, só o DTO e um mapeamento mudam. O resto do app nem fica sabendo.
+      \end{conceito}
+      \begin{dica}
+        Em apps pequenos é aceitável usar o mesmo modelo em duas camadas. Separe quando os formatos começarem a divergir.
+      \end{dica}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% =============================================================================
+\section{Camada de domínio}
+
+\begin{frame}[fragile]{Casos de uso}
+  \begin{columns}[T]
+    \begin{column}{0.54\textwidth}
+\begin{codigo}[title=VerificarAlertasUseCase.kt]{Kotlin}
+class VerificarAlertasUseCase(
+  private val bancadas: BancadaRepository,
+  private val ajustes: AjustesRepository
+) {
+  // operator invoke: o objeto é chamado como função
+  operator fun invoke(): Flow<List<Alerta>> =
+    combine(bancadas.bancadas(), ajustes.limite()) {
+      lista, limite ->
+      lista.mapNotNull { b ->
+        val t = b.temperatura ?: return@mapNotNull null
+        if (t > limite) Alerta(b.id, t, limite) else null
+      }
+    }
+}
+
+// no ViewModel
+val alertas = verificarAlertas()
+  .stateIn(viewModelScope, WhileSubscribed(5_000),
+    emptyList())
+\end{codigo}
+    \end{column}
+    \begin{column}{0.44\textwidth}
+      \begin{conceito}[Caso de uso]
+        Classe com \textbf{uma única responsabilidade} de negócio, nomeada com verbo: \cod{ReservarBancada}, \cod{CalcularConsumo}, \cod{VerificarAlertas}.
+      \end{conceito}
+      \begin{dica}[Quando criar]
+        Quando a regra é usada por vários ViewModels, combina repositórios ou o ViewModel cresceu demais.
+      \end{dica}
+      \begin{atencao}
+        Domínio é Kotlin puro, sem \cod{Context} nem classes Android, e por isso é reaproveitável em Kotlin Multiplatform.
+      \end{atencao}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% =============================================================================
+\section{Injeção de dependência com Hilt}
+
+\begin{frame}[fragile]{O que é injeção de dependência}
+  \begin{columns}[T]
+    \begin{column}{0.48\textwidth}
+\begin{codigo}[title=Sem DI: a classe cria o que usa]{Kotlin}
+class PainelViewModel : ViewModel() {
+  private val repo = BancadaRepositoryImpl(
+    AppDatabase.get(???).bancadaDao(),
+    Retrofit.Builder()...create(LabApi::class)
+  )  // acoplado e impossível de testar
+}
+\end{codigo}
+\begin{codigo}[title=Com DI: recebe pronto]{Kotlin}
+class PainelViewModel(
+  private val repo: BancadaRepository
+) : ViewModel()
+\end{codigo}
+    \end{column}
+    \begin{column}{0.5\textwidth}
+      \begin{conceito}[Injeção de dependência (DI)]
+        Uma classe \textbf{recebe} suas dependências (pelo construtor) em vez de criá-las. Alguém de fora monta o ``grafo'' de objetos.
+      \end{conceito}
+      \begin{itemize}
+        \item \textbf{Teste}: injete um repositório \emph{fake}.
+        \item \textbf{Reuso}: um único banco e um único cliente HTTP para o app todo.
+        \item \textbf{Troca}: mude a implementação em um só lugar.
+      \end{itemize}
+      \begin{dica}[Opções]
+        \textbf{Hilt} (oficial Google, verificado em compilação), \textbf{Koin} (simples, também multiplataforma) ou DI manual com uma classe \cod{AppContainer}.
+      \end{dica}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}[fragile]{Hilt: configuração}
+  \begin{columns}[T]
+    \begin{column}{0.5\textwidth}
+\begin{codigo}[title=app/build.gradle.kts]{Kotlin}
+plugins {
+  alias(libs.plugins.ksp)
+  alias(libs.plugins.hilt)
+}
+dependencies {
+  implementation(libs.hilt.android)
+  ksp(libs.hilt.compiler)
+  implementation(libs.hilt.navigation.compose)
+}
+\end{codigo}
+\begin{codigo}[title=LabMonitorApp.kt]{Kotlin}
+@HiltAndroidApp
+class LabMonitorApp : Application()
+\end{codigo}
+\begin{codigo}[title=MainActivity.kt]{Kotlin}
+@AndroidEntryPoint
+class MainActivity : ComponentActivity() { /*...*/ }
+\end{codigo}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \begin{enumerate}
+        \item Adicione os plugins e as dependências.
+        \item Crie uma classe \cod{Application} anotada com \cod{@HiltAndroidApp} e registre-a no manifesto (\cod{android:name=".LabMonitorApp"}).
+        \item Anote a Activity com \cod{@AndroidEntryPoint}.
+        \item Anote ViewModels com \cod{@HiltViewModel}.
+        \item Ensine o Hilt a criar interfaces e classes de bibliotecas com \cod{@Module}.
+      \end{enumerate}
+      \begin{dica}
+        O \textbf{KSP} (\emph{Kotlin Symbol Processing}) gera o código de DI em tempo de compilação: erros de configuração aparecem no build, não no celular.
+      \end{dica}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}[fragile]{Hilt: ViewModels e módulos}
+  \begin{columns}[T]
+    \begin{column}{0.5\textwidth}
+\begin{codigo}[title=ViewModel injetado]{Kotlin}
+@HiltViewModel
+class PainelViewModel @Inject constructor(
+  private val repo: BancadaRepository,
+  private val verificarAlertas: VerificarAlertasUseCase
+) : ViewModel() { /* ... */ }
+
+// Classes próprias: basta @Inject no construtor
+class VerificarAlertasUseCase @Inject constructor(
+  private val bancadas: BancadaRepository,
+  private val ajustes: AjustesRepository
+)
+
+// Na tela
+val vm: PainelViewModel = hiltViewModel()
+\end{codigo}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+\begin{codigo}[title=di/DataModule.kt]{Kotlin}
+@Module
+@InstallIn(SingletonComponent::class)
+abstract class RepositoryModule {
+  @Binds @Singleton   // interface -> implementação
+  abstract fun bancadas(
+    impl: BancadaRepositoryImpl
+  ): BancadaRepository
+}
+
+@Module
+@InstallIn(SingletonComponent::class)
+object DatabaseModule {
+  @Provides @Singleton  // classes de biblioteca
+  fun banco(@ApplicationContext ctx: Context) =
+    Room.databaseBuilder(ctx, AppDatabase::class.java,
+      "labmonitor.db").build()
+
+  @Provides fun dao(db: AppDatabase) = db.bancadaDao()
+}
+\end{codigo}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% =============================================================================
+\section{Organização do projeto}
+
+\begin{frame}[fragile]{Pacotes por funcionalidade e modularização}
+  \begin{columns}[T]
+    \begin{column}{0.44\textwidth}
+\begin{codigo}[title=Pacotes por feature]{bash}
+br.edu.ifma.labmonitor/
+|-- LabMonitorApp.kt
+|-- MainActivity.kt
+|-- navegacao/
+|-- core/
+|   |-- data/   (db, rede, repositórios)
+|   |-- domain/ (modelos, casos de uso)
+|   `-- ui/     (tema, componentes comuns)
+|-- feature/
+|   |-- painel/
+|   |   |-- PainelViewModel.kt
+|   |   `-- TelaPainel.kt
+|   |-- equipamentos/
+|   `-- reservas/
+`-- di/
+\end{codigo}
+    \end{column}
+    \begin{column}{0.54\textwidth}
+      \begin{conceito}[Pacotes por funcionalidade]
+        Agrupar por \emph{feature} em vez de por tipo mantém juntos os arquivos que mudam juntos.
+      \end{conceito}
+      \centering
+      \begin{tikzpicture}[node distance=2.5mm and 3mm]
+        \node[caixaescura] (app) {\cod{:app}};
+        \node[caixa,below left=of app] (f1) {\cod{:feature:painel}};
+        \node[caixa,below right=of app] (f2) {\cod{:feature:reservas}};
+        \node[caixaambar,below=of f1] (d) {\cod{:core:data}};
+        \node[caixaambar,below=of f2] (u) {\cod{:core:ui}};
+        \draw[seta] (app) -- (f1); \draw[seta] (app) -- (f2);
+        \draw[seta] (f1) -- (d); \draw[seta] (f2) -- (d);
+        \draw[seta] (f1) -- (u); \draw[seta] (f2) -- (u);
+      \end{tikzpicture}
+      \begin{dica}[Modularização Gradle]
+        Em projetos grandes, cada pasta vira um módulo Gradle, com builds mais rápidos e fronteiras garantidas pelo compilador (veja o \emph{Now in Android}).
+      \end{dica}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% =============================================================================
+\section{Fechamento}
+
+\begin{frame}{Resumo}
+  \begin{resumo}
+    \begin{itemize}
+      \item Separe o app em camadas: UI (composables + ViewModel), domínio (casos de uso) e dados (repositórios + fontes).
+      \item MVVM com UDF: o ViewModel expõe \cod{StateFlow<UiState>} e recebe eventos como funções.
+      \item Divida cada tela em \emph{Route} (liga o ViewModel) e \emph{Screen} (só desenha).
+      \item O repositório é a fonte única da verdade; a rede alimenta o banco local.
+      \item DTO, Entity e modelo de domínio isolam o app de mudanças externas.
+      \item Hilt monta o grafo de dependências: \cod{@HiltAndroidApp}, \cod{@HiltViewModel}, \cod{@Inject}, \cod{@Module}.
+    \end{itemize}
+  \end{resumo}
+\end{frame}
+
+\begin{frame}{Glossário (1/2)}
+  \begin{glossario}
+    Arquitetura & estruturas do sistema e decisões difíceis de mudar depois \\
+    Camada & grupo de código com uma responsabilidade: UI, domínio ou dados \\
+    MVVM & a \emph{view} observa o estado exposto pelo \cod{ViewModel} \\
+    MVI & estado único e imutável; cada intenção do usuário gera um novo estado \\
+    \cod{UiState} & classe imutável com tudo o que a tela precisa desenhar \\
+    \cod{ViewModel} & guarda o estado da tela e sobrevive à rotação \\
+    Repositório & fonte única da verdade de um tipo de dado \\
+    Caso de uso & classe com uma única regra de negócio reutilizável \\
+    Regra da dependência & camadas internas não conhecem as externas \\
+  \end{glossario}
+\end{frame}
+
+\begin{frame}{Glossário (2/2)}
+  \begin{glossario}
+    Inversão de dependência & depender de abstrações, não de implementações \\
+    Injeção de dependência & receber as dependências prontas em vez de criá-las \\
+    Raiz de composição & único lugar onde os objetos concretos são criados e ligados \\
+    Localizador de serviços & registro global ao qual a classe pede suas dependências \\
+    Hilt & biblioteca de DI do Google, com o grafo verificado na compilação \\
+    Escopo & tempo de vida de uma dependência (\cod{@Singleton}, \cod{@ViewModelScoped}) \\
+    ADR & registro curto de uma decisão de arquitetura e de seus motivos \\
+  \end{glossario}
+\end{frame}
+
+\begin{frame}{Questões de revisão}
+  \begin{questoes}
+    \item Que problemas aparecem quando uma \cod{Activity} faz tudo? Cite três.
+    \item Compare MVP e MVVM: quem atualiza a tela em cada um?
+    \item Por que o \cod{UiState} deve ser imutável e único por tela?
+    \item Enuncie a regra da dependência e dê um exemplo de violação.
+    \item Como a interface \cod{FonteLeituras} permite trocar BLE por MQTT sem mexer no \cod{ViewModel}?
+    \item Qual a diferença entre injeção de dependência e localizador de serviços?
+    \item Que escopo dar ao cliente HTTP, ao banco e a um \cod{ViewModel}? Por quê?
+    \item Quando vale a pena criar a camada de domínio com casos de uso?
+  \end{questoes}
+\end{frame}
+
+\begin{frame}{Exercícios}
+  \begin{exercicio}[Exercício 1 --- Diagnóstico]
+    Analise um projeto antigo seu (ou um exemplo da internet) e liste as responsabilidades misturadas. Desenhe como ficaria em camadas.
+  \end{exercicio}
+  \begin{exercicio}[Exercício 2 --- UiState]
+    Modele o \cod{UiState} da tela de reserva: bancada escolhida, data, horário inicial e final, validação de conflito, envio em andamento e mensagem de erro.
+  \end{exercicio}
+  \begin{exercicio}[Exercício 3 --- Fake]
+    Crie \cod{FakeBancadaRepository} que guarda os dados em um \cod{MutableStateFlow}. Use-o para alimentar o \cod{@Preview} e, no Módulo 14, os testes do ViewModel.
+  \end{exercicio}
+  \begin{projeto}[LabMonitor --- Etapa 8]
+    Refatore o app para MVVM com Hilt: \cod{PainelViewModel}, \cod{EquipamentosViewModel}, repositórios com implementação \emph{fake} e o caso de uso \cod{VerificarAlertasUseCase}.
+  \end{projeto}
+\end{frame}
+
+\begin{frame}{Para aprofundar}
+  \small
+  \begin{itemize}
+    \item Guia de arquitetura de apps: \url{https://developer.android.com/topic/architecture}
+    \item Recomendações de arquitetura: \url{https://developer.android.com/topic/architecture/recommendations}
+    \item Camada de UI: \url{https://developer.android.com/topic/architecture/ui-layer}
+    \item Camada de dados: \url{https://developer.android.com/topic/architecture/data-layer}
+    \item Hilt: \url{https://developer.android.com/training/dependency-injection/hilt-android}
+    \item Now in Android (app de referência): \url{https://github.com/android/nowinandroid}
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{Respostas das questões de revisão}
+  \begin{respostas}
+    \item A rotação refaz requisições e perde dados; as regras não podem ser testadas sem o app; uma mudança na API ou no banco quebra a tela; o código fica enorme e difícil de entender.
+    \item No MVP, o \emph{presenter} chama métodos de uma interface da \emph{view}. No MVVM, o \cod{ViewModel} expõe estado e a \emph{view} o observa, sem que o \cod{ViewModel} a conheça.
+    \item Um único objeto imutável evita estados contraditórios e atualizações pela metade; cada mudança gera uma cópia nova, fácil de comparar, registrar e testar.
+    \item As camadas internas não conhecem as externas. Violação: um caso de uso que importa \cod{android.content.Context} ou classes do Retrofit.
+    \item O \cod{ViewModel} depende só da interface, e o Hilt injeta \cod{FonteBle} ou \cod{FonteMqtt}: trocar é mudar uma linha no módulo de DI. Nos testes, entra uma \cod{FonteFake}.
+    \item Na DI, a classe recebe as dependências de fora, explícitas no construtor. No localizador, ela mesma as pede a um registro global, o que as esconde e só falha em execução.
+    \item Cliente HTTP e banco: únicos no app (\cod{@Singleton}), pois são caros e compartilhados. \cod{ViewModel}: ligado à tela, vive enquanto ela estiver na pilha.
+    \item Quando regras se repetem em mais de um \cod{ViewModel}, são complexas ou precisam de testes isolados. Em apps pequenos, UI e dados bastam.
+  \end{respostas}
+\end{frame}
+
+\encerramento{Módulo 09 (comum) --- Fundamentos de banco de dados: modelagem, SQL, normalização, transações e índices.}
+
+\end{document}

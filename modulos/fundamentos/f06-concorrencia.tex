@@ -1,0 +1,303 @@
+% =============================================================================
+%  Fundamentos compartilhados --- Módulo 06: concorrência e assincronia
+%  Incluído pelas trilhas Kotlin e Flutter com \input{../fundamentos/f06-concorrencia}
+% =============================================================================
+\section{Fundamentos: concorrência e assincronia}
+
+\begin{frame}{Programas, processos e \emph{threads}}
+  \begin{columns}[c]
+    \begin{column}{0.47\textwidth}
+      \centering
+      \begin{tikzpicture}[every node/.style={font=\tiny}]
+        \draw[azulpetroleo,line width=0.8pt,rounded corners=4pt,fill=cinzafundo] (0,0) rectangle (5.6,3.2);
+        \node[rotulo,anchor=north west] at (0.1,3.15) {\textbf{processo do app}};
+        \node[caixaambar,minimum width=5.1cm,minimum height=5mm,font=\tiny] at (2.8,2.45) {memória compartilhada (\emph{heap}): objetos do app};
+        \foreach \x/\n in {0.95/{principal (UI)},2.8/{rede},4.65/{cálculo}}{
+          \node[caixaescura,minimum width=1.6cm,minimum height=11mm,font=\tiny,align=center] at (\x,1.15) {\emph{thread}\\ \n\\[1pt] \textcolor{ambarclaro}{pilha própria}};
+        }
+        \node[caixa,minimum width=5.6cm,minimum height=5mm,font=\tiny] (so) at (2.8,-0.55) {sistema operacional: escalonador};
+        \foreach \x in {0.7,2.1,3.5,4.9}{\node[caixa,minimum width=1.1cm,minimum height=4mm,font=\tiny] at (\x,-1.3) {núcleo};}
+      \end{tikzpicture}
+    \end{column}
+    \begin{column}{0.51\textwidth}
+      \begin{definicao}[Processo e \emph{thread}]
+        \textbf{Processo}: programa em execução, com memória própria e isolada dos outros apps. \textbf{\emph{Thread}}: linha de execução dentro do processo; as \emph{threads} dividem a memória do processo, mas cada uma tem sua pilha.
+      \end{definicao}
+      \begin{pordentro}[O escalonador]
+        O sistema operacional distribui as \emph{threads} pelos núcleos e alterna entre elas milhares de vezes por segundo (troca de contexto). Cada \emph{thread} custa memória e tempo de troca: não se cria uma por tarefa.
+      \end{pordentro}
+      \begin{analogia}
+        O processo é a cozinha; as \emph{threads} são os cozinheiros. Eles dividem a despensa, e é aí que começam as brigas pelo mesmo ingrediente.
+      \end{analogia}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Concorrência e paralelismo}
+  \begin{columns}[c]
+    \begin{column}{0.47\textwidth}
+      \centering
+      \begin{tikzpicture}[x=0.55cm,y=0.5cm,every node/.style={font=\tiny}]
+        \node[rotulo,anchor=east] at (-0.2,2) {1 núcleo};
+        \foreach \x/\cor in {0/petroleo,1.5/ambar,3/petroleo,4.5/ambar,6/petroleo,7.5/ambar}{\fill[\cor!80] (\x,1.6) rectangle ++(1.4,0.8);}
+        \node[rotulo] at (4.5,3.1) {\textbf{concorrência}: as tarefas se alternam};
+        \node[rotulo,anchor=east] at (-0.2,0) {núcleo 1};
+        \fill[petroleo!80] (0,-0.4) rectangle ++(8.9,0.8);
+        \node[rotulo,anchor=east] at (-0.2,-1.1) {núcleo 2};
+        \fill[ambar!80] (0,-1.5) rectangle ++(8.9,0.8);
+        \node[rotulo] at (4.5,-2.3) {\textbf{paralelismo}: as tarefas rodam juntas};
+        \draw[->,cinzamedio] (0,-2.9) -- (9.3,-2.9) node[rotulo,right]{tempo};
+        \fill[petroleo!80] (0.4,4) rectangle ++(0.5,0.4); \node[rotulo,anchor=west] at (1,4.2) {tarefa A};
+        \fill[ambar!80] (3.4,4) rectangle ++(0.5,0.4); \node[rotulo,anchor=west] at (4,4.2) {tarefa B};
+      \end{tikzpicture}
+      \raggedright
+      \begin{pordentro}[Chips de celular]
+        Combinam núcleos de alto desempenho e núcleos econômicos (big.LITTLE): o sistema escolhe onde cada \emph{thread} roda para poupar bateria.
+      \end{pordentro}
+    \end{column}
+    \begin{column}{0.51\textwidth}
+      \begin{definicao}[Concorrência]
+        Várias tarefas em andamento no mesmo período, que podem se alternar. É um jeito de \textbf{estruturar} o programa.
+      \end{definicao}
+      \begin{definicao}[Paralelismo]
+        Várias tarefas executando \textbf{no mesmo instante}, em núcleos diferentes. É um jeito de \textbf{executar}.
+      \end{definicao}
+      \begin{historia}[Na frase de Rob Pike (2012)]
+        Concorrência é lidar com muitas coisas ao mesmo tempo; paralelismo é fazer muitas coisas ao mesmo tempo.
+      \end{historia}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Tarefas de I/O e tarefas de CPU}
+  \scriptsize
+  \begin{tabularx}{\textwidth}{@{}l L L l l@{}}
+    \toprule
+    \cabecalho{Tipo} & \cabecalho{O que limita} & \cabecalho{Exemplos} & \cabecalho{Kotlin} & \cabecalho{Dart} \\
+    \midrule
+    I/O & espera por rede, disco ou banco & requisição HTTP, consulta SQL, ler arquivo & \cod{suspend} + \cod{Dispatchers.IO} & \cod{Future} + \cod{await} \\
+    CPU & cálculo no processador & decodificar imagem, JSON gigante, criptografia & \cod{Dispatchers.Default} & \cod{Isolate.run} \\
+    Tempo & o relógio & atraso, repetição, tempo limite & \cod{delay}, \cod{withTimeout} & \cod{Future.delayed}, \cod{Timer} \\
+    \bottomrule
+  \end{tabularx}
+  \normalsize
+  \vspace{4pt}
+  \begin{columns}[T]
+    \begin{column}{0.49\textwidth}
+      \begin{definicao}[Bloqueante \emph{versus} não bloqueante]
+        Uma chamada \textbf{bloqueante} prende a \emph{thread} até terminar. Uma \textbf{não bloqueante} registra o pedido e libera a \emph{thread}; o resultado chega depois, por notificação do sistema.
+      \end{definicao}
+    \end{column}
+    \begin{column}{0.49\textwidth}
+      \begin{conceito}[A ideia-chave do módulo]
+        \textbf{Esperar não precisa de \emph{thread}}: enquanto a resposta não chega, a mesma \emph{thread} atende outros eventos. Já o \textbf{cálculo pesado precisa de um núcleo} de verdade, fora da \emph{thread} da interface.
+      \end{conceito}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{O laço de eventos em cada plataforma}
+  \begin{columns}[T]
+    \begin{column}{0.55\textwidth}
+      \begin{definicao}[Laço de eventos (\emph{event loop})]
+        Uma \emph{thread} que repete sem parar: pega o próximo evento da fila, executa o código associado até o fim e volta à fila. Toda interface gráfica funciona assim.
+      \end{definicao}
+      \scriptsize
+      \begin{tabularx}{\linewidth}{@{}l L@{}}
+        \toprule
+        \cabecalho{Plataforma} & \cabecalho{Mecanismo na \emph{thread} principal} \\
+        \midrule
+        Android & \cod{Looper} + \cod{MessageQueue} + \cod{Handler} \\
+        iOS & \cod{RunLoop} e fila principal do GCD \\
+        Dart & fila de microtarefas e fila de eventos \\
+        Web & laço de eventos do navegador (tarefas e microtarefas) \\
+        \bottomrule
+      \end{tabularx}
+    \end{column}
+    \begin{column}{0.43\textwidth}
+      \begin{pordentro}[Dart: duas filas]
+        Antes de cada evento, o Dart esvazia a fila de \textbf{microtarefas} (continuações curtas de \cod{Future}s). Desde o Flutter 3.29, no Android e no iOS, o código Dart roda na própria \emph{thread} principal do app.
+      \end{pordentro}
+      \begin{atencao}[Um evento lento atrasa todos]
+        Quadros se perdem (\emph{jank}) e, no Android, sem resposta a um toque por cerca de 5\,s aparece o diálogo ANR.
+      \end{atencao}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Da pirâmide de \emph{callbacks} ao \cod{async}/\cod{await}}
+  \centering
+  \begin{tikzpicture}[every node/.style={font=\tiny}]
+    \draw[seta] (0,0) -- (13.4,0);
+    \foreach \x/\t/\d in {1.2/\emph{callbacks}/{funções chamadas\\ no fim da tarefa},4.4/\emph{Futures} e \emph{Promises}/{objeto que representa\\ o resultado futuro},7.8/{\cod{async}/\cod{await}}/{C\# (2012), Dart (2015),\\ JavaScript (2017)},11.4/concorrência estruturada/{Kotlin (2018):\\ escopos e cancelamento}}{
+      \fill[ambar] (\x,0) circle (2pt);
+      \node[font=\scriptsize\bfseries,text=azulpetroleo,above=1mm] at (\x,0) {\t};
+      \node[rotulo,below=1mm] at (\x,0) {\d};
+    }
+  \end{tikzpicture}
+  \raggedright
+  \begin{columns}[T]
+    \begin{column}{0.49\textwidth}
+      \begin{definicao}[\emph{Future} (ou \emph{Promise})]
+        Objeto que representa um resultado que ainda não existe. Começa \textbf{pendente} e termina \textbf{com valor} ou \textbf{com erro}. Quem o recebe pode esperar sem bloquear a \emph{thread}.
+      \end{definicao}
+      \centering
+      \begin{tikzpicture}[x=0.5cm,y=0.45cm,every node/.style={font=\tiny}]
+        \node[rotulo,anchor=east] at (-0.2,0.4) {\emph{thread}};
+        \fill[petroleo!80] (0,0) rectangle ++(2,0.8); \node[white] at (1,0.4) {trecho 1};
+        \fill[cinzaclaro] (2,0) rectangle ++(3,0.8); \node at (3.5,0.4) {outros eventos};
+        \fill[petroleo!80] (5,0) rectangle ++(2,0.8); \node[white] at (6,0.4) {trecho 2};
+        \fill[cinzaclaro] (7,0) rectangle ++(2.4,0.8); \node at (8.2,0.4) {outros};
+        \fill[petroleo!80] (9.4,0) rectangle ++(1.6,0.8); \node[white] at (10.2,0.4) {fim};
+        \foreach \x in {2,7}{\draw[ambar,line width=1pt] (\x,-0.2) -- (\x,1.1); \node[rotulo,above] at (\x,1.1) {\cod{await}};}
+      \end{tikzpicture}
+    \end{column}
+    \begin{column}{0.49\textwidth}
+      \begin{pordentro}[O que acontece em um \cod{await}]
+        A função pausa em um \textbf{ponto de suspensão} e devolve a \emph{thread}; quando o resultado chega, continua de onde parou, com as variáveis locais preservadas. O compilador do Kotlin transforma cada função \cod{suspend} em uma máquina de estados que recebe uma \cod{Continuation}.
+      \end{pordentro}
+      \begin{dica}
+        O ganho é escrever código assíncrono com cara de sequencial: \cod{try}/\cod{catch} e laços funcionam como sempre.
+      \end{dica}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Concorrência estruturada}
+  \begin{columns}[c]
+    \begin{column}{0.45\textwidth}
+      \centering
+      \begin{tikzpicture}[every node/.style={font=\tiny}]
+        \node[caixaescura,minimum width=3.4cm,font=\tiny] (e) at (0,0) {escopo da tela};
+        \node[caixa,minimum width=1.6cm,font=\tiny] (a) at (-0.95,-1) {carregar lista};
+        \node[caixa,minimum width=1.6cm,font=\tiny] (b) at (0.95,-1) {ouvir sensor};
+        \node[caixaambar,minimum width=1.6cm,font=\tiny] (c) at (0.95,-2) {ler histórico};
+        \draw[seta] (e) -- (a); \draw[seta] (e) -- (b); \draw[seta] (b) -- (c);
+        \draw[pontilhado] (-2,0.5) rectangle (2,-2.5);
+        \node[rotulo,text width=4.2cm] at (0,-3) {a tela fecha $\Rightarrow$ o escopo termina $\Rightarrow$ as tarefas filhas são canceladas};
+      \end{tikzpicture}
+      \begin{historia}
+        Assim como a programação estruturada aposentou o \cod{goto}, este modelo aposenta tarefas soltas. A ideia ganhou força em 2018, com um ensaio de Nathaniel J. Smith, e o Kotlin a adotou no mesmo ano.
+      \end{historia}
+    \end{column}
+    \begin{column}{0.53\textwidth}
+      \begin{definicao}[Concorrência estruturada]
+        Toda tarefa concorrente nasce dentro de um \textbf{escopo} e não vive mais que ele: quando o escopo termina, as tarefas filhas são canceladas.
+      \end{definicao}
+      \begin{conceito}[Garantias]
+        Nada fica rodando depois que a tela fecha; o cancelamento chega aos filhos; erros dos filhos chegam ao pai.
+      \end{conceito}
+      \begin{atencao}[E no Dart?]
+        \cod{Future} e \cod{Stream} não seguem esse modelo: cancele inscrições e temporizadores no \cod{dispose} e confira \cod{mounted} após um \cod{await}.
+      \end{atencao}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Condições de corrida e impasses}
+  \begin{columns}[T]
+    \begin{column}{0.47\textwidth}
+      \centering
+      \begin{tikzpicture}[x=0.7cm,y=0.6cm,every node/.style={font=\tiny}]
+        \tikzset{passo/.style={caixa,minimum height=4.5mm,minimum width=1.2cm,inner sep=2pt,font=\tiny}}
+        \node[rotulo,anchor=east] at (-0.1,1) {\emph{thread} A};
+        \node[rotulo,anchor=east] at (-0.1,0) {\emph{thread} B};
+        \node[passo] at (0.9,1) {lê 5};
+        \node[passo] at (2.6,0) {lê 5};
+        \node[passo,caixaambar,font=\tiny] at (4.3,1) {grava 6};
+        \node[passo,caixaambar,font=\tiny] at (6,0) {grava 6};
+        \draw[->,cinzamedio] (0,-0.7) -- (7,-0.7) node[rotulo,right]{t};
+        \node[rotulo,text=vermelhoerro,text width=4.8cm] at (3.4,-1.3) {duas somas de 1 a partir de 5 deveriam dar 7: uma atualização se perdeu};
+      \end{tikzpicture}
+      \begin{definicao}[Condição de corrida]
+        Erro em que o resultado depende da ordem imprevisível em que tarefas concorrentes acessam um dado compartilhado.
+      \end{definicao}
+      \begin{atencao}[Impasse (\emph{deadlock})]
+        Duas tarefas, cada uma segurando um recurso e esperando o da outra: ninguém avança. Adquira travas sempre na mesma ordem.
+      \end{atencao}
+    \end{column}
+    \begin{column}{0.51\textwidth}
+      \scriptsize
+      \begin{tabularx}{\linewidth}{@{}l L@{}}
+        \toprule
+        \cabecalho{Proteção} & \cabecalho{Como funciona} \\
+        \midrule
+        Exclusão mútua & uma tarefa por vez na região crítica (\cod{Mutex}) \\
+        Operação atômica & ler e gravar em um passo indivisível (\cod{AtomicInteger}, \cod{StateFlow.update}) \\
+        Confinamento & só uma \emph{thread} toca o dado (a principal, por exemplo) \\
+        Imutabilidade & ninguém altera: cria-se uma cópia nova \\
+        Mensagens & cada tarefa tem seus dados e troca cópias \\
+        \bottomrule
+      \end{tabularx}
+      \normalsize
+      \begin{pordentro}[Corrida lógica com uma \emph{thread} só]
+        Entre dois \cod{await}, outro evento pode mudar o estado. Duas buscas disparadas em sequência podem responder fora de ordem, e a mais antiga sobrescrever a mais nova.
+      \end{pordentro}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Memória compartilhada ou troca de mensagens}
+  \begin{columns}[c]
+    \begin{column}{0.43\textwidth}
+      \centering
+      \begin{tikzpicture}[every node/.style={font=\tiny}]
+        \node[caixa,minimum width=1.3cm,font=\tiny] (a) at (0,0) {\emph{thread} A};
+        \node[caixa,minimum width=1.3cm,font=\tiny] (b) at (2.6,0) {\emph{thread} B};
+        \node[caixaambar,minimum width=1.6cm,font=\tiny] (o) at (1.3,-1.2) {objeto + trava};
+        \draw[seta] (a) -- (o); \draw[seta] (b) -- (o);
+        \node[rotulo] at (1.3,0.6) {\textbf{memória compartilhada}};
+        \node[caixaescura,minimum width=1.3cm,minimum height=9mm,font=\tiny] (c) at (0,-3) {isolate A\\ memória A};
+        \node[caixaescura,minimum width=1.3cm,minimum height=9mm,font=\tiny] (d) at (2.6,-3) {isolate B\\ memória B};
+        \draw[setaambar] ([yshift=1.5mm]c.east) -- node[rotulo,above]{mensagem} ([yshift=1.5mm]d.west);
+        \draw[setaambar] ([yshift=-1.5mm]d.west) -- node[rotulo,below]{resposta} ([yshift=-1.5mm]c.east);
+        \node[rotulo] at (1.3,-2.1) {\textbf{troca de mensagens}};
+      \end{tikzpicture}
+    \end{column}
+    \begin{column}{0.55\textwidth}
+      \scriptsize
+      \begin{tabularx}{\linewidth}{@{}l L L@{}}
+        \toprule
+         & \cabecalho{Memória compartilhada} & \cabecalho{Troca de mensagens} \\
+        \midrule
+        Exemplos & \emph{threads} da JVM (Kotlin, Java) & \emph{isolates} do Dart, atores, Web Workers \\
+        Comunicação & ler e gravar o mesmo objeto & enviar cópias de dados \\
+        Risco & corridas e impasses & custo de copiar dados grandes \\
+        Proteção & travas, atômicos, confinamento & o próprio modelo isola \\
+        \bottomrule
+      \end{tabularx}
+      \normalsize
+      \begin{analogia}
+        Um quadro branco compartilhado exige regras para ninguém apagar o do colega. Colegas que trocam bilhetes nunca brigam pelo quadro, mas gastam tempo escrevendo.
+      \end{analogia}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Fluxos de dados: frios, quentes e contrapressão}
+  \begin{columns}[T]
+    \begin{column}{0.55\textwidth}
+      \begin{definicao}[Fluxo (\emph{stream})]
+        Sequência de valores que chegam ao longo do tempo: leituras de sensor, mensagens, mudanças no banco. Segue o padrão \textbf{Observador}: quem produz notifica quem se inscreveu.
+      \end{definicao}
+      \scriptsize
+      \begin{tabularx}{\linewidth}{@{}l L l l@{}}
+        \toprule
+        \cabecalho{Tipo} & \cabecalho{Comportamento} & \cabecalho{Kotlin} & \cabecalho{Dart} \\
+        \midrule
+        Frio & o produtor começa a cada inscrição & \cod{Flow} & \cod{Stream} (\cod{async*}) \\
+        Quente & existe sem observadores; quem chega tarde perde o passado & \cod{SharedFlow} & \cod{Stream} \emph{broadcast} \\
+        Estado & quente e guarda o valor atual & \cod{StateFlow} & \cod{ValueNotifier} \\
+        \bottomrule
+      \end{tabularx}
+    \end{column}
+    \begin{column}{0.43\textwidth}
+      \begin{definicao}[Contrapressão (\emph{backpressure})]
+        O que fazer quando o produtor é mais rápido que o consumidor: acumular (\emph{buffer}), descartar, manter só o mais recente (\emph{conflate}) ou amostrar (\emph{debounce}, \emph{sample}).
+      \end{definicao}
+      \begin{exemplo}[No LabMonitor]
+        Um sensor envia 100 leituras por segundo e a tela desenha 60 quadros: basta mostrar sempre a leitura mais recente.
+      \end{exemplo}
+    \end{column}
+  \end{columns}
+\end{frame}

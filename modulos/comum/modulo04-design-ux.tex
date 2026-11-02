@@ -1,0 +1,852 @@
+\documentclass[aspectratio=169,10pt]{beamer}
+\makeatletter\def\input@path{{../../estilo/}{../estilo/}{estilo/}}\makeatother
+\usepackage{devmobile}
+\modulo{04}{Design de Interfaces e UX}{Experiência do usuário, pesquisa, princípios de interação, design visual, acessibilidade, sistemas de design, prototipação no Figma e testes de usabilidade}
+
+\begin{document}
+\capa
+
+\begin{frame}{Objetivos do módulo}
+  \begin{conceito}[Ao final deste módulo você será capaz de]
+    \begin{itemize}
+      \item Diferenciar UX, UI e usabilidade e conduzir um processo de design centrado no usuário.
+      \item Criar personas, jornadas e a arquitetura de navegação de um app.
+      \item Aplicar leis de interação, heurísticas de Nielsen e princípios da Gestalt.
+      \item Usar tipografia, cor, contraste, espaçamento e grades com critério.
+      \item Projetar para acessibilidade seguindo a WCAG.
+      \item Prototipar no Figma e validar com testes de usabilidade.
+    \end{itemize}
+  \end{conceito}
+\end{frame}
+
+\sumario
+
+% =============================================================================
+\section{UX, UI e o processo de design}
+
+\begin{frame}{UX, UI e usabilidade}
+  \begin{columns}[T]
+    \begin{column}{0.5\textwidth}
+      \begin{definicao}[UX --- experiência do usuário]
+        Tudo o que a pessoa percebe e sente ao usar o produto: encontrar, aprender, usar, errar, receber ajuda.
+      \end{definicao}
+      \begin{definicao}[UI --- interface do usuário]
+        A parte concreta com que se interage: telas, componentes, textos, cores, sons e vibrações.
+      \end{definicao}
+      \begin{definicao}[Usabilidade (ISO 9241-11)]
+        Quanto um produto permite que usuários atinjam objetivos com \textbf{eficácia}, \textbf{eficiência} e \textbf{satisfação} num contexto de uso.
+      \end{definicao}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \begin{analogia}
+        Num carro, a UI é o volante e o painel; a UX é a viagem inteira, do ajuste do banco à chegada sem estresse.
+      \end{analogia}
+      \begin{historia}
+        Don Norman popularizou o termo \emph{user experience} nos anos 1990, na Apple, para cobrir toda a relação da pessoa com o produto.
+      \end{historia}
+      \begin{atencao}
+        No celular, a pessoa usa uma mão, está distraída, com sol na tela e rede instável. Projete para esse contexto.
+      \end{atencao}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Design centrado no usuário: o duplo diamante}
+  \centering
+  \begin{tikzpicture}[x=0.9cm,y=0.85cm]
+    \fill[azulpetroleo!10] (0,0) -- (2.4,1.25) -- (4.8,0) -- (2.4,-1.25) -- cycle;
+    \fill[ambar!18] (4.8,0) -- (7.2,1.25) -- (9.6,0) -- (7.2,-1.25) -- cycle;
+    \draw[azulpetroleo,line width=1pt] (0,0) -- (2.4,1.25) -- (4.8,0) -- (2.4,-1.25) -- cycle;
+    \draw[ambar!80!black,line width=1pt] (4.8,0) -- (7.2,1.25) -- (9.6,0) -- (7.2,-1.25) -- cycle;
+    \draw[cinzamedio,dashed] (2.4,1.4) -- (2.4,-1.4) (7.2,1.4) -- (7.2,-1.4);
+    \node[font=\scriptsize\bfseries,text=azulpetroleo] at (1.25,0) {Descobrir};
+    \node[font=\scriptsize\bfseries,text=azulpetroleo] at (3.6,0) {Definir};
+    \node[font=\scriptsize\bfseries,text=ambar!70!black] at (6.05,0) {Desenvolver};
+    \node[font=\scriptsize\bfseries,text=ambar!70!black] at (8.4,0) {Entregar};
+    \node[font=\tiny,align=center] at (2.4,-1.65) {problema certo};
+    \node[font=\tiny,align=center] at (7.2,-1.65) {solução certa};
+    \node[font=\tiny,text=cinzamedio] at (1.2,1.25) {divergir};
+    \node[font=\tiny,text=cinzamedio] at (3.6,1.25) {convergir};
+    \node[font=\tiny,text=cinzamedio] at (6.0,1.25) {divergir};
+    \node[font=\tiny,text=cinzamedio] at (8.4,1.25) {convergir};
+  \end{tikzpicture}
+  \vspace{4pt}
+  \begin{columns}[T]
+    \begin{column}{0.48\textwidth}
+      \begin{conceito}[As quatro fases]
+        \textbf{Descobrir}: pesquisar usuários e contexto. \textbf{Definir}: escolher o problema. \textbf{Desenvolver}: gerar e prototipar soluções. \textbf{Entregar}: testar, refinar e lançar.
+      \end{conceito}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \begin{historia}
+        Proposto pelo Design Council britânico em 2005; resume o \emph{design thinking}: abrir possibilidades, depois escolher. O processo é iterativo.
+      \end{historia}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% =============================================================================
+\section{Pesquisa e definição}
+
+\begin{frame}{Conhecer quem vai usar: personas}
+  \begin{columns}[T]
+    \begin{column}{0.48\textwidth}
+      \begin{conceito}[Métodos de pesquisa]
+        \begin{itemize}
+          \item \textbf{Entrevistas}: entender objetivos e dores.
+          \item \textbf{Observação} no local: ver o laboratório funcionando.
+          \item \textbf{Questionários}: medir em escala.
+          \item \textbf{Análise de concorrentes}: o que já existe.
+        \end{itemize}
+      \end{conceito}
+      \begin{definicao}[Persona]
+        Personagem fictício, baseado em dados da pesquisa, que representa um grupo de usuários e mantém a equipe focada em pessoas reais.
+      \end{definicao}
+    \end{column}
+    \begin{column}{0.5\textwidth}
+      \begin{exemplo}[Persona: Marina, técnica do laboratório]
+        \scriptsize
+        \textbf{Perfil}: 34 anos, cuida de 20 bancadas e dos equipamentos; usa o celular o dia todo, muitas vezes com luvas.\\[2pt]
+        \textbf{Objetivos}: saber rapidamente quais bancadas estão em uso e se há algo superaquecendo.\\[2pt]
+        \textbf{Dores}: alunos reservam por WhatsApp e esquecem; descobre falhas só quando alguém reclama.\\[2pt]
+        \textbf{Citação}: ``Eu preciso ver tudo de uma vez, sem abrir dez telas.''
+      \end{exemplo}
+      \begin{atencao}
+        Persona inventada sem pesquisa vira estereótipo. Baseie-se em conversas reais.
+      \end{atencao}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Jornada do usuário}
+  \centering
+  \begin{tikzpicture}[x=2.35cm,every node/.style={font=\tiny,align=center}]
+    \foreach \i/\t in {0/Chega ao\\laboratório,1/Procura\\bancada livre,2/Faz a\\reserva,3/Usa a\\bancada,4/Encerra e\\devolve}{
+      \node[caixapetroleo,minimum width=2.1cm,minimum height=8mm] at (\i,0) {\t};}
+    \node[font=\scriptsize\bfseries,text=azulpetroleo,anchor=east] at (-0.55,0) {Etapa};
+    \node[font=\scriptsize\bfseries,text=azulpetroleo,anchor=east] at (-0.55,-1.0) {Ação};
+    \foreach \i/\t in {0/abre o app,1/filtra por\\``livre agora'',2/escolhe horário\\e confirma,3/acompanha\\leituras,4/encerra pelo\\QR code}{
+      \node at (\i,-1.0) {\t};}
+    \node[font=\scriptsize\bfseries,text=azulpetroleo,anchor=east] at (-0.55,-2.0) {Emoção};
+    \draw[ambar,line width=1.4pt] plot[smooth] coordinates {(0,-1.85) (1,-2.35) (2,-1.75) (3,-1.65) (4,-2.15)};
+    \foreach \x/\y in {0/-1.85,1/-2.35,2/-1.75,3/-1.65,4/-2.15} \fill[ambar] (\x,\y) circle (2pt);
+    \node[text=vermelhoerro] at (1,-2.6) {frustração: lista longa};
+    \node[text=vermelhoerro] at (4,-2.45) {esquece de encerrar};
+  \end{tikzpicture}
+  \vspace{4pt}
+  \begin{columns}[T]
+    \begin{column}{0.48\textwidth}
+      \begin{definicao}[Mapa de jornada]
+        Representa as etapas que a pessoa percorre para atingir um objetivo, com ações, pensamentos e emoções em cada uma.
+      \end{definicao}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \begin{dica}
+        Os pontos baixos da curva são as oportunidades de design: filtro ``livre agora'' e lembrete para encerrar.
+      \end{dica}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Arquitetura da informação e navegação}
+  \begin{columns}[c]
+    \begin{column}{0.52\textwidth}
+      \centering
+      \begin{tikzpicture}[node distance=3mm,every node/.style={font=\tiny,minimum width=1.55cm,minimum height=6mm}]
+        \node[caixaescura] (login) {Login};
+        \node[caixapetroleo,below=5mm of login] (painel) {Painel};
+        \node[caixa,below left=5mm and 4mm of painel] (ban) {Bancada};
+        \node[caixa,below=5mm of painel] (ale) {Alertas};
+        \node[caixa,below right=5mm and 4mm of painel] (per) {Perfil};
+        \node[caixaambar,below=5mm of ban] (res) {Reservar};
+        \node[caixa,below=5mm of ale] (det) {Detalhe};
+        \draw[seta] (login) -- (painel);
+        \draw[seta] (painel) -- (ban); \draw[seta] (painel) -- (ale); \draw[seta] (painel) -- (per);
+        \draw[seta] (ban) -- (res); \draw[seta] (ale) -- (det);
+      \end{tikzpicture}
+    \end{column}
+    \begin{column}{0.46\textwidth}
+      \begin{definicao}[Arquitetura da informação]
+        Organização, nomes e estrutura do conteúdo para que as pessoas encontrem o que precisam.
+      \end{definicao}
+      \scriptsize
+      \begin{tabularx}{\linewidth}{@{}l L@{}}
+        \toprule
+        \cabecalho{Padrão} & \cabecalho{Quando usar} \\
+        \midrule
+        Barra inferior & 3 a 5 destinos principais e frequentes \\
+        Gaveta lateral & muitos destinos, pouco usados \\
+        Abas & seções do mesmo nível dentro de uma tela \\
+        Pilha (voltar) & do geral para o detalhe \\
+        \bottomrule
+      \end{tabularx}
+      \begin{dica}
+        \emph{Card sorting}: peça a usuários que agrupem cartões com as funções; os grupos revelam a navegação esperada.
+      \end{dica}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% =============================================================================
+\section{Princípios de interação}
+
+\begin{frame}{Leis que explicam a interação}
+  \begin{columns}[T]
+    \begin{column}{0.56\textwidth}
+      \begin{definicao}[Lei de Fitts (1954)]
+        O tempo para atingir um alvo cresce com a distância $D$ e diminui com o tamanho $W$:\quad $T = a + b \log_2\!\left(1 + \frac{D}{W}\right)$.
+      \end{definicao}
+      \begin{definicao}[Lei de Hick (1952)]
+        O tempo de decisão cresce com o logaritmo do número de opções $n$:\quad $T = b \log_2(n + 1)$.
+      \end{definicao}
+      \begin{definicao}[Memória de trabalho]
+        Guardamos poucos itens de cada vez (Miller sugeriu 7$\pm$2; estudos recentes indicam cerca de 4 blocos). Não obrigue o usuário a lembrar o que estava na tela anterior.
+      \end{definicao}
+    \end{column}
+    \begin{column}{0.42\textwidth}
+      \centering
+      \begin{tikzpicture}
+        \draw[line width=1.4pt,rounded corners=6pt,draw=azulpetroleo] (0,0) rectangle (2.0,3.6);
+        \fill[vermelhoerro!25,rounded corners=3pt] (0.12,2.4) rectangle (1.88,3.45);
+        \fill[ambar!35] (0.12,1.3) rectangle (1.88,2.4);
+        \fill[verdeok!35,rounded corners=3pt] (0.12,0.15) rectangle (1.88,1.3);
+        \node[font=\tiny] at (1.0,2.9) {difícil};
+        \node[font=\tiny] at (1.0,1.85) {alcançável};
+        \node[font=\tiny] at (1.0,0.7) {fácil};
+        \node[font=\tiny\bfseries,text=azulpetroleo] at (1.0,-0.25) {zona do polegar};
+      \end{tikzpicture}
+      \begin{conceito}[Consequências]
+        Ações frequentes grandes e perto do polegar (botão flutuante, barra inferior); poucas opções por tela; menus agrupados.
+      \end{conceito}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{As 10 heurísticas de Nielsen}
+  \scriptsize
+  \begin{tabularx}{\textwidth}{@{}r p{4.6cm} L@{}}
+    \toprule
+    & \cabecalho{Heurística} & \cabecalho{Exemplo no LabMonitor} \\
+    \midrule
+    1 & Visibilidade do estado do sistema & indicador ``conectando ao sensor\ldots'' e hora da última leitura \\
+    2 & Correspondência com o mundo real & ``bancada'', ``reserva'', °C; nada de ``registro 0x2F'' \\
+    3 & Controle e liberdade do usuário & desfazer o cancelamento de uma reserva \\
+    4 & Consistência e padrões & voltar sempre pelo gesto do sistema; mesmos ícones em todo o app \\
+    5 & Prevenção de erros & horários ocupados nem aparecem como opção \\
+    6 & Reconhecer em vez de lembrar & últimas bancadas usadas no topo \\
+    7 & Flexibilidade e eficiência & atalho ``reservar de novo'' para quem usa sempre \\
+    8 & Estética e minimalismo & painel só com o essencial; detalhes num toque \\
+    9 & Ajudar a reconhecer e corrigir erros & ``Sem conexão. As leituras serão enviadas quando a rede voltar.'' \\
+    10 & Ajuda e documentação & dicas curtas no primeiro uso \\
+    \bottomrule
+  \end{tabularx}
+  \vspace{2pt}
+  \begin{historia}
+    Jakob Nielsen publicou a lista em 1994. Ela é usada na \textbf{avaliação heurística}: especialistas percorrem a interface e anotam violações de cada princípio.
+  \end{historia}
+\end{frame}
+
+\begin{frame}{Princípios da Gestalt}
+  \begin{columns}[T]
+    \begin{column}{0.6\textwidth}
+      \centering
+      \begin{tikzpicture}[d/.style={circle,fill=azulpetroleo,inner sep=1.6pt}]
+        \foreach \x in {0,0.25,0.5} \foreach \y in {0,0.25,0.5} \node[d] at (\x,\y) {};
+        \foreach \x in {1.05,1.3,1.55} \foreach \y in {0,0.25,0.5} \node[d] at (\x,\y) {};
+        \node[font=\tiny] at (0.78,-0.35) {Proximidade};
+        \foreach \x/\c in {2.3/azulpetroleo,2.55/ambar,2.8/azulpetroleo,3.05/ambar,3.3/azulpetroleo}
+          \foreach \y in {0,0.25,0.5} \node[circle,fill=\c,inner sep=1.6pt] at (\x,\y) {};
+        \node[font=\tiny] at (2.8,-0.35) {Semelhança};
+        \draw[azulpetroleo,line width=1pt,dash pattern=on 6pt off 3pt] (4.0,0.25) circle (0.32);
+        \node[font=\tiny] at (4.0,-0.35) {Fechamento};
+        \fill[cinzaclaro,rounded corners=2pt] (0,-1.5) rectangle (1.6,-0.75);
+        \foreach \x in {0.2,0.6,1.0,1.4} \node[d] at (\x,-1.12) {};
+        \foreach \x in {2.0,2.4} \node[d] at (\x,-1.12) {};
+        \node[font=\tiny] at (1.2,-1.8) {Região comum};
+        \draw[azulpetroleo,line width=1pt] plot[smooth] coordinates {(2.9,-1.4) (3.4,-0.9) (3.9,-1.2) (4.4,-0.8)};
+        \draw[ambar,line width=1pt] (2.9,-0.85) -- (4.4,-1.4);
+        \node[font=\tiny] at (3.65,-1.8) {Continuidade};
+      \end{tikzpicture}
+    \end{column}
+    \begin{column}{0.38\textwidth}
+      \begin{definicao}[Gestalt]
+        Escola da psicologia alemã do início do século XX que estudou como percebemos \textbf{conjuntos} antes das partes: ``o todo é diferente da soma das partes''.
+      \end{definicao}
+    \end{column}
+  \end{columns}
+  \vspace{2pt}
+  \scriptsize
+  \begin{tabularx}{\textwidth}{@{}l L@{}}
+    \toprule
+    \cabecalho{Princípio} & \cabecalho{Na interface} \\
+    \midrule
+    Proximidade & rótulo perto do seu campo; espaço maior separa grupos \\
+    Semelhança & itens com a mesma aparência parecem ter a mesma função (todos os botões primários iguais) \\
+    Região comum & o cartão agrupa nome, estado e temperatura da bancada \\
+    Fechamento e continuidade & ícones simples são completados pela mente; listas alinhadas guiam o olhar \\
+    \bottomrule
+  \end{tabularx}
+\end{frame}
+
+% =============================================================================
+\section{Design visual}
+
+\begin{frame}{Hierarquia visual}
+  \begin{columns}[c]
+    \begin{column}{0.42\textwidth}
+      \centering
+      \begin{tikzpicture}
+        \draw[line width=1.2pt,rounded corners=5pt,draw=azulpetroleo,fill=white] (0,0) rectangle (3.6,2.1);
+        \node[anchor=west,font=\tiny,text=cinzamedio] at (0.2,1.8) {BANCADA};
+        \node[anchor=west,font=\large\bfseries,text=azulpetroleo] at (0.2,1.35) {B7};
+        \node[anchor=east,font=\Large\bfseries,text=ambar!80!black] at (3.4,1.35) {31,4\,°C};
+        \node[anchor=west,font=\tiny,text=cinzatexto] at (0.2,0.85) {Reservada por Ana até 16h};
+        \fill[vermelhoerro!12,rounded corners=2pt] (0.2,0.2) rectangle (2.0,0.55);
+        \node[anchor=west,font=\tiny\bfseries,text=vermelhoerro] at (0.25,0.375) {Acima do limite};
+        \fill[azulpetroleo,rounded corners=2pt] (2.4,0.2) rectangle (3.4,0.55);
+        \node[font=\tiny\bfseries,text=white] at (2.9,0.375) {Ver};
+      \end{tikzpicture}
+    \end{column}
+    \begin{column}{0.56\textwidth}
+      \begin{definicao}[Hierarquia visual]
+        Ordem em que os elementos são percebidos, controlada por \textbf{tamanho}, \textbf{peso}, \textbf{cor}, \textbf{contraste}, \textbf{posição} e \textbf{espaço}.
+      \end{definicao}
+      \begin{conceito}[No cartão ao lado]
+        A temperatura (maior, cor de destaque) é lida primeiro; depois o nome da bancada; depois o estado e a ação. Rótulos auxiliares ficam pequenos e acinzentados.
+      \end{conceito}
+      \begin{dica}
+        Teste do olhar semicerrado: aperte os olhos diante da tela. O que continua visível é o que a hierarquia destaca.
+      \end{dica}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Tipografia}
+  \begin{columns}[T]
+    \begin{column}{0.48\textwidth}
+      \scriptsize
+      \begin{tabularx}{\linewidth}{@{}l L l@{}}
+        \toprule
+        \cabecalho{Papel (Material 3)} & \cabecalho{Uso} & \cabecalho{Tamanho} \\
+        \midrule
+        \emph{Display} & números grandes, telas de destaque & 36--57\,sp \\
+        \emph{Headline} & títulos de tela & 24--32\,sp \\
+        \emph{Title} & títulos de cartões e seções & 14--22\,sp \\
+        \emph{Body} & texto corrido & 12--16\,sp \\
+        \emph{Label} & botões, rótulos, abas & 11--14\,sp \\
+        \bottomrule
+      \end{tabularx}
+      \begin{dica}
+        Use poucos tamanhos e pesos (uma escala), sempre os mesmos papéis para as mesmas funções.
+      \end{dica}
+    \end{column}
+    \begin{column}{0.5\textwidth}
+      \begin{conceito}[Legibilidade]
+        \begin{itemize}
+          \item Texto corrido com pelo menos 14--16\,sp.
+          \item Linhas de 45 a 75 caracteres; entrelinha de cerca de 1,4 a 1,5 vez o corpo.
+          \item Evite parágrafos em caixa alta e texto justificado em telas estreitas.
+          \item Fontes do sistema (Roboto, SF Pro) já são otimizadas para tela.
+        \end{itemize}
+      \end{conceito}
+      \begin{definicao}[sp e \emph{Dynamic Type}]
+        Unidades que acompanham o tamanho de fonte escolhido pelo usuário nas configurações. Teste o app com a fonte no máximo.
+      \end{definicao}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Cor}
+  \begin{columns}[T]
+    \begin{column}{0.48\textwidth}
+      \begin{conceito}[Papéis de cor no Material 3]
+        \textbf{primary} (ações principais), \textbf{secondary} e \textbf{tertiary} (acentos), \textbf{surface} (fundos e cartões), \textbf{error}, e as cores ``\emph{on}'' para texto e ícones sobre cada uma.
+      \end{conceito}
+      \centering
+      \begin{tikzpicture}
+        \foreach \i/\c/\t in {0/azulpetroleo/primary,1/ambar/secondary,2/azulprofundo/tertiary,3/cinzafundo/surface,4/vermelhoerro/error}{
+          \fill[\c,draw=cinzamedio] (\i*1.15,0) rectangle ++(1.0,0.7);
+          \node[font=\tiny,below] at (\i*1.15+0.5,0) {\t};}
+      \end{tikzpicture}
+    \end{column}
+    \begin{column}{0.5\textwidth}
+      \begin{conceito}[Boas práticas]
+        \begin{itemize}
+          \item Regra 60--30--10: base neutra, cor principal e um acento.
+          \item Cor com significado consistente (âmbar = atenção; vermelho = erro).
+          \item \textbf{Nunca} use só a cor para informar: some ícone ou texto (daltonismo).
+          \item Defina um tema escuro, não uma inversão automática.
+        \end{itemize}
+      \end{conceito}
+      \begin{dica}[Cor dinâmica]
+        No Android 12+, o Material You pode gerar a paleta do app a partir do papel de parede do usuário.
+      \end{dica}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Contraste: a matemática da legibilidade}
+  \begin{columns}[T]
+    \begin{column}{0.5\textwidth}
+      \begin{definicao}[Razão de contraste (WCAG)]
+        \[ C = \frac{L_1 + 0{,}05}{L_2 + 0{,}05} \]
+        onde $L_1$ e $L_2$ são as luminâncias relativas da cor mais clara e da mais escura (0 = preto, 1 = branco). Vai de 1:1 a 21:1.
+      \end{definicao}
+      \scriptsize
+      \begin{tabularx}{\linewidth}{@{}L l l@{}}
+        \toprule
+        \cabecalho{Elemento} & \cabecalho{AA} & \cabecalho{AAA} \\
+        \midrule
+        Texto normal & 4,5:1 & 7:1 \\
+        Texto grande (18\,pt ou 14\,pt negrito) & 3:1 & 4,5:1 \\
+        Ícones e bordas de componentes & 3:1 & --- \\
+        \bottomrule
+      \end{tabularx}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \begin{exemplo}[As cores deste curso]
+        \scriptsize
+        \begin{tabular}{@{}l l l@{}}
+          \colorbox{azulpetroleo}{\color{white}\,Aa\,} sobre branco & 13,5:1 & \textcolor{verdeok}{AAA} \\[2pt]
+          \colorbox{white}{\color{cinzamedio}\,Aa\,} cinza médio sobre branco & 4,6:1 & \textcolor{verdeok}{AA} \\[2pt]
+          \colorbox{ambarclaro!40}{\color{ambar}\,Aa\,} âmbar sobre branco & 2,1:1 & \textcolor{vermelhoerro}{reprova} \\[2pt]
+          \colorbox{azulpetroleo}{\color{ambar}\,Aa\,} âmbar sobre petróleo & 6,3:1 & \textcolor{verdeok}{AA} \\
+        \end{tabular}
+      \end{exemplo}
+      \begin{dica}
+        Por isso o âmbar aparece aqui como faixa e destaque gráfico, e não como cor de texto sobre fundo branco.
+      \end{dica}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Espaçamento, grade e densidade de tela}
+  \begin{columns}[T]
+    \begin{column}{0.5\textwidth}
+      \begin{definicao}[Pixel independente de densidade]
+        Unidade lógica (dp no Android, pt no iOS) que tem o mesmo tamanho físico aproximado em qualquer tela:\quad
+        $\text{px} = \text{dp} \times \dfrac{\text{dpi}}{160}$.
+      \end{definicao}
+      \scriptsize
+      \begin{tabularx}{\linewidth}{@{}l l L@{}}
+        \toprule
+        \cabecalho{Densidade} & \cabecalho{dpi} & \cabecalho{48\,dp viram} \\
+        \midrule
+        mdpi (1$\times$) & 160 & 48\,px \\
+        xhdpi (2$\times$) & 320 & 96\,px \\
+        xxhdpi (3$\times$) & 480 & 144\,px \\
+        \bottomrule
+      \end{tabularx}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \begin{conceito}[Grade de 8\,dp]
+        Margens, espaçamentos e tamanhos em múltiplos de 8 (4 para ajustes finos) criam ritmo visual e simplificam a conversa entre design e código.
+      \end{conceito}
+      \begin{conceito}[Alvos de toque]
+        Mínimo de \textbf{48$\times$48\,dp} no Android e \textbf{44$\times$44\,pt} no iOS, mesmo que o ícone desenhado seja menor.
+      \end{conceito}
+      \begin{dica}
+        Espaço em branco não é desperdício: é o que agrupa e separa (Gestalt).
+      \end{dica}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% =============================================================================
+\section{Sistemas de design}
+
+\begin{frame}{Material Design 3 e Human Interface Guidelines}
+  \footnotesize
+  \begin{tabularx}{\textwidth}{@{}p{2.6cm} L L@{}}
+    \toprule
+    & \cabecalho{Material Design 3 (Google)} & \cabecalho{Human Interface Guidelines (Apple)} \\
+    \midrule
+    Filosofia & sistema adaptável, expressivo, com cor dinâmica & clareza, deferência ao conteúdo, profundidade \\
+    Fonte padrão & Roboto (e a do sistema) & San Francisco (SF Pro) \\
+    Voltar & gesto do sistema ou seta na barra superior & gesto da borda esquerda; botão no topo \\
+    Navegação principal & barra de navegação inferior, \emph{rail}, gaveta & barra de abas (\emph{tab bar}) \\
+    Componentes no código & Compose Material 3; widgets Material do Flutter & SwiftUI; widgets Cupertino do Flutter \\
+    \bottomrule
+  \end{tabularx}
+  \vspace{4pt}
+  \begin{columns}[T]
+    \begin{column}{0.48\textwidth}
+      \begin{conceito}[Por que seguir as diretrizes]
+        Usuários já sabem usar os padrões do sistema (Lei de Jakob: as pessoas passam a maior parte do tempo em \textbf{outros} apps).
+      \end{conceito}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \begin{dica}[Apps multiplataforma]
+        Mantenha a identidade da marca, mas respeite convenções de cada sistema: gesto de voltar, diálogos, seletores de data.
+      \end{dica}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{\emph{Design tokens} e sistemas de design}
+  \begin{columns}[c]
+    \begin{column}{0.5\textwidth}
+      \centering
+      \begin{tikzpicture}[node distance=3mm,every node/.style={font=\scriptsize,minimum width=4.4cm,align=center}]
+        \node[caixaambar] (t) {\textbf{Tokens}\\ \tiny \texttt{cor.primaria}, \texttt{espaco.m = 16}, \texttt{raio.cartao = 12}};
+        \node[caixapetroleo,below=of t] (c) {\textbf{Componentes}\\ \tiny botão, cartão de bancada, campo de texto};
+        \node[caixa,below=of c] (p) {\textbf{Padrões}\\ \tiny formulário de reserva, lista com filtro};
+        \node[caixaescura,below=of p] (s) {\textbf{Telas}};
+        \draw[seta] (t) -- (c); \draw[seta] (c) -- (p); \draw[seta] (p) -- (s);
+      \end{tikzpicture}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \begin{definicao}[Sistema de design]
+        Conjunto documentado de princípios, \emph{tokens}, componentes e padrões que garante consistência entre telas, pessoas e plataformas.
+      \end{definicao}
+      \begin{definicao}[\emph{Design token}]
+        Decisão de design com nome (cor, espaçamento, raio, tipografia) guardada num só lugar e usada tanto no Figma quanto no código.
+      \end{definicao}
+      \begin{dica}
+        No código, os \emph{tokens} viram o tema: \cod{MaterialTheme} no Compose e \cod{ThemeData} no Flutter. Trocar o \emph{token} muda o app inteiro.
+      \end{dica}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% =============================================================================
+\section{Acessibilidade}
+
+\begin{frame}{Acessibilidade: por que e para quem}
+  \begin{columns}[T]
+    \begin{column}{0.5\textwidth}
+      \begin{definicao}[Acessibilidade digital]
+        Permitir que pessoas com diferentes capacidades visuais, auditivas, motoras e cognitivas usem o produto com autonomia.
+      \end{definicao}
+      \begin{exemplo}[No Brasil]
+        Segundo a PNAD Contínua 2022 (IBGE), cerca de \textbf{18,6 milhões} de pessoas de 2 anos ou mais (8,9\,\%) têm alguma deficiência. A Lei Brasileira de Inclusão (Lei 13.146/2015) garante o direito à acessibilidade.
+      \end{exemplo}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \scriptsize
+      \begin{tabularx}{\linewidth}{@{}l L L L@{}}
+        \toprule
+        & \cabecalho{Permanente} & \cabecalho{Temporária} & \cabecalho{Situacional} \\
+        \midrule
+        Visão & cegueira & cirurgia nos olhos & sol forte na tela \\
+        Mão & um braço & braço quebrado & segurando uma sacola \\
+        Audição & surdez & infecção no ouvido & ambiente barulhento \\
+        \bottomrule
+      \end{tabularx}
+      \begin{conceito}[Design inclusivo]
+        Resolver para uma limitação permanente beneficia muito mais gente, em situações temporárias e cotidianas.
+      \end{conceito}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{WCAG e acessibilidade na prática}
+  \begin{columns}[T]
+    \begin{column}{0.46\textwidth}
+      \scriptsize
+      \begin{tabularx}{\linewidth}{@{}l L@{}}
+        \toprule
+        \multicolumn{2}{@{}l}{\cabecalho{Princípios da WCAG (POUR)}} \\
+        \midrule
+        \textbf{P}erceptível & alternativas em texto, contraste, legendas \\
+        \textbf{O}perável & alvos grandes, sem depender de gestos complexos, tempo suficiente \\
+        \textbf{C}ompreensível & linguagem clara, comportamento previsível, ajuda nos erros \\
+        \textbf{R}obusto & funciona com leitores de tela e tecnologias assistivas \\
+        \bottomrule
+      \end{tabularx}
+      \begin{definicao}[WCAG]
+        Diretrizes de acessibilidade do W3C (versão 2.2, de 2023), com critérios nos níveis A, AA e AAA.
+      \end{definicao}
+    \end{column}
+    \begin{column}{0.52\textwidth}
+      \begin{conceito}[\emph{Checklist} do app]
+        \begin{itemize}
+          \item Rótulo para todo botão de ícone (leitor de tela).
+          \item Fonte ampliável até 200\,\% sem cortar texto.
+          \item Contraste AA; informação nunca só por cor.
+          \item Alvos de 48\,dp e ordem de foco lógica.
+          \item Animações que respeitam ``reduzir movimento''.
+          \item Mensagens de erro anunciadas e associadas ao campo.
+        \end{itemize}
+      \end{conceito}
+      \begin{dica}[Teste de verdade]
+        Use o app com o \textbf{TalkBack} (Android) ou o \textbf{VoiceOver} (iOS) de olhos fechados. Ferramentas: Accessibility Scanner e Accessibility Inspector.
+      \end{dica}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% =============================================================================
+\section{Prototipação no Figma}
+
+\begin{frame}{Da ideia ao protótipo: níveis de fidelidade}
+  \centering
+  \begin{tikzpicture}[node distance=5mm,every node/.style={font=\scriptsize,align=center,minimum height=12mm,text width=2.5cm}]
+    \node[caixa] (s) {\textbf{Esboço}\\ \tiny papel, minutos};
+    \node[caixa,right=of s] (w) {\textbf{\emph{Wireframe}}\\ \tiny caixas cinza, estrutura};
+    \node[caixapetroleo,right=of w] (m) {\textbf{\emph{Mockup}}\\ \tiny visual final, estático};
+    \node[caixaambar,right=of m] (p) {\textbf{Protótipo}\\ \tiny navegável, testável};
+    \draw[seta] (s) -- (w); \draw[seta] (w) -- (m); \draw[seta] (m) -- (p);
+    \draw[setaambar,<->] ([yshift=-9mm]s.south west) -- ([yshift=-9mm]p.south east);
+    \node[rotulo,anchor=north west,text width=4cm,minimum height=0pt] at ([yshift=-10mm]s.south west) {\tiny mais barato de mudar};
+    \node[rotulo,anchor=north east,text width=4cm,align=right,minimum height=0pt] at ([yshift=-10mm]p.south east) {\tiny mais realista para testar};
+  \end{tikzpicture}
+  \vspace{6pt}
+  \begin{columns}[T]
+    \begin{column}{0.48\textwidth}
+      \begin{conceito}[Fidelidade certa no momento certo]
+        Baixa fidelidade para explorar ideias e estrutura sem apego; alta fidelidade para validar detalhes visuais e fluxos com usuários.
+      \end{conceito}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \begin{erro}[Pular etapas]
+        Começar pelo visual final faz a equipe discutir cores antes de saber se a tela resolve o problema.
+      \end{erro}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Figma: conceitos essenciais}
+  \begin{columns}[T]
+    \begin{column}{0.5\textwidth}
+      \scriptsize
+      \begin{tabularx}{\linewidth}{@{}l L@{}}
+        \toprule
+        \cabecalho{Recurso} & \cabecalho{Para quê} \\
+        \midrule
+        \emph{Frame} & a tela ou um contêiner, com tamanho de aparelho \\
+        \emph{Auto layout} & empilha filhos com espaçamento e margens, como um layout de código \\
+        \emph{Constraints} & como o elemento reage ao redimensionamento \\
+        Componentes e instâncias & elemento reutilizável; mudar o principal atualiza todos \\
+        Variantes & estados de um componente (padrão, pressionado, desabilitado) \\
+        Variáveis e estilos & \emph{tokens} de cor, número e texto, com modos claro e escuro \\
+        Protótipo & ligações entre telas, transições e interações \\
+        \emph{Dev Mode} & medidas, \emph{tokens} e exportação para quem programa \\
+        \bottomrule
+      \end{tabularx}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \begin{dica}[Comece com kits oficiais]
+        A comunidade do Figma tem o \emph{Material 3 Design Kit} e os kits de iOS da Apple; o \emph{plugin} Material Theme Builder gera a paleta e o tema para Compose e Flutter.
+      \end{dica}
+      \begin{dica}[Plano educacional]
+        Estudantes e professores podem solicitar o plano educacional gratuito do Figma.
+      \end{dica}
+      \begin{atencao}
+        Nomeie camadas e componentes como no código (\cod{CartaoBancada}, \cod{BotaoPrimario}): facilita a passagem para a programação.
+      \end{atencao}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}[fragile]{Do Figma para o código}
+  \begin{columns}[T]
+    \begin{column}{0.33\textwidth}
+      \scriptsize
+      \begin{tabularx}{\linewidth}{@{}p{1.2cm} p{1.75cm} L@{}}
+        \toprule
+        \cabecalho{Figma} & \cabecalho{Compose} & \cabecalho{Flutter} \\
+        \midrule
+        \emph{Auto layout} vertical & \cod{Column} & \cod{Column} \\
+        horizontal & \cod{Row} & \cod{Row} \\
+        \emph{gap} & \cod{spacedBy} & \cod{spacing} \\
+        \emph{padding} & \cod{padding} & \cod{Padding} \\
+        \emph{fill} & \cod{fillMaxWidth} & \cod{Expanded} \\
+        \emph{hug} & padrão & padrão \\
+        \bottomrule
+      \end{tabularx}
+    \end{column}
+    \begin{column}{0.31\textwidth}
+\begin{codigo}[title=Compose]{Kotlin}
+Card {
+  Column(
+    Modifier.padding(16.dp),
+    verticalArrangement =
+      Arrangement.spacedBy(8.dp)
+  ) {
+    Text("B7", style = MaterialTheme
+      .typography.titleLarge)
+    Text("31,4 °C")
+  }
+}
+\end{codigo}
+    \end{column}
+    \begin{column}{0.34\textwidth}
+\begin{codigo}[title=Flutter]{Dart}
+Card(
+  child: Padding(
+    padding: const EdgeInsets.all(16),
+    child: Column(spacing: 8, children: [
+      Text('B7', style: Theme.of(context)
+          .textTheme.titleLarge),
+      const Text('31,4 °C'),
+    ]),
+  ),
+)
+\end{codigo}
+    \end{column}
+  \end{columns}
+  \begin{destaque}
+    \emph{Auto layout} é o mesmo raciocínio de \cod{Column} e \cod{Row}: quem desenha e quem programa falam a mesma língua.
+  \end{destaque}
+\end{frame}
+
+% =============================================================================
+\section{Avaliação e escrita}
+
+\begin{frame}{Testes de usabilidade}
+  \begin{columns}[T]
+    \begin{column}{0.5\textwidth}
+      \begin{definicao}[Teste de usabilidade]
+        Observar pessoas reais realizando \textbf{tarefas} com o protótipo ou o app, para descobrir onde têm dificuldade.
+      \end{definicao}
+      \begin{conceito}[Como conduzir]
+        \begin{enumerate}
+          \item Defina 3 a 5 tarefas realistas (``reserve a B7 para amanhã às 14h'').
+          \item Peça que pensem em voz alta.
+          \item Não ajude nem explique: observe e anote.
+          \item Meça sucesso, tempo e erros.
+        \end{enumerate}
+      \end{conceito}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \begin{historia}
+        Jakob Nielsen e Tom Landauer mostraram que poucos participantes (cerca de cinco por rodada) já revelam a maioria dos problemas; vale mais fazer várias rodadas pequenas.
+      \end{historia}
+      \begin{definicao}[SUS --- \emph{System Usability Scale}]
+        Questionário de 10 itens (escala de 1 a 5) que gera uma nota de 0 a 100; a média de referência fica perto de 68.
+      \end{definicao}
+      \begin{dica}
+        Teste com quem vai usar de verdade: técnicos e alunos do laboratório, não colegas de equipe.
+      \end{dica}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Escrita para interfaces (UX \emph{writing})}
+  \footnotesize
+  \begin{tabularx}{\textwidth}{@{}p{2.6cm} L L@{}}
+    \toprule
+    \cabecalho{Situação} & \cabecalho{Evite} & \cabecalho{Prefira} \\
+    \midrule
+    Botão & ``OK'', ``Enviar'' & ``Reservar bancada'' \\
+    Erro & ``Erro 409'' & ``Esse horário já foi reservado. Escolha outro.'' \\
+    Sem conexão & ``Falha de rede'' & ``Sem internet. Mostrando as últimas leituras salvas.'' \\
+    Estado vazio & lista em branco & ``Nenhuma reserva hoje. Toque em + para reservar.'' \\
+    Confirmação & ``Tem certeza?'' & ``Cancelar a reserva da B7 das 14h?'' \\
+    Permissão & ``Permitir acesso à câmera'' & ``Para ler o QR code da bancada, permita o uso da câmera.'' \\
+    \bottomrule
+  \end{tabularx}
+  \vspace{4pt}
+  \begin{columns}[T]
+    \begin{column}{0.48\textwidth}
+      \begin{conceito}[Princípios]
+        Claro, curto e útil. Verbos de ação nos botões. Diga o que aconteceu e o que fazer. Mesmos termos em todo o app.
+      \end{conceito}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \begin{dica}
+        Textos fazem parte do design: escreva-os no protótipo, não deixe ``lorem ipsum'' para depois.
+      \end{dica}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% =============================================================================
+\section{Fechamento}
+
+\begin{frame}{Resumo}
+  \begin{resumo}
+    \begin{itemize}
+      \item UX é a experiência inteira; UI é a interface concreta; usabilidade é eficácia, eficiência e satisfação.
+      \item O duplo diamante alterna divergir e convergir: problema certo, depois solução certa.
+      \item Personas, jornadas e arquitetura da informação vêm da pesquisa com pessoas reais.
+      \item Fitts, Hick, Nielsen e Gestalt explicam por que uma interface funciona.
+      \item Tipografia, cor, contraste (WCAG) e grade de 8\,dp formam a base visual.
+      \item Acessibilidade beneficia todos; o Figma conecta design e código; testes com usuários validam.
+    \end{itemize}
+  \end{resumo}
+\end{frame}
+
+\begin{frame}{Glossário (1/2)}
+  \begin{glossario}
+    UX & experiência completa da pessoa com o produto \\
+    UI & interface concreta: telas, componentes, textos e cores \\
+    Usabilidade & eficácia, eficiência e satisfação num contexto de uso \\
+    Persona & personagem baseado em pesquisa que representa um grupo de usuários \\
+    Jornada do usuário & etapas, ações e emoções para atingir um objetivo \\
+    Arquitetura da informação & organização e nomes do conteúdo e da navegação \\
+    Heurística & princípio geral usado para avaliar interfaces \\
+    Hierarquia visual & ordem de leitura criada por tamanho, cor, contraste e posição \\
+  \end{glossario}
+\end{frame}
+
+\begin{frame}{Glossário (2/2)}
+  \begin{glossario}
+    Razão de contraste & relação de luminância entre texto e fundo, de 1:1 a 21:1 \\
+    dp / pt & unidades independentes de densidade (Android / iOS) \\
+    \emph{Design token} & decisão de design com nome, usada no Figma e no código \\
+    Sistema de design & princípios, \emph{tokens}, componentes e padrões documentados \\
+    WCAG & diretrizes de acessibilidade do W3C, níveis A, AA e AAA \\
+    \emph{Wireframe} & esboço estrutural, sem acabamento visual \\
+    \emph{Auto layout} & recurso do Figma que empilha elementos com espaçamento \\
+    SUS & questionário padronizado de usabilidade, nota de 0 a 100 \\
+  \end{glossario}
+\end{frame}
+
+\begin{frame}{Questões de revisão}
+  \begin{questoes}
+    \item Diferencie UX, UI e usabilidade com um exemplo do LabMonitor.
+    \item Por que o duplo diamante tem duas fases de divergência?
+    \item Use a Lei de Fitts para justificar onde colocar o botão ``Reservar''.
+    \item Que heurística de Nielsen é violada por uma mensagem ``Erro 409''? Reescreva-a.
+    \item Calcule em pixels um ícone de 24\,dp numa tela xxhdpi (480\,dpi).
+    \item Por que texto âmbar sobre fundo branco é um problema? Como usar o âmbar com segurança?
+    \item Dê um exemplo de limitação situacional e da solução de design que também ajuda pessoas com deficiência.
+    \item Por que testar com cinco usuários em várias rodadas costuma ser melhor que com vinte de uma vez?
+  \end{questoes}
+\end{frame}
+
+\begin{frame}{Exercícios}
+  \begin{exercicio}[Exercício 1 --- Pesquisa]
+    Entreviste duas pessoas que usam um laboratório e crie uma persona e uma jornada com os pontos de dor.
+  \end{exercicio}
+  \begin{exercicio}[Exercício 2 --- Avaliação heurística]
+    Avalie um app que você usa com as 10 heurísticas e proponha três melhorias, com capturas de tela.
+  \end{exercicio}
+  \begin{exercicio}[Exercício 3 --- Contraste]
+    Monte a paleta do seu app no Material Theme Builder e confira a razão de contraste de cada par texto/fundo.
+  \end{exercicio}
+  \begin{projeto}[LabMonitor --- Etapa 4]
+    No Figma: \emph{wireframes} das telas principais, componentes com variantes (cartão de bancada, botões), variáveis de cor para temas claro e escuro, protótipo navegável e um teste de usabilidade com três pessoas.
+  \end{projeto}
+\end{frame}
+
+\begin{frame}{Para aprofundar}
+  \small
+  \begin{itemize}
+    \item Material Design 3: \url{https://m3.material.io}
+    \item Human Interface Guidelines: \url{https://developer.apple.com/design/human-interface-guidelines}
+    \item WCAG 2.2: \url{https://www.w3.org/TR/WCAG22}
+    \item Heurísticas de Nielsen: \url{https://www.nngroup.com/articles/ten-usability-heuristics}
+    \item Guia de acessibilidade do Android: \url{https://developer.android.com/guide/topics/ui/accessibility}
+    \item Aprenda Figma (oficial): \url{https://help.figma.com}
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{Respostas das questões de revisão}
+  \begin{respostas}
+    \item UI: o cartão da bancada e o botão ``Reservar''. UX: todo o processo de achar e reservar a bancada, inclusive o lembrete. Usabilidade: reservar em poucos toques, sem erro, saindo satisfeito.
+    \item A primeira abre possibilidades sobre o \textbf{problema} (pesquisa); a segunda, sobre as \textbf{soluções}. Cada uma termina convergindo numa escolha.
+    \item O tempo cai com alvo maior e mais próximo: botão grande, na parte inferior, ao alcance do polegar.
+    \item ``Ajudar a reconhecer, diagnosticar e corrigir erros''. Melhor: ``Esse horário já foi reservado. Escolha outro.''
+    \item $24 \times 480 / 160 = 72$ px.
+    \item A razão de contraste é cerca de 2,1:1, abaixo do mínimo de 4,5:1. Use o âmbar em faixas, ícones grandes ou sobre o azul-petróleo (6,3:1).
+    \item Usar o celular com uma mão ocupada: botões grandes na zona do polegar ajudam também quem tem limitação motora permanente.
+    \item Cada rodada revela os problemas mais graves; corrigidos, a rodada seguinte encontra outros, em vez de vinte pessoas tropeçarem nos mesmos.
+  \end{respostas}
+\end{frame}
+
+\encerramento{Módulo 05 --- Interfaces declarativas: Jetpack Compose (trilha Kotlin) ou widgets e layouts (trilha Flutter).}
+
+\end{document}

@@ -1,0 +1,563 @@
+\documentclass[aspectratio=169,10pt]{beamer}
+\makeatletter\def\input@path{{../../estilo/}{../estilo/}{estilo/}}\makeatother
+\usepackage{devmobile}
+\modulo[Flutter]{08}{Arquitetura e Gerência de Estado}{Arquitetura recomendada (MVVM), views, view models, repositórios, serviços, Result, Command, injeção de dependência, Provider, Riverpod e Bloc}
+
+\begin{document}
+\capa
+
+\begin{frame}{Objetivos do módulo}
+  \begin{conceito}[Ao final deste módulo você será capaz de]
+    \begin{itemize}
+      \item Aplicar a arquitetura recomendada pela documentação do Flutter: camada de UI e camada de dados.
+      \item Implementar \emph{views}, \emph{view models}, repositórios e serviços.
+      \item Tratar falhas com o tipo \cod{Result} e ações assíncronas com o padrão \textbf{Command}.
+      \item Injetar dependências com \textbf{Provider}.
+      \item Comparar Provider, Riverpod e Bloc e escolher a abordagem adequada.
+      \item Organizar as pastas de um app que vai crescer.
+    \end{itemize}
+  \end{conceito}
+\end{frame}
+
+\sumario
+
+\input{../fundamentos/f08-arquitetura}
+
+% =============================================================================
+\section{A arquitetura recomendada}
+
+\begin{frame}{Por que arquitetura?}
+  \begin{columns}[c]
+    \begin{column}{0.46\textwidth}
+      \centering
+      \begin{tikzpicture}
+        \node[caixaescura,minimum width=4.4cm,minimum height=3.4cm] (a) {};
+        \node[font=\small\bfseries,text=white] at ([yshift=-3mm]a.north) {TelaPainel (1\,500 linhas)};
+        \foreach \t/\y in {widgets e layout/0.75,chamadas HTTP/0.3,SQL/-0.15,regras de negócio/-0.6,Bluetooth/-1.05}{
+          \node[caixaambar,minimum width=3.4cm,minimum height=4mm,font=\tiny] at (0,\y) {\t};}
+      \end{tikzpicture}
+    \end{column}
+    \begin{column}{0.52\textwidth}
+      \begin{erro}[Tudo dentro do widget]
+        \begin{itemize}
+          \item Impossível testar regras sem montar a tela.
+          \item Uma mudança na API quebra várias telas.
+          \item Dados duplicados e inconsistentes entre telas.
+        \end{itemize}
+      \end{erro}
+      \begin{conceito}[Princípios]
+        \begin{itemize}
+          \item Separação de responsabilidades.
+          \item Fonte única da verdade.
+          \item Fluxo unidirecional de dados.
+          \item UI como função do estado.
+        \end{itemize}
+      \end{conceito}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Camadas: UI e dados}
+  \begin{columns}[c]
+    \begin{column}{0.58\textwidth}
+      \centering
+      \begin{tikzpicture}[node distance=3mm]
+        \node[caixa,minimum width=2.6cm,minimum height=8mm] (v) {\textbf{View}\\ \tiny widgets};
+        \node[caixaescura,minimum width=2.6cm,minimum height=8mm,right=6mm of v] (vm) {\textbf{View model}\\ \tiny \cod{ChangeNotifier}};
+        \node[pontilhado,fit=(v)(vm),label={[rotulo,anchor=south west]north west:\textbf{Camada de UI}}] (ui) {};
+        \node[caixapetroleo,minimum width=5.8cm,minimum height=7mm,below=9mm of ui] (r) {\textbf{Repositórios} \tiny fonte da verdade, cache, regras};
+        \node[caixa,minimum width=1.8cm,below=3mm of r.south west,anchor=north west] (s1) {API\\ \tiny service};
+        \node[caixa,minimum width=1.8cm,below=3mm of r.south] (s2) {Banco\\ \tiny service};
+        \node[caixa,minimum width=1.8cm,below=3mm of r.south east,anchor=north east] (s3) {BLE\\ \tiny service};
+        \node[pontilhado,fit=(r)(s1)(s2)(s3),label={[rotulo,anchor=south west]north west:\textbf{Camada de dados}}] (d) {};
+        \draw[seta] (v) -- (vm);
+        \draw[seta] (vm.south) -- (vm.south |- r.north);
+        \draw[seta] (r.south -| s1) -- (s1); \draw[seta] (r) -- (s2); \draw[seta] (r.south -| s3) -- (s3);
+      \end{tikzpicture}
+    \end{column}
+    \begin{column}{0.4\textwidth}
+      \scriptsize
+      \begin{tabularx}{\linewidth}{@{}l L@{}}
+        \toprule
+        \cabecalho{Peça} & \cabecalho{Responsabilidade} \\
+        \midrule
+        \textbf{View} & desenhar e repassar eventos; sem lógica \\
+        \textbf{View model} & transformar dados em estado de tela e expor ações \\
+        \textbf{Repositório} & fonte da verdade: cache, erros, retentativas \\
+        \textbf{Serviço} & falar com uma fonte externa (HTTP, SQLite, BLE) \\
+        \bottomrule
+      \end{tabularx}
+      \begin{dica}
+        Uma view para cada view model. Repositórios e serviços são compartilhados entre telas.
+      \end{dica}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}[fragile]{Organização das pastas}
+  \begin{columns}[T]
+    \begin{column}{0.46\textwidth}
+\begin{codigo}[title=lib/,listing options={style=dm,language=bash,basicstyle=\ttfamily\tiny}]{bash}
+lib/
+|-- main.dart
+|-- routing/router.dart
+|-- domain/
+|   `-- models/        bancada.dart, leitura.dart
+|-- data/
+|   |-- services/      api_service.dart, ble_service.dart
+|   `-- repositories/  bancada_repository.dart
+|-- ui/
+|   |-- core/          tema e widgets comuns
+|   |-- painel/
+|   |   |-- view_models/painel_view_model.dart
+|   |   `-- widgets/painel_screen.dart
+|   `-- equipamentos/
+`-- utils/             result.dart, command.dart
+test/                  espelha lib/
+\end{codigo}
+    \end{column}
+    \begin{column}{0.52\textwidth}
+      \begin{conceito}[Organização mista]
+        A camada de UI é organizada \textbf{por funcionalidade} (cada tela tem sua view e seu view model). A camada de dados é organizada \textbf{por tipo}, porque repositórios e serviços são usados por várias telas.
+      \end{conceito}
+      \begin{dica}[Referência oficial]
+        O app de exemplo \textbf{Compass} (\cod{flutter/samples}) segue exatamente esta estrutura e é o estudo de caso da documentação.
+      \end{dica}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% =============================================================================
+\section{Camada de dados}
+
+\begin{frame}[fragile]{Tratando falhas com \cod{Result}}
+  \begin{columns}[T]
+    \begin{column}{0.5\textwidth}
+\begin{codigo}[title=utils/result.dart]{Dart}
+sealed class Result<T> {
+  const Result();
+}
+
+final class Ok<T> extends Result<T> {
+  const Ok(this.valor);
+  final T valor;
+}
+
+final class Falha<T> extends Result<T> {
+  const Falha(this.erro);
+  final Exception erro;
+}
+\end{codigo}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+\begin{codigo}[title=Usando]{Dart}
+final r = await repo.listar();
+switch (r) {
+  case Ok(:final valor):
+    bancadas = valor;
+  case Falha(:final erro):
+    mensagem = traduzir(erro);
+}
+\end{codigo}
+      \begin{conceito}[Por que \cod{Result}?]
+        O tipo de retorno deixa explícito que a operação pode falhar e o \cod{switch} exaustivo obriga quem chama a tratar o erro. Exceções esquecidas viram telas vermelhas.
+      \end{conceito}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}[fragile]{Serviços e repositórios}
+  \begin{columns}[T]
+    \begin{column}{0.56\textwidth}
+\begin{codigo}[title=data/repositories/bancada\_repository.dart]{Dart}
+abstract class BancadaRepository {
+  Future<Result<List<Bancada>>> listar();
+}
+
+class BancadaRepositoryRemoto implements BancadaRepository {
+  BancadaRepositoryRemoto({required this.api});
+  final ApiService api;
+  List<Bancada>? _cache;
+
+  @override
+  Future<Result<List<Bancada>>> listar() async {
+    if (_cache != null) return Ok(_cache!);
+    try {
+      final dtos = await api.getBancadas();   // serviço
+      _cache = dtos.map((d) => d.paraModelo()).toList();
+      return Ok(_cache!);
+    } on Exception catch (e) { return Falha(e); }
+  }
+}
+\end{codigo}
+    \end{column}
+    \begin{column}{0.42\textwidth}
+      \begin{conceito}[Serviço]
+        Envolve uma fonte externa e devolve dados brutos (DTOs). Não guarda estado nem decide nada.
+      \end{conceito}
+      \begin{conceito}[Repositório]
+        Transforma DTOs em modelos de domínio, mantém cache, trata erros e decide de onde vêm os dados.
+      \end{conceito}
+      \begin{dica}
+        A classe abstrata permite trocar a implementação (remota, local ou um \emph{fake} nos testes) sem mexer na UI.
+      \end{dica}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% =============================================================================
+\section{Camada de UI}
+
+\begin{frame}[fragile]{O padrão Command}
+  \begin{columns}[T]
+    \begin{column}{0.54\textwidth}
+\begin{codigo}[title=utils/command.dart (simplificado)]{Dart}
+class Command0<T> extends ChangeNotifier {
+  Command0(this._acao);
+  final Future<Result<T>> Function() _acao;
+
+  bool executando = false;
+  Result<T>? resultado;
+  bool get falhou => resultado is Falha;
+
+  Future<void> execute() async {
+    if (executando) return;          // evita duplo clique
+    executando = true;
+    resultado = null;
+    notifyListeners();
+    try {
+      resultado = await _acao();
+    } finally {
+      executando = false;
+      notifyListeners();
+    }
+  }
+}
+\end{codigo}
+    \end{column}
+    \begin{column}{0.44\textwidth}
+      \begin{conceito}[Command]
+        Envolve uma ação assíncrona do view model e expõe seu andamento: \textbf{executando}, \textbf{concluída} ou \textbf{falhou}. A view desenha cada estado sem \cod{bool}s espalhados.
+      \end{conceito}
+      \begin{dica}
+        É o padrão usado no estudo de caso oficial do Flutter. Existe também a variante \cod{Command1<T, A>} para ações com argumento.
+      \end{dica}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}[fragile]{O view model}
+  \begin{columns}[T]
+    \begin{column}{0.56\textwidth}
+\begin{codigo}[title=ui/painel/view\_models/painel\_view\_model.dart]{Dart}
+class PainelViewModel extends ChangeNotifier {
+  PainelViewModel({required this.repo}) {
+    carregar = Command0(_carregar)..execute();
+  }
+  final BancadaRepository repo;
+  late final Command0<List<Bancada>> carregar;
+
+  List<Bancada> _bancadas = [];  String _filtro = '';
+  List<Bancada> get visiveis => _bancadas
+      .where((b) => b.nome.contains(_filtro)).toList();
+  void filtrar(String f) { _filtro = f; notifyListeners(); }
+
+  Future<Result<List<Bancada>>> _carregar() async {
+    final r = await repo.listar();
+    if (r case Ok(:final valor)) _bancadas = valor;
+    notifyListeners();
+    return r;
+  }
+}
+\end{codigo}
+    \end{column}
+    \begin{column}{0.42\textwidth}
+      \small
+      \begin{itemize}
+        \item Recebe os repositórios no construtor (injeção).
+        \item Guarda o estado da tela e o expõe só para leitura.
+        \item Ações são métodos ou \emph{commands}.
+        \item Não importa \cod{flutter/material.dart}: é Dart puro, fácil de testar.
+      \end{itemize}
+      \begin{atencao}
+        O view model nunca guarda \cod{BuildContext} nem widgets.
+      \end{atencao}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}[fragile]{A view}
+  \begin{columns}[T]
+    \begin{column}{0.58\textwidth}
+\begin{codigo}[title=ui/painel/widgets/painel\_screen.dart]{Dart}
+class PainelScreen extends StatelessWidget {
+  const PainelScreen({super.key, required this.vm});
+  final PainelViewModel vm;
+
+  @override
+  Widget build(BuildContext context) => ListenableBuilder(
+    listenable: Listenable.merge([vm, vm.carregar]),
+    builder: (context, _) {
+      if (vm.carregar.executando) {
+        return const Carregador();   // spinner centralizado
+      }
+      if (vm.carregar.falhou) {
+        return ErroComRetentativa(
+            onTentar: vm.carregar.execute);
+      }
+      return ListaBancadas(
+          bancadas: vm.visiveis, onFiltro: vm.filtrar);
+    },
+  );
+}
+\end{codigo}
+    \end{column}
+    \begin{column}{0.4\textwidth}
+      \begin{conceito}[Responsabilidade da view]
+        Ler o estado do view model e desenhar; repassar eventos chamando métodos e \emph{commands}. Nenhuma regra de negócio.
+      \end{conceito}
+      \begin{dica}[Teste fácil]
+        A tela recebe o view model no construtor: num teste, passe um view model com um repositório \emph{fake} (Módulo 14).
+      \end{dica}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% =============================================================================
+\section{Injeção de dependência}
+
+\begin{frame}[fragile]{Injetando com Provider}
+  \begin{columns}[T]
+    \begin{column}{0.56\textwidth}
+\begin{codigo}[title=main.dart]{Dart}
+void main() {
+  runApp(MultiProvider(
+    providers: [
+      Provider(create: (_) => ApiService()),
+      Provider(create: (_) => BancoService()),
+      Provider<BancadaRepository>(create: (ctx) =>
+          BancadaRepositoryRemoto(api: ctx.read())),
+      ChangeNotifierProvider(create: (_) => AuthRepository()),
+    ],
+    child: const LabMonitorApp(),
+  ));
+}
+
+// na rota: cria o view model com as dependências
+GoRoute(path: '/painel', builder: (ctx, _) =>
+    PainelScreen(vm: PainelViewModel(repo: ctx.read())));
+\end{codigo}
+    \end{column}
+    \begin{column}{0.42\textwidth}
+      \begin{conceito}[Provider]
+        Pacote recomendado pela documentação do Flutter para disponibilizar objetos na árvore de widgets. \cod{context.read<T>()} obtém o objeto; \cod{context.watch<T>()} também reconstrói quando ele notifica.
+      \end{conceito}
+      \begin{dica}
+        Alternativas de DI: construtores (manual), \cod{get\_it} (\emph{service locator}) ou o próprio Riverpod.
+      \end{dica}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% =============================================================================
+\section{Gerência de estado: alternativas}
+
+\begin{frame}[fragile]{Riverpod}
+  \begin{columns}[T]
+    \begin{column}{0.56\textwidth}
+\begin{codigo}[title=Painel com Riverpod]{Dart}
+final repoProvider = Provider<BancadaRepository>(
+    (ref) => BancadaRepositoryRemoto(api: ref.watch(apiProvider)));
+
+final bancadasProvider = FutureProvider<List<Bancada>>(
+    (ref) => ref.watch(repoProvider).listarOuFalhar());
+
+class PainelScreen extends ConsumerWidget {
+  const PainelScreen({super.key});
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final estado = ref.watch(bancadasProvider);
+    return estado.when(
+      loading: () => const CircularProgressIndicator(),
+      error: (e, _) => Text('Erro: $e'),
+      data: (lista) => ListaBancadas(bancadas: lista),
+    );
+  }
+}
+// runApp(const ProviderScope(child: LabMonitorApp()));
+\end{codigo}
+    \end{column}
+    \begin{column}{0.42\textwidth}
+      \begin{conceito}[Riverpod]
+        \emph{Providers} globais e tipados, independentes da árvore de widgets. Cache, carregamento e erro (\cod{AsyncValue}) já embutidos; dependências entre providers com \cod{ref.watch}.
+      \end{conceito}
+      \begin{dica}
+        \cod{NotifierProvider} faz o papel do view model com estado mutável; geração de código com \cod{@riverpod} reduz repetição.
+      \end{dica}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}[fragile]{Bloc / Cubit}
+  \begin{columns}[T]
+    \begin{column}{0.56\textwidth}
+\begin{codigo}[title=Painel com Cubit]{Dart}
+sealed class PainelEstado {}
+class Carregando extends PainelEstado {}
+class Pronto extends PainelEstado {
+  Pronto(this.bancadas); final List<Bancada> bancadas; }
+class ErroPainel extends PainelEstado {
+  ErroPainel(this.msg); final String msg; }
+
+class PainelCubit extends Cubit<PainelEstado> {
+  PainelCubit(this._repo) : super(Carregando());
+  final BancadaRepository _repo;
+
+  Future<void> carregar() async {
+    emit(Carregando());
+    switch (await _repo.listar()) {
+      case Ok(:final valor): emit(Pronto(valor));
+      case Falha(:final erro): emit(ErroPainel('$erro'));
+    }
+  }
+}
+\end{codigo}
+    \end{column}
+    \begin{column}{0.42\textwidth}
+\begin{codigo}[title=Na view]{Dart}
+BlocProvider(
+  create: (ctx) =>
+      PainelCubit(ctx.read())..carregar(),
+  child: BlocBuilder<PainelCubit,
+      PainelEstado>(
+    builder: (ctx, e) => switch (e) {
+      Carregando() => const Carregador(),
+      Pronto(:final bancadas) =>
+          ListaBancadas(bancadas: bancadas),
+      ErroPainel(:final msg) => Text(msg),
+    }),
+);
+\end{codigo}
+      \begin{conceito}[Bloc]
+        Estados imutáveis emitidos em sequência; \cod{Bloc} completo recebe \textbf{eventos}, \cod{Cubit} recebe chamadas de método. Muito usado em equipes grandes.
+      \end{conceito}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Qual escolher?}
+  \footnotesize
+  \begin{tabularx}{\textwidth}{@{}l L L L@{}}
+    \toprule
+    & \cabecalho{ChangeNotifier + Provider} & \cabecalho{Riverpod} & \cabecalho{Bloc / Cubit} \\
+    \midrule
+    Origem & SDK do Flutter + pacote recomendado & comunidade (autor do Provider) & comunidade (Very Good Ventures) \\
+    Curva & baixa & média & média \\
+    Boilerplate & baixo & baixo (com geração) & médio \\
+    Pontos fortes & simples, oficial, MVVM direto & cache e assíncrono embutidos, testável & previsível, rastreável, padrão rígido \\
+    Indicado para & começar e apps pequenos e médios & apps médios e grandes & equipes grandes, regras complexas \\
+    \bottomrule
+  \end{tabularx}
+  \vspace{4pt}
+  \begin{caixaambar}
+    O que importa é a \dest{separação em camadas}: com ela, trocar a biblioteca de estado afeta só a camada de UI. Neste curso usamos \dest{ChangeNotifier + Provider}, como na documentação oficial.
+  \end{caixaambar}
+\end{frame}
+
+% =============================================================================
+\section{Fechamento}
+
+\begin{frame}{Resumo}
+  \begin{resumo}
+    \begin{itemize}
+      \item Duas camadas: UI (views + view models) e dados (repositórios + serviços).
+      \item Views desenham; view models guardam estado e ações; repositórios são a fonte da verdade.
+      \item \cod{Result} torna as falhas explícitas; \textbf{Command} expõe o andamento das ações.
+      \item Dependências entram pelo construtor; Provider as disponibiliza na árvore.
+      \item Riverpod e Bloc são alternativas maduras; a arquitetura em camadas vale para todas.
+    \end{itemize}
+  \end{resumo}
+\end{frame}
+
+\begin{frame}{Glossário (1/2)}
+  \begin{glossario}
+    Arquitetura & estruturas do sistema e decisões difíceis de mudar depois \\
+    Camada & grupo de código com uma responsabilidade: UI ou dados (e domínio) \\
+    MVVM & a \emph{view} observa o estado exposto pelo \emph{view model} \\
+    MVI & estado único e imutável; cada intenção do usuário gera um novo estado \\
+    \emph{View model} & transforma dados em estado de tela e expõe ações \\
+    Repositório & fonte única da verdade de um tipo de dado \\
+    Serviço & classe que fala com uma fonte externa: HTTP, SQLite, BLE \\
+    \cod{Result} & tipo que representa sucesso (\cod{Ok}) ou falha (\cod{Falha}) sem exceções \\
+    \emph{Command} & envolve uma ação e expõe seu andamento: executando, concluída, falhou \\
+  \end{glossario}
+\end{frame}
+
+\begin{frame}{Glossário (2/2)}
+  \begin{glossario}
+    Regra da dependência & camadas internas não conhecem as externas \\
+    Inversão de dependência & depender de abstrações, não de implementações \\
+    Injeção de dependência & receber as dependências prontas em vez de criá-las \\
+    Raiz de composição & único lugar onde os objetos concretos são criados e ligados \\
+    Localizador de serviços & registro global ao qual a classe pede dependências (\cod{get\_it}) \\
+    Provider e Riverpod & injeção e gerência de estado pela árvore ou por provedores \\
+    Bloc e Cubit & estado emitido como fluxo, a partir de eventos ou de métodos \\
+    ADR & registro curto de uma decisão de arquitetura e de seus motivos \\
+  \end{glossario}
+\end{frame}
+
+\begin{frame}{Questões de revisão}
+  \begin{questoes}
+    \item Que problemas aparecem quando um widget faz HTTP, SQL e regras de negócio? Cite três.
+    \item Compare MVP e MVVM: quem atualiza a tela em cada um?
+    \item Qual a diferença de responsabilidade entre repositório e serviço?
+    \item Enuncie a regra da dependência e dê um exemplo de violação.
+    \item Como a interface \cod{FonteLeituras} permite trocar BLE por MQTT sem mexer no \emph{view model}?
+    \item Qual a diferença entre injeção de dependência e localizador de serviços? Onde fica o \cod{get\_it}?
+    \item Por que devolver \cod{Result} em vez de lançar exceções nos repositórios?
+    \item Que critérios usar para escolher entre Provider, Riverpod e Bloc?
+  \end{questoes}
+\end{frame}
+
+\begin{frame}{Exercícios}
+  \begin{exercicio}[Exercício 1 --- Refatoração]
+    Pegue uma tela com lógica dentro do widget e separe-a em view, view model, repositório e serviço.
+  \end{exercicio}
+  \begin{exercicio}[Exercício 2 --- Command]
+    Implemente \cod{Command1<T, A>} e use-o na ação ``reservar bancada'', mostrando um indicador no botão enquanto executa e uma \emph{snackbar} em caso de falha.
+  \end{exercicio}
+  \begin{exercicio}[Exercício 3 --- Comparação]
+    Implemente o mesmo painel com Riverpod e com Cubit. Compare quantidade de código, testabilidade e clareza.
+  \end{exercicio}
+  \begin{projeto}[LabMonitor --- Etapa 8]
+    Reorganize o app nas pastas recomendadas: \cod{PainelViewModel}, \cod{EquipamentosViewModel}, \cod{BancadaRepository} com implementação \emph{fake} e injeção com Provider.
+  \end{projeto}
+\end{frame}
+
+\begin{frame}{Para aprofundar}
+  \small
+  \begin{itemize}
+    \item Guia de arquitetura: \url{https://docs.flutter.dev/app-architecture/guide}
+    \item Estudo de caso (app Compass): \url{https://docs.flutter.dev/app-architecture/case-study}
+    \item Recomendações de arquitetura: \url{https://docs.flutter.dev/app-architecture/recommendations}
+    \item Provider: \url{https://pub.dev/packages/provider} \quad Riverpod: \url{https://riverpod.dev}
+    \item Bloc: \url{https://bloclibrary.dev}
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{Respostas das questões de revisão}
+  \begin{respostas}
+    \item As regras não podem ser testadas sem montar a tela; uma mudança na API quebra várias telas; os dados ficam duplicados e inconsistentes; o arquivo fica enorme.
+    \item No MVP, o \emph{presenter} chama métodos de uma interface da \emph{view}. No MVVM, o \emph{view model} expõe estado e a \emph{view} o observa, sem que ele a conheça.
+    \item O serviço só conversa com uma fonte externa (HTTP, SQLite, BLE). O repositório combina serviços, decide cache e retentativas e é a fonte da verdade para a UI.
+    \item As camadas internas não conhecem as externas. Violação: um repositório que importa \cod{package:flutter/material.dart} ou recebe um \cod{BuildContext}.
+    \item O \emph{view model} depende só da interface; a raiz de composição injeta \cod{FonteBle} ou \cod{FonteMqtt}, e os testes usam uma \cod{FonteFake}.
+    \item Na DI, a classe recebe as dependências de fora, explícitas no construtor. No localizador, ela mesma as pede a um registro global, como o \cod{get\_it}, o que as esconde e só falha em execução.
+    \item O tipo de retorno deixa claro que a operação pode falhar e o \cod{switch} exaustivo obriga a tratar o erro; exceções esquecidas viram telas vermelhas.
+    \item Tamanho do time e do app, familiaridade, necessidade de rastrear eventos (Bloc), verificação em compilação e testes (Riverpod) e simplicidade (Provider).
+  \end{respostas}
+\end{frame}
+
+\encerramento{Módulo 09 (comum) --- Fundamentos de banco de dados: modelagem, SQL, normalização, transações e índices.}
+
+\end{document}
