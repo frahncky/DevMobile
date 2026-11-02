@@ -1,0 +1,531 @@
+\documentclass[aspectratio=169,10pt]{beamer}
+\makeatletter\def\input@path{{../estilo/}{estilo/}}\makeatother
+\usepackage{devmobile}
+\modulo{05}{Estado e Navegação}{Estado em Compose, recomposição, state hoisting, efeitos colaterais, ciclo de vida e Navigation 3}
+
+\begin{document}
+\capa
+
+\begin{frame}{Objetivos do módulo}
+  \begin{conceito}[Ao final deste módulo você será capaz de]
+    \begin{itemize}
+      \item Criar estado com \cod{remember} e \cod{mutableStateOf} e entender a recomposição.
+      \item Preservar estado em rotações com \cod{rememberSaveable}.
+      \item Aplicar \emph{state hoisting} para criar componentes reutilizáveis e testáveis.
+      \item Usar efeitos colaterais com segurança (\cod{LaunchedEffect}, \cod{DisposableEffect}\ldots).
+      \item Explicar o ciclo de vida da Activity e coletar fluxos respeitando-o.
+      \item Implementar navegação entre telas com \textbf{Navigation 3}.
+    \end{itemize}
+  \end{conceito}
+\end{frame}
+
+\sumario
+
+% =============================================================================
+\section{Estado e recomposição}
+
+\begin{frame}[fragile]{O que é estado}
+  \begin{columns}[T]
+    \begin{column}{0.5\textwidth}
+      \small
+      \termo{Estado} é qualquer valor que pode mudar com o tempo e afeta o que aparece na tela: o texto digitado, a lista carregada, se um diálogo está aberto, a última leitura do sensor.
+\begin{codigo}[title=Não funciona!]{Kotlin}
+@Composable
+fun Contador() {
+  var cliques = 0          // variável comum
+  Button(onClick = { cliques++ }) {
+    Text("Cliques: $cliques")  // nunca muda
+  }
+}
+\end{codigo}
+      \begin{erro}
+        Mudar uma variável comum não avisa o Compose, e a cada recomposição ela volta a 0.
+      \end{erro}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+\begin{codigo}[title=Correto]{Kotlin}
+@Composable
+fun Contador() {
+  var cliques by remember { mutableStateOf(0) }
+  Button(onClick = { cliques++ }) {
+    Text("Cliques: $cliques")
+  }
+}
+\end{codigo}
+      \begin{conceito}[Duas peças]
+        \begin{itemize}
+          \item \cod{mutableStateOf}: valor \textbf{observável}; ler registra dependência, escrever agenda recomposição.
+          \item \cod{remember}: guarda o objeto entre recomposições.
+        \end{itemize}
+      \end{conceito}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Recomposição}
+  \begin{columns}[c]
+    \begin{column}{0.52\textwidth}
+      \centering
+      \begin{tikzpicture}[node distance=4mm]
+        \node[caixaescura,minimum width=4.6cm] (c) {\textbf{Composição inicial}\\ executa as funções e cria a árvore};
+        \node[caixaambar,minimum width=4.6cm,below=of c] (m) {\textbf{Estado muda}\\ \cod{cliques++}};
+        \node[caixa,minimum width=4.6cm,below=of m] (r) {\textbf{Recomposição}\\ reexecuta \emph{só} quem leu o estado};
+        \node[caixa,minimum width=4.6cm,below=of r,fill=cinzaclaro] (d) {layout e desenho atualizados};
+        \draw[seta] (c) -- (m); \draw[seta] (m) -- (r); \draw[seta] (r) -- (d);
+        \draw[setaambar,rounded corners] (d.east) -- ++(5mm,0) |- (m.east);
+      \end{tikzpicture}
+    \end{column}
+    \begin{column}{0.46\textwidth}
+      \begin{conceito}[Propriedades]
+        \begin{itemize}
+          \item É \textbf{inteligente}: funções cujos parâmetros não mudaram podem ser puladas.
+          \item Pode acontecer \textbf{a cada quadro} (ex.: animações).
+          \item Pode ser \textbf{cancelada} e refeita.
+        \end{itemize}
+      \end{conceito}
+      \begin{dica}
+        O \emph{Layout Inspector} mostra quantas vezes cada composable recompôs. Números muito altos indicam problema de desempenho (Módulo 11).
+      \end{dica}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}[fragile]{\cod{remember} \emph{versus} \cod{rememberSaveable}}
+  \begin{columns}[T]
+    \begin{column}{0.52\textwidth}
+\begin{codigo}[title=Sobrevivendo à rotação]{Kotlin}
+// perdido ao girar a tela
+var filtro by remember { mutableStateOf("") }
+
+// salvo no Bundle: sobrevive à rotação e à
+// morte do processo em segundo plano
+var busca by rememberSaveable { mutableStateOf("") }
+
+// estado derivado: só recalcula quando muda
+val visiveis by remember(itens) {
+  derivedStateOf { itens.filter { busca in it.descricao } }
+}
+
+// listas observáveis
+val selecionados = remember { mutableStateListOf<String>() }
+\end{codigo}
+    \end{column}
+    \begin{column}{0.46\textwidth}
+      \footnotesize
+      \begin{tabularx}{\linewidth}{@{}l c c@{}}
+        \toprule
+        & \cabecalho{recomposição} & \cabecalho{rotação} \\
+        \midrule
+        variável comum & \textcolor{vermelhoerro}{perde} & \textcolor{vermelhoerro}{perde} \\
+        \cod{remember} & \textcolor{verdeok}{mantém} & \textcolor{vermelhoerro}{perde} \\
+        \cod{rememberSaveable} & \textcolor{verdeok}{mantém} & \textcolor{verdeok}{mantém} \\
+        ViewModel & \textcolor{verdeok}{mantém} & \textcolor{verdeok}{mantém} \\
+        \bottomrule
+      \end{tabularx}
+      \begin{atencao}
+        \cod{rememberSaveable} só aceita tipos que cabem num \cod{Bundle} (primitivos, \cod{String}, \cod{Parcelable}). Para objetos maiores, use um ViewModel (Módulo 06).
+      \end{atencao}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% =============================================================================
+\section{State hoisting}
+
+\begin{frame}[fragile]{Elevando o estado (\emph{state hoisting})}
+  \begin{columns}[T]
+    \begin{column}{0.52\textwidth}
+\begin{codigo}[title=Componente sem estado (stateless)]{Kotlin}
+@Composable
+fun CampoLimite(
+  valor: String,                   // estado desce
+  onValorChange: (String) -> Unit, // evento sobe
+  modifier: Modifier = Modifier
+) {
+  OutlinedTextField(
+    value = valor,
+    onValueChange = onValorChange,
+    label = { Text("Limite (°C)") },
+    modifier = modifier
+  )
+}
+
+// Quem usa decide onde o estado mora
+@Composable
+fun TelaConfig() {
+  var limite by rememberSaveable { mutableStateOf("30") }
+  CampoLimite(limite, onValorChange = { limite = it })
+}
+\end{codigo}
+    \end{column}
+    \begin{column}{0.46\textwidth}
+      \centering
+      \begin{tikzpicture}[node distance=12mm]
+        \node[caixaescura,minimum width=3.6cm] (p) {\cod{TelaConfig}\\ \tiny dona do estado};
+        \node[caixa,minimum width=3.6cm,below=of p] (f) {\cod{CampoLimite}\\ \tiny stateless};
+        \draw[seta] ([xshift=-8mm]p.south) -- node[rotulo,left]{estado} ([xshift=-8mm]f.north);
+        \draw[setaambar] ([xshift=8mm]f.north) -- node[rotulo,right]{eventos} ([xshift=8mm]p.south);
+      \end{tikzpicture}
+      \begin{conceito}[Fluxo unidirecional de dados (UDF)]
+        O estado desce como parâmetro e os eventos sobem como lambdas. Há uma única \textbf{fonte da verdade}.
+      \end{conceito}
+      \begin{dica}[Vantagens]
+        Componente reutilizável, fácil de testar e de visualizar em \cod{@Preview}.
+      \end{dica}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Onde o estado deve morar?}
+  \begin{center}
+  \begin{tikzpicture}[node distance=5mm and 8mm,
+      decisao/.style={caixaambar,diamond,aspect=2.6,inner sep=1pt,text width=2.5cm,font=\tiny}]
+    \node[decisao] (q1) {É só aparência da UI? (expandido, rolagem, foco)};
+    \node[caixaescura,right=12mm of q1,text width=3.2cm] (r1) {No próprio composable,\\ com \cod{remember(Saveable)}};
+    \node[decisao,below=6mm of q1] (q2) {Vários composables usam?};
+    \node[caixa,right=12mm of q2,text width=3.2cm] (r2) {No ancestral comum mais baixo (hoisting)};
+    \node[decisao,below=6mm of q2] (q3) {Envolve regras de negócio ou dados?};
+    \node[caixaambarforte,right=12mm of q3,text width=3.2cm] (r3) {No \textbf{ViewModel} (\emph{state holder} da tela)};
+    \draw[seta] (q1) -- node[rotulo,above]{sim} (r1);
+    \draw[seta] (q1) -- node[rotulo,left]{não} (q2);
+    \draw[seta] (q2) -- node[rotulo,above]{sim} (r2);
+    \draw[seta] (q2) -- node[rotulo,left]{não} (q3);
+    \draw[seta] (q3) -- node[rotulo,above]{sim} (r3);
+  \end{tikzpicture}
+  \end{center}
+  \begin{dica}
+    Regra prática: eleve o estado só até onde for necessário, nem mais nem menos.
+  \end{dica}
+\end{frame}
+
+% =============================================================================
+\section{Efeitos colaterais}
+
+\begin{frame}[fragile]{APIs de efeitos}
+  \begin{columns}[T]
+    \begin{column}{0.5\textwidth}
+\begin{codigo}[title=LaunchedEffect e DisposableEffect]{Kotlin}
+@Composable
+fun Monitor(bancadaId: Int, vm: PainelViewModel) {
+  // roda quando entra na tela e quando a chave muda
+  LaunchedEffect(bancadaId) {
+    vm.carregar(bancadaId)   // coroutine
+  }
+
+  val lifecycle = LocalLifecycleOwner.current.lifecycle
+  DisposableEffect(lifecycle) {
+    val obs = LifecycleEventObserver { _, e ->
+      if (e == Lifecycle.Event.ON_RESUME) vm.reconectar()
+    }
+    lifecycle.addObserver(obs)
+    onDispose { lifecycle.removeObserver(obs) }
+  }
+}
+\end{codigo}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \scriptsize
+      \begin{tabularx}{\linewidth}{@{}l L@{}}
+        \toprule
+        \cabecalho{API} & \cabecalho{Quando usar} \\
+        \midrule
+        \cod{LaunchedEffect(chave)} & rodar \cod{suspend} ao entrar ou quando a chave muda \\
+        \cod{rememberCoroutineScope} & iniciar coroutine a partir de um clique \\
+        \cod{DisposableEffect} & registrar e remover \emph{listeners} \\
+        \cod{SideEffect} & sincronizar com código não-Compose a cada recomposição \\
+        \cod{rememberUpdatedState} & usar o valor mais recente dentro de um efeito longo \\
+        \cod{produceState} & converter fonte externa em estado \\
+        \cod{derivedStateOf} & estado calculado que muda menos que a origem \\
+        \bottomrule
+      \end{tabularx}
+      \begin{atencao}
+        \cod{LaunchedEffect(Unit)} roda uma única vez enquanto o composable estiver na tela.
+      \end{atencao}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% =============================================================================
+\section{Ciclo de vida}
+
+\begin{frame}{Ciclo de vida da Activity}
+  \begin{columns}[c]
+    \begin{column}{0.56\textwidth}
+      \centering
+      \begin{tikzpicture}[node distance=2.2mm,cb/.style={caixa,minimum width=2.3cm,minimum height=5.5mm,font=\tiny}]
+        \node[caixaambarforte,minimum width=2.3cm] (l) {Lançada};
+        \node[cb,below=of l] (c) {\cod{onCreate()}};
+        \node[cb,below=of c] (s) {\cod{onStart()}};
+        \node[cb,below=of s] (r) {\cod{onResume()}};
+        \node[caixaescura,minimum width=2.3cm,below=of r] (run) {Em execução};
+        \node[cb,below=of run] (p) {\cod{onPause()}};
+        \node[cb,below=of p] (st) {\cod{onStop()}};
+        \node[cb,below=of st] (d) {\cod{onDestroy()}};
+        \foreach \a/\b in {l/c,c/s,s/r,r/run,run/p,p/st,st/d}{\draw[seta] (\a) -- (\b);}
+        \node[cb,right=7mm of s] (rs) {\cod{onRestart()}};
+        \draw[setaambar] (st.east) -| (rs.south);
+        \draw[setaambar] (rs.west) -- (s.east);
+        \draw[setaambar] (p.west) -- ++(-6mm,0) |- (r.west);
+        \node[rotulo,anchor=east] at ([xshift=-7mm]$(p.west)!0.5!(r.west)$) {volta ao\\ primeiro plano};
+        \node[rotulo,anchor=north] at ([yshift=-1mm]rs.south east) {volta do\\ segundo plano};
+      \end{tikzpicture}
+    \end{column}
+    \begin{column}{0.42\textwidth}
+      \scriptsize
+      \begin{tabularx}{\linewidth}{@{}l L@{}}
+        \toprule
+        \cabecalho{Estado} & \cabecalho{Significado} \\
+        \midrule
+        \textbf{Created} & criada, ainda invisível \\
+        \textbf{Started} & visível \\
+        \textbf{Resumed} & em primeiro plano, recebe toques \\
+        \textbf{Paused} & parcialmente encoberta \\
+        \textbf{Stopped} & invisível (segundo plano) \\
+        \bottomrule
+      \end{tabularx}
+      \begin{atencao}[Mudanças de configuração]
+        Girar a tela, trocar idioma ou tema \textbf{destrói e recria} a Activity. Por isso o estado precisa estar em \cod{rememberSaveable} ou no ViewModel.
+      \end{atencao}
+      \begin{atencao}[Morte do processo]
+        Em segundo plano, o sistema pode encerrar o app para liberar memória. Ao voltar, só o estado salvo sobrevive.
+      \end{atencao}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}[fragile]{Coletando fluxos com segurança}
+  \begin{columns}[T]
+    \begin{column}{0.54\textwidth}
+\begin{codigo}[title=TelaPainel.kt]{Kotlin}
+@Composable
+fun TelaPainel(vm: PainelViewModel = viewModel()) {
+  // para de coletar quando o app vai para o
+  // segundo plano (abaixo de STARTED)
+  val estado by vm.estado.collectAsStateWithLifecycle()
+
+  when (val e = estado) {
+    PainelUiState.Carregando -> CircularProgressIndicator()
+    is PainelUiState.Erro -> Text(e.mensagem)
+    is PainelUiState.Pronto -> Painel(
+      leituras = e.leituras,
+      onAtualizar = vm::atualizar
+    )
+  }
+}
+\end{codigo}
+    \end{column}
+    \begin{column}{0.44\textwidth}
+      \begin{conceito}[\cod{collectAsStateWithLifecycle}]
+        Converte \cod{StateFlow} em \cod{State} do Compose e \textbf{pausa a coleta} quando a tela não está visível, economizando bateria, rede e sensores.
+      \end{conceito}
+      \begin{dica}[Dependência]
+        Vem do artefato\\ \cod{androidx.lifecycle:}\\\cod{lifecycle-runtime-compose}.
+      \end{dica}
+      \begin{erro}
+        \cod{collectAsState()} continua coletando em segundo plano. No Android, prefira a versão \emph{WithLifecycle}.
+      \end{erro}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% =============================================================================
+\section{Navegação com Navigation 3}
+
+\begin{frame}{Conceitos de navegação}
+  \begin{columns}[c]
+    \begin{column}{0.5\textwidth}
+      \small
+      \begin{itemize}
+        \item Apps Compose costumam ter \textbf{uma Activity} e várias telas (\emph{destinos}).
+        \item A \termo{pilha de navegação} (\emph{back stack}) guarda o histórico; o botão/gesto voltar remove o topo.
+        \item \textbf{Navigation 3} (Jetpack, estável desde nov./2025) representa a pilha como uma \textbf{lista observável de chaves} controlada pelo próprio app.
+      \end{itemize}
+      \begin{conceito}[Peças]
+        \cod{NavKey} (chave de cada tela) $\cdot$ \cod{rememberNavBackStack} (a pilha) $\cdot$ \cod{NavDisplay} (exibe o topo) $\cdot$ \cod{entryProvider} (chave $\rightarrow$ tela).
+      \end{conceito}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \centering
+      \begin{tikzpicture}[node distance=1mm]
+        \node[caixa,minimum width=3.2cm] (a) {\cod{Lista}};
+        \node[caixa,minimum width=3.2cm,above=of a] (b) {\cod{Detalhe(id = 42)}};
+        \node[caixaambarforte,minimum width=3.2cm,above=of b] (c) {\cod{Reserva(id = 42)}};
+        \node[rotulo,right=2mm of c] {topo: visível};
+        \draw[setaambar] ([xshift=-4mm]c.north west) -- ++(0,4mm) node[above,rotulo]{\cod{add()}};
+        \draw[seta] ([xshift=4mm]c.north east) ++(0,4mm) -- ([xshift=4mm]c.north east) ;
+        \node[rotulo] at ([xshift=12mm,yshift=6mm]c.north east) {\cod{removeLastOrNull()}};
+        \node[pontilhado,fit=(a)(b)(c)] {};
+      \end{tikzpicture}
+      \begin{dica}
+        Muitos projetos existentes usam \textbf{Navigation Compose} (Nav2, com \cod{NavHost} e \cod{NavController}). Os conceitos são os mesmos; ao final mostramos a equivalência.
+      \end{dica}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}[fragile]{Navigation 3: chaves e pilha}
+  \begin{columns}[T]
+    \begin{column}{0.5\textwidth}
+\begin{codigo}[title=app/build.gradle.kts]{Kotlin}
+plugins {
+  alias(libs.plugins.kotlin.serialization)
+}
+dependencies {
+  implementation(libs.androidx.navigation3.runtime)
+  implementation(libs.androidx.navigation3.ui)
+  implementation(
+    libs.androidx.lifecycle.viewmodel.navigation3)
+  implementation(libs.kotlinx.serialization.core)
+}
+\end{codigo}
+\begin{codigo}[title=Rotas.kt]{Kotlin}
+@Serializable data object Lista : NavKey
+@Serializable data class Detalhe(val id: Int) : NavKey
+@Serializable data class Reserva(val id: Int) : NavKey
+\end{codigo}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \begin{conceito}[Chaves tipadas]
+        Cada tela é uma classe \cod{@Serializable} que implementa \cod{NavKey}. Os argumentos são propriedades: sem strings de rota e sem erros de digitação.
+      \end{conceito}
+      \begin{conceito}[Pilha persistente]
+        \cod{rememberNavBackStack(Lista)} cria a pilha com a tela inicial e a salva automaticamente em rotações e na morte do processo, por isso as chaves são serializáveis.
+      \end{conceito}
+      \begin{dica}
+        Passe só identificadores (\cod{id}) nas chaves; a tela de destino busca os dados.
+      \end{dica}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}[fragile]{Navigation 3: \cod{NavDisplay}}
+  \begin{columns}[T]
+    \begin{column}{0.6\textwidth}
+\begin{codigo}[title=NavegacaoApp.kt]{Kotlin}
+@Composable
+fun NavegacaoApp() {
+  val pilha = rememberNavBackStack(Lista)
+  NavDisplay(
+    backStack = pilha,
+    onBack = { pilha.removeLastOrNull() },
+    entryDecorators = listOf(
+      rememberSaveableStateHolderNavEntryDecorator(),
+      rememberViewModelStoreNavEntryDecorator()), // VM por tela
+    entryProvider = entryProvider {
+      entry<Lista> {
+        TelaLista(onAbrir = { id -> pilha.add(Detalhe(id)) })
+      }
+      entry<Detalhe> { chave ->
+        TelaDetalhe(chave.id,
+          onReservar = { pilha.add(Reserva(chave.id)) })
+      }
+      entry<Reserva> { chave -> TelaReserva(chave.id) }
+    }
+  )
+}
+\end{codigo}
+    \end{column}
+    \begin{column}{0.38\textwidth}
+      \small
+      \begin{itemize}
+        \item \textbf{Navegar} = \cod{pilha.add(chave)}.
+        \item \textbf{Voltar} = \cod{pilha.removeLastOrNull()}.
+        \item O gesto de voltar do sistema chama \cod{onBack}.
+        \item Os decoradores salvam o estado de cada tela e criam um ViewModel por entrada da pilha.
+      \end{itemize}
+      \begin{atencao}[Telas não conhecem a pilha]
+        \cod{TelaLista} recebe \cod{onAbrir} como lambda, não a pilha. Assim ela continua reutilizável e testável.
+      \end{atencao}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}[fragile]{Navegação principal com barra inferior}
+  \begin{columns}[T]
+    \begin{column}{0.56\textwidth}
+\begin{codigo}[title=Abas principais]{Kotlin}
+enum class Aba(val chave: NavKey, val rotulo: String,
+               val icone: ImageVector) {
+  PAINEL(Painel, "Painel", Icons.Default.Dashboard),
+  EQUIP(Lista, "Equipamentos", Icons.Default.Memory),
+  CONFIG(Config, "Ajustes", Icons.Default.Settings)
+}
+
+NavigationBar {
+  Aba.entries.forEach { aba ->
+    NavigationBarItem(
+      selected = pilha.first() == aba.chave,
+      onClick = {           // troca a raiz da pilha
+        pilha.clear(); pilha.add(aba.chave)
+      },
+      icon = { Icon(aba.icone, null) },
+      label = { Text(aba.rotulo) }
+    )
+  }
+}
+\end{codigo}
+    \end{column}
+    \begin{column}{0.42\textwidth}
+      \begin{dica}[Uma pilha por aba]
+        Em apps maiores, mantenha uma pilha para cada aba e exiba a da aba ativa. Assim cada aba lembra até onde o usuário navegou. Os \emph{recipes} oficiais do Navigation 3 trazem esse padrão pronto.
+      \end{dica}
+      \begin{conceito}[Nav2 $\leftrightarrow$ Nav3]
+        \scriptsize
+        \begin{tabular}{@{}l l@{}}
+          \cod{NavHost} & \cod{NavDisplay} \\
+          \cod{navigate(r)} & \cod{pilha.add(r)} \\
+          \cod{popBackStack()} & \cod{removeLastOrNull()} \\
+          \cod{composable<R>\{\}} & \cod{entry<R>\{\}} \\
+          \cod{toRoute<R>()} & a própria chave \\
+        \end{tabular}
+      \end{conceito}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% =============================================================================
+\section{Fechamento}
+
+\begin{frame}{Resumo}
+  \begin{resumo}
+    \begin{itemize}
+      \item \cod{mutableStateOf} + \cod{remember} criam estado observável; mudar o estado dispara a recomposição.
+      \item \cod{rememberSaveable} sobrevive à rotação; o ViewModel guarda o estado da tela.
+      \item \emph{State hoisting}: estado desce, eventos sobem, uma fonte da verdade.
+      \item Efeitos colaterais só dentro de \cod{LaunchedEffect}, \cod{DisposableEffect} e afins.
+      \item Rotação recria a Activity; colete fluxos com \cod{collectAsStateWithLifecycle}.
+      \item Navigation 3: chaves \cod{NavKey}, pilha observável e \cod{NavDisplay}.
+    \end{itemize}
+  \end{resumo}
+\end{frame}
+
+\begin{frame}{Exercícios}
+  \begin{exercicio}[Exercício 1 --- Rotação]
+    Crie um formulário com três campos, um usando \cod{remember} e dois com \cod{rememberSaveable}. Gire o emulador e explique o que aconteceu.
+  \end{exercicio}
+  \begin{exercicio}[Exercício 2 --- Hoisting]
+    Transforme um \cod{SeletorDeFaixa} com estado interno (mínimo e máximo) em um componente \emph{stateless} com \cod{RangeSlider}. Escreva dois \cod{@Preview}s com valores diferentes.
+  \end{exercicio}
+  \begin{exercicio}[Exercício 3 --- Ciclo de vida]
+    Registre um \cod{Log} em cada callback do ciclo de vida da \cod{MainActivity}. Gire a tela, vá para a tela inicial e volte. Desenhe a sequência observada.
+  \end{exercicio}
+  \begin{projeto}[LabMonitor --- Etapa 5]
+    Implemente a navegação: \textbf{Painel}, \textbf{Equipamentos} (lista $\rightarrow$ detalhe $\rightarrow$ reserva) e \textbf{Ajustes} com \cod{NavigationBar}. O formulário de reserva deve sobreviver à rotação.
+  \end{projeto}
+\end{frame}
+
+\begin{frame}{Para aprofundar}
+  \small
+  \begin{itemize}
+    \item Estado e Jetpack Compose: \url{https://developer.android.com/develop/ui/compose/state}
+    \item Onde elevar o estado: \url{https://developer.android.com/develop/ui/compose/state-hoisting}
+    \item Efeitos colaterais: \url{https://developer.android.com/develop/ui/compose/side-effects}
+    \item Ciclo de vida da Activity: \url{https://developer.android.com/guide/components/activities/activity-lifecycle}
+    \item Navigation 3: \url{https://developer.android.com/guide/navigation/navigation-3}
+    \item Recipes do Navigation 3: \url{https://github.com/android/nav3-recipes}
+  \end{itemize}
+\end{frame}
+
+\encerramento{Módulo 06 --- Arquitetura de apps: MVVM, camadas, repositório, casos de uso e injeção de dependência com Hilt.}
+
+\end{document}

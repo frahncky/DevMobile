@@ -1,0 +1,665 @@
+\documentclass[aspectratio=169,10pt]{beamer}
+\makeatletter\def\input@path{{../estilo/}{estilo/}}\makeatother
+\usepackage{devmobile}
+\modulo{10}{Recursos do Dispositivo e IoT}{Permissões, câmera e QR code, localização, notificações, WorkManager, sensores, Bluetooth Low Energy e MQTT com ESP32}
+
+\begin{document}
+\capa
+
+\begin{frame}{Objetivos do módulo}
+  \begin{conceito}[Ao final deste módulo você será capaz de]
+    \begin{itemize}
+      \item Solicitar permissões em tempo de execução seguindo as boas práticas.
+      \item Usar câmera, seletor de fotos, leitor de QR code e localização.
+      \item Criar notificações e agendar tarefas em segundo plano com WorkManager.
+      \item Ler sensores do aparelho como \cod{Flow}.
+      \item Comunicar com um \textbf{ESP32} via \textbf{Bluetooth Low Energy} (GATT).
+      \item Receber telemetria via \textbf{MQTT} e escolher o protocolo adequado.
+    \end{itemize}
+  \end{conceito}
+  \begin{atencao}
+    Este módulo exige \textbf{celular físico}: o emulador não tem Bluetooth real.
+  \end{atencao}
+\end{frame}
+
+\sumario
+
+% =============================================================================
+\section{Permissões em tempo de execução}
+
+\begin{frame}{Fluxo de permissões}
+  \begin{columns}[c]
+    \begin{column}{0.56\textwidth}
+      \centering
+      \begin{tikzpicture}[node distance=4mm and 6mm,
+          decisao/.style={caixaambar,diamond,aspect=2.4,inner sep=1pt,text width=2cm,font=\tiny}]
+        \node[caixaescura,minimum width=2.6cm] (u) {usuário toca em\\ ``Escanear''};
+        \node[decisao,below=of u] (q1) {já concedida?};
+        \node[caixa,right=of q1,text width=1.8cm] (ok) {usa o recurso};
+        \node[decisao,below=of q1] (q2) {precisa explicar?};
+        \node[caixa,right=of q2,text width=1.8cm] (exp) {mostra o motivo na UI};
+        \node[caixaambarforte,below=of q2,minimum width=2.6cm] (pede) {diálogo do sistema};
+        \node[caixa,right=of pede,text width=1.8cm,draw=vermelhoerro] (neg) {negada: modo degradado};
+        \draw[seta] (u) -- (q1);
+        \draw[seta] (q1) -- node[rotulo,above]{sim} (ok);
+        \draw[seta] (q1) -- node[rotulo,left]{não} (q2);
+        \draw[seta] (q2) -- node[rotulo,above]{sim} (exp);
+        \draw[seta] (exp) |- (pede);
+        \draw[seta] (q2) -- node[rotulo,left]{não} (pede);
+        \draw[seta] (pede) -- (neg);
+      \end{tikzpicture}
+    \end{column}
+    \begin{column}{0.42\textwidth}
+      \begin{conceito}[Boas práticas]
+        \begin{itemize}
+          \item Peça \textbf{no momento do uso}, não na abertura do app.
+          \item Explique o motivo \textbf{antes} quando não for óbvio.
+          \item Peça o \textbf{mínimo}: localização aproximada se bastar.
+          \item Funcione, mesmo que limitado, se o usuário negar.
+        \end{itemize}
+      \end{conceito}
+      \begin{atencao}
+        Após duas negativas, o sistema não mostra mais o diálogo. Ofereça um botão que abre as configurações do app.
+      \end{atencao}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}[fragile]{Pedindo permissões em Compose}
+  \begin{columns}[T]
+    \begin{column}{0.58\textwidth}
+\begin{codigo}[title=PermissaoBle.kt]{Kotlin}
+val permissoesBle = if (Build.VERSION.SDK_INT >= 31)
+  arrayOf(Manifest.permission.BLUETOOTH_SCAN,
+          Manifest.permission.BLUETOOTH_CONNECT)
+else arrayOf(Manifest.permission.ACCESS_FINE_LOCATION)
+
+@Composable
+fun BotaoProcurarSensores(onPermitido: () -> Unit) {
+  var negado by remember { mutableStateOf(false) }
+  val launcher = rememberLauncherForActivityResult(
+    ActivityResultContracts.RequestMultiplePermissions()
+  ) { resultado ->
+    if (resultado.values.all { it }) onPermitido()
+    else negado = true
+  }
+  Button(onClick = { launcher.launch(permissoesBle) }) {
+    Text("Procurar sensores")
+  }
+  if (negado) Text("Sem Bluetooth não é possível " +
+    "ler as bancadas. Ative em Configurações.")
+}
+\end{codigo}
+    \end{column}
+    \begin{column}{0.4\textwidth}
+\begin{codigo}[title=AndroidManifest.xml]{XML}
+<uses-permission android:name=
+ "android.permission.BLUETOOTH_SCAN"
+ android:usesPermissionFlags=
+  "neverForLocation" />
+<uses-permission android:name=
+ "android.permission.BLUETOOTH_CONNECT"/>
+<!-- Android 11 ou anterior -->
+<uses-permission android:name=
+ "android.permission.
+   ACCESS_FINE_LOCATION"
+ android:maxSdkVersion="30" />
+\end{codigo}
+      \begin{dica}
+        Declare no manifesto \textbf{e} peça em tempo de execução. \cod{neverForLocation} afirma que o app não usa o BLE para localizar o usuário.
+      \end{dica}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% =============================================================================
+\section{Câmera, QR code e localização}
+
+\begin{frame}[fragile]{Fotos e QR code sem permissão}
+  \begin{columns}[T]
+    \begin{column}{0.52\textwidth}
+\begin{codigo}[title=Seletor de fotos (Photo Picker)]{Kotlin}
+val escolher = rememberLauncherForActivityResult(
+  ActivityResultContracts.PickVisualMedia()
+) { uri -> uri?.let(vm::onFotoEscolhida) }
+
+Button(onClick = {
+  escolher.launch(PickVisualMediaRequest(
+    ActivityResultContracts.PickVisualMedia.ImageOnly))
+}) { Text("Escolher foto") }
+\end{codigo}
+\begin{codigo}[title=Leitor de QR code (Google Play services)]{Kotlin}
+suspend fun lerPatrimonio(ctx: Context): String? =
+  GmsBarcodeScanning.getClient(ctx)
+    .startScan().await().rawValue  // ex.: "IFMA-0042"
+\end{codigo}
+    \end{column}
+    \begin{column}{0.46\textwidth}
+      \begin{conceito}[Menos permissões, mais privacidade]
+        O \textbf{Photo Picker} e o \textbf{leitor de códigos} rodam em processos do sistema: o app recebe só o resultado e não precisa de permissão de câmera nem de acesso à galeria.
+      \end{conceito}
+      \begin{dica}[Ideia para o laboratório]
+        Cole etiquetas com QR code do número de patrimônio nos equipamentos. Ler o código abre direto a ficha do equipamento no LabMonitor.
+      \end{dica}
+      \begin{dica}
+        Para preview de câmera personalizado, análise quadro a quadro ou visão computacional, use \textbf{CameraX} (exige a permissão \cod{CAMERA}).
+      \end{dica}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}[fragile]{Localização}
+  \begin{columns}[T]
+    \begin{column}{0.54\textwidth}
+\begin{codigo}[title=LocalizacaoRepository.kt]{Kotlin}
+class LocalizacaoRepository @Inject constructor(
+  @ApplicationContext ctx: Context
+) {
+  private val cliente =
+    LocationServices.getFusedLocationProviderClient(ctx)
+
+  @RequiresPermission(anyOf = [
+    Manifest.permission.ACCESS_COARSE_LOCATION,
+    Manifest.permission.ACCESS_FINE_LOCATION])
+  suspend fun atual(): Location? =
+    cliente.getCurrentLocation(
+      Priority.PRIORITY_BALANCED_POWER_ACCURACY,
+      null
+    ).await()
+}
+\end{codigo}
+    \end{column}
+    \begin{column}{0.44\textwidth}
+      \scriptsize
+      \begin{tabularx}{\linewidth}{@{}l L@{}}
+        \toprule
+        \cabecalho{Permissão} & \cabecalho{Precisão} \\
+        \midrule
+        \cod{COARSE} & aproximada (cerca de 3\,km) \\
+        \cod{FINE} & precisa (GPS) \\
+        \cod{BACKGROUND} & também com o app fechado \\
+        \bottomrule
+      \end{tabularx}
+      \begin{conceito}[Fused Location Provider]
+        Combina GPS, Wi-Fi e rede celular, escolhendo a fonte mais econômica para a precisão pedida.
+      \end{conceito}
+      \begin{atencao}
+        Localização em segundo plano passa por revisão rigorosa da Google Play. Só peça se for essencial.
+      \end{atencao}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% =============================================================================
+\section{Notificações e segundo plano}
+
+\begin{frame}[fragile]{Notificações locais}
+  \begin{columns}[T]
+    \begin{column}{0.56\textwidth}
+\begin{codigo}[title=Notificador.kt]{Kotlin}
+const val CANAL_ALERTAS = "alertas"
+
+fun criarCanal(ctx: Context) {
+  val canal = NotificationChannel(CANAL_ALERTAS,
+    "Alertas de temperatura",
+    NotificationManager.IMPORTANCE_HIGH)
+  ctx.getSystemService(NotificationManager::class.java)
+    .createNotificationChannel(canal)
+}
+
+fun notificarAlerta(ctx: Context, bancada: Int, t: Double) {
+  val n = NotificationCompat.Builder(ctx, CANAL_ALERTAS)
+    .setSmallIcon(R.drawable.ic_termometro)
+    .setContentTitle("Bancada $bancada: %.1f °C".format(t))
+    .setContentText("Acima do limite configurado")
+    .setAutoCancel(true)
+    .build()
+  if (temPermissaoNotificacao(ctx))
+    NotificationManagerCompat.from(ctx).notify(bancada, n)
+}
+\end{codigo}
+    \end{column}
+    \begin{column}{0.42\textwidth}
+      \begin{conceito}[Canais]
+        Desde o Android 8, toda notificação pertence a um \textbf{canal}. O usuário controla som, vibração e bloqueio de cada canal separadamente.
+      \end{conceito}
+      \begin{atencao}[Android 13+]
+        É preciso pedir \cod{POST\_NOTIFICATIONS} em tempo de execução, como qualquer permissão perigosa.
+      \end{atencao}
+      \begin{dica}
+        Adicione um \cod{PendingIntent} com \cod{setContentIntent} para abrir a tela da bancada ao tocar na notificação.
+      \end{dica}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}[fragile]{WorkManager: tarefas garantidas}
+  \begin{columns}[T]
+    \begin{column}{0.56\textwidth}
+\begin{codigo}[title=SincronizarWorker.kt]{Kotlin}
+@HiltWorker
+class SincronizarWorker @AssistedInject constructor(
+  @Assisted ctx: Context, @Assisted p: WorkerParameters,
+  private val repo: BancadaRepository
+) : CoroutineWorker(ctx, p) {
+  override suspend fun doWork(): Result = try {
+    repo.enviarPendentes(); repo.sincronizar()
+    Result.success()
+  } catch (e: IOException) { Result.retry() }
+}
+
+val pedido = PeriodicWorkRequestBuilder<SincronizarWorker>(
+    15, TimeUnit.MINUTES)                  // mínimo: 15 min
+  .setConstraints(Constraints(
+    requiredNetworkType = NetworkType.CONNECTED,
+    requiresBatteryNotLow = true))
+  .build()
+WorkManager.getInstance(ctx).enqueueUniquePeriodicWork(
+  "sync", ExistingPeriodicWorkPolicy.KEEP, pedido)
+\end{codigo}
+    \end{column}
+    \begin{column}{0.42\textwidth}
+      \begin{conceito}[Quando usar]
+        Trabalho que \textbf{precisa acontecer} mesmo se o app fechar ou o aparelho reiniciar: sincronizar, enviar a fila offline, limpar o banco.
+      \end{conceito}
+      \scriptsize
+      \begin{tabular}{@{}p{2.6cm} l@{}}
+        \toprule
+        \cabecalho{Necessidade} & \cabecalho{Ferramenta} \\
+        \midrule
+        enquanto a tela está aberta & coroutines \\
+        adiável e garantida & WorkManager \\
+        contínua e visível (ex.: monitorar BLE) & \emph{foreground service} \\
+        horário exato (alarme) & \cod{AlarmManager} \\
+        \bottomrule
+      \end{tabular}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% =============================================================================
+\section{Sensores do aparelho}
+
+\begin{frame}[fragile]{Sensores como \cod{Flow}}
+  \begin{columns}[T]
+    \begin{column}{0.54\textwidth}
+\begin{codigo}[title=Usando o callbackFlow do Módulo 03]{Kotlin}
+class InclinacaoViewModel @Inject constructor(
+  sensores: SensorManager
+) : ViewModel() {
+  val anguloX: StateFlow<Float> = sensores
+    .leituras(Sensor.TYPE_ACCELEROMETER)
+    .map { (x, y, z) ->
+      Math.toDegrees(atan2(x, hypot(y, z)).toDouble())
+        .toFloat()
+    }
+    .sample(100)       // no máximo 10 Hz para a UI
+    .stateIn(viewModelScope,
+      SharingStarted.WhileSubscribed(5_000), 0f)
+}
+\end{codigo}
+    \end{column}
+    \begin{column}{0.44\textwidth}
+      \scriptsize
+      \begin{tabularx}{\linewidth}{@{}l L@{}}
+        \toprule
+        \cabecalho{Sensor} & \cabecalho{Medida} \\
+        \midrule
+        Acelerômetro & aceleração em m/s$^2$ (x, y, z) \\
+        Giroscópio & velocidade angular em rad/s \\
+        Magnetômetro & campo magnético em $\mu$T \\
+        Luz & iluminância em lux \\
+        Barômetro & pressão em hPa \\
+        Proximidade & distância (ou perto/longe) \\
+        \bottomrule
+      \end{tabularx}
+      \begin{dica}[Celular como instrumento]
+        Com o magnetômetro dá para detectar o campo de um ímã ou de um indutor; com o acelerômetro, medir vibração de motores (Fourier com \cod{Dispatchers.Default}).
+      \end{dica}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% =============================================================================
+\section{Bluetooth Low Energy com ESP32}
+
+\begin{frame}{Conceitos de BLE}
+  \begin{columns}[c]
+    \begin{column}{0.54\textwidth}
+      \centering
+      \begin{tikzpicture}[node distance=2mm]
+        \node[caixaescura,minimum width=5.6cm] (dev) {\textbf{Periférico} (servidor GATT): ESP32 ``LabMonitor-B3''};
+        \node[caixapetroleo,minimum width=5cm,below=of dev] (svc) {\textbf{Serviço} \tiny UUID 4fafc201-\ldots{} (Ambiente)};
+        \node[caixaambar,minimum width=4.4cm,below=of svc] (c1) {\textbf{Característica} Temperatura\\ \tiny UUID beb5483e-\ldots{} \quad READ $\cdot$ NOTIFY};
+        \node[caixa,minimum width=3.6cm,below=of c1] (d) {\textbf{Descritor} CCCD (0x2902)\\ \tiny liga/desliga notificações};
+        \node[caixaambar,minimum width=4.4cm,below=of d] (c2) {\textbf{Característica} Relé \tiny WRITE};
+        \node[left=3mm of svc] (cel) {\celular[0.32]{}};
+        \node[rotulo,below=0mm of cel] {central (cliente)};
+      \end{tikzpicture}
+    \end{column}
+    \begin{column}{0.44\textwidth}
+      \small
+      \begin{itemize}
+        \item \termo{GAP}: anúncio (\emph{advertising}) e conexão. O ESP32 anuncia; o celular procura e conecta.
+        \item \termo{GATT}: organização dos dados em \textbf{serviços} e \textbf{características}, cada uma com um UUID.
+        \item Operações: \textbf{read}, \textbf{write} e \textbf{notify} (o periférico envia quando o valor muda).
+      \end{itemize}
+      \begin{dica}
+        Use o app \textbf{nRF Connect} para explorar e depurar o ESP32 antes de escrever o código Android.
+      \end{dica}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}[fragile]{Firmware do ESP32 (Arduino)}
+  \begin{columns}[T]
+    \begin{column}{0.56\textwidth}
+\begin{codigo}[title=labmonitor\_ble.ino --- configuração]{CPP}
+#include <BLEDevice.h>
+#include <BLEServer.h>
+#include <BLE2902.h>
+#define SVC_UUID  "4fafc201-1fb5-459e-8fcc-c5c9c331914b"
+#define TEMP_UUID "beb5483e-36e1-4688-b7f5-ea07361b26a8"
+BLECharacteristic *temp;
+
+void setup() {
+  BLEDevice::init("LabMonitor-B3");
+  BLEServer *srv = BLEDevice::createServer();
+  BLEService *svc = srv->createService(SVC_UUID);
+  temp = svc->createCharacteristic(TEMP_UUID,
+    BLECharacteristic::PROPERTY_READ |
+    BLECharacteristic::PROPERTY_NOTIFY);
+  temp->addDescriptor(new BLE2902());   // CCCD
+  svc->start();
+  BLEDevice::getAdvertising()->addServiceUUID(SVC_UUID);
+  BLEDevice::startAdvertising();
+}
+\end{codigo}
+    \end{column}
+    \begin{column}{0.42\textwidth}
+\begin{codigo}[title=--- laço principal]{CPP}
+void loop() {
+  // centésimos de grau: 24,87 °C -> 2487
+  int16_t c = (int16_t)(lerTemperatura() * 100);
+  temp->setValue((uint8_t*)&c, sizeof(c));
+  temp->notify();
+  delay(1000);
+}
+\end{codigo}
+      \begin{conceito}[Formato binário]
+        \cod{int16\_t} em centésimos de grau: 2 bytes, \emph{little-endian}.
+      \end{conceito}
+      \begin{atencao}[Contrato]
+        UUIDs, escala e ordem dos bytes formam o contrato firmware--app. Documente-o e gere UUIDs próprios (\cod{uuidgen}).
+      \end{atencao}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}[fragile]{Procurando o ESP32 no Android}
+  \begin{columns}[T]
+    \begin{column}{0.58\textwidth}
+\begin{codigo}[title=BleScanner.kt]{Kotlin}
+val SVC_UUID = UUID.fromString(
+  "4fafc201-1fb5-459e-8fcc-c5c9c331914b")
+
+@SuppressLint("MissingPermission") // verificada antes
+fun BluetoothAdapter.procurar(): Flow<ScanResult> =
+  callbackFlow {
+    val cb = object : ScanCallback() {
+      override fun onScanResult(tipo: Int, r: ScanResult) {
+        trySend(r)
+      }
+      override fun onScanFailed(erro: Int) {
+        close(IllegalStateException("scan falhou: $erro"))
+      }
+    }
+    val filtro = ScanFilter.Builder()
+      .setServiceUuid(ParcelUuid(SVC_UUID)).build()
+    val cfg = ScanSettings.Builder()
+      .setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY).build()
+    bluetoothLeScanner.startScan(listOf(filtro), cfg, cb)
+    awaitClose { bluetoothLeScanner.stopScan(cb) }
+  }
+\end{codigo}
+    \end{column}
+    \begin{column}{0.4\textwidth}
+      \begin{conceito}[Filtre pelo serviço]
+        O filtro por UUID faz o sistema entregar só os seus dispositivos e economiza bateria.
+      \end{conceito}
+      \begin{dica}[Na UI]
+        \cod{procurar().take(10)} com \cod{timeout} de 10\,s preenche uma lista com nome e \cod{rssi} (intensidade do sinal) de cada bancada.
+      \end{dica}
+      \begin{atencao}
+        O scan é caro: pare assim que encontrar o dispositivo. O Android limita a 5 inícios de scan a cada 30\,s por app.
+      \end{atencao}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}[fragile]{Conectando ao periférico}
+  \begin{columns}[T]
+    \begin{column}{0.6\textwidth}
+\begin{codigo}[title=BleTemperatura.kt (1/2)]{Kotlin}
+fun BluetoothDevice.temperaturas(ctx: Context): Flow<Double> =
+  callbackFlow {
+    val cb = object : BluetoothGattCallback() {
+      override fun onConnectionStateChange(
+          g: BluetoothGatt, status: Int, novo: Int) {
+        if (novo == BluetoothProfile.STATE_CONNECTED)
+          g.discoverServices()
+        else close(IOException("desconectado ($status)"))
+      }
+      override fun onServicesDiscovered(g: BluetoothGatt, s: Int) {
+        val c = g.getService(SVC_UUID).getCharacteristic(TEMP_UUID)
+        g.setCharacteristicNotification(c, true)
+        g.writeDescriptor(c.getDescriptor(CCCD_UUID),
+          BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE)
+      }
+    } // + onCharacteristicChanged (próximo slide)
+    val gatt = connectGatt(ctx, false, cb,
+      BluetoothDevice.TRANSPORT_LE)
+    awaitClose { gatt.disconnect(); gatt.close() }
+  }
+\end{codigo}
+    \end{column}
+    \begin{column}{0.38\textwidth}
+      \centering
+      \begin{tikzpicture}[node distance=2mm]
+        \node[caixa,minimum width=3.4cm] (a) {\cod{connectGatt}};
+        \node[caixa,minimum width=3.4cm,below=of a] (b) {\cod{discoverServices}};
+        \node[caixaambar,minimum width=3.4cm,below=of b] (c) {habilita notify (CCCD)};
+        \node[caixaescura,minimum width=3.4cm,below=of c] (d) {\cod{onCharacteristicChanged}};
+        \draw[seta] (a) -- (b); \draw[seta] (b) -- (c); \draw[seta] (c) -- (d);
+      \end{tikzpicture}
+      \begin{dica}
+        \cod{CCCD\_UUID} é o UUID padrão\\ {\scriptsize\cod{00002902-0000-1000-}\\\cod{8000-00805f9b34fb}}.
+      \end{dica}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}[fragile]{Recebendo e decodificando as notificações}
+  \begin{columns}[T]
+    \begin{column}{0.56\textwidth}
+\begin{codigo}[title=BleTemperatura.kt (2/2)]{Kotlin}
+override fun onCharacteristicChanged(
+    g: BluetoothGatt,
+    c: BluetoothGattCharacteristic,
+    valor: ByteArray) {
+  val bruto = ByteBuffer.wrap(valor)
+    .order(ByteOrder.LITTLE_ENDIAN).short   // int16
+  trySend(bruto / 100.0)                    // °C
+}
+\end{codigo}
+\begin{codigo}[title=No ViewModel: reconexão automática]{Kotlin}
+val temperatura = dispositivo.temperaturas(ctx)
+  .retryWhen { causa, tentativa ->
+    causa is IOException && tentativa < 5 &&
+      run { delay(1_000L shl tentativa.toInt()); true }
+  }
+  .stateIn(viewModelScope, WhileSubscribed(5_000), null)
+\end{codigo}
+    \end{column}
+    \begin{column}{0.42\textwidth}
+      \begin{atencao}[Cuidados reais]
+        \begin{itemize}
+          \item Uma operação GATT por vez: enfileire leituras e escritas.
+          \item Sempre \cod{close()} ao terminar.
+          \item Reconecte com espera crescente (1, 2, 4, 8\ldots\,s).
+        \end{itemize}
+      \end{atencao}
+      \begin{dica}[Bibliotecas e segundo plano]
+        \textbf{Kable} e \textbf{Nordic BLE Library} cuidam de fila e reconexão. Monitorar com a tela desligada exige um \emph{foreground service}.
+      \end{dica}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% =============================================================================
+\section{MQTT e escolha do protocolo}
+
+\begin{frame}{MQTT: publicar e assinar}
+  \begin{center}
+  \begin{tikzpicture}[node distance=8mm]
+    \node[caixaescura,minimum width=2.6cm] (e1) {ESP32 bancada 3\\ \tiny publica};
+    \node[caixaescura,minimum width=2.6cm,below=4mm of e1] (e2) {ESP32 bancada 4\\ \tiny publica};
+    \node[caixaambarforte,minimum width=2.8cm,minimum height=14mm,right=16mm of $(e1)!0.5!(e2)$] (b) {\textbf{Broker}\\ \tiny Mosquitto, EMQX, HiveMQ};
+    \node[caixa,minimum width=2.6cm,right=16mm of b,yshift=6mm] (app) {App LabMonitor\\ \tiny assina \cod{ifma/dee/+/+/temp}};
+    \node[caixa,minimum width=2.6cm,right=16mm of b,yshift=-6mm] (db) {Servidor / histórico\\ \tiny assina \cod{ifma/\#}};
+    \draw[seta] (e1) -- node[rotulo,above,sloped]{\cod{ifma/dee/lab1/b3/temp}} (b);
+    \draw[seta] (e2) -- (b);
+    \draw[seta] (b) -- (app); \draw[seta] (b) -- (db);
+  \end{tikzpicture}
+  \end{center}
+  \begin{columns}[T]
+    \begin{column}{0.32\textwidth}
+      \begin{conceito}[Tópicos]
+        Hierarquia com \cod{/}. Curingas: \cod{+} (um nível) e \cod{\#} (todos os níveis abaixo).
+      \end{conceito}
+    \end{column}
+    \begin{column}{0.32\textwidth}
+      \begin{conceito}[QoS]
+        \textbf{0}: no máximo uma vez. \textbf{1}: pelo menos uma vez. \textbf{2}: exatamente uma vez.
+      \end{conceito}
+    \end{column}
+    \begin{column}{0.32\textwidth}
+      \begin{conceito}[Retained / LWT]
+        \emph{Retained} guarda o último valor do tópico. \emph{Last Will} avisa quando a placa cai.
+      \end{conceito}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}[fragile]{MQTT no app}
+  \begin{columns}[T]
+    \begin{column}{0.58\textwidth}
+\begin{codigo}[title=MqttRepository.kt (HiveMQ MQTT Client)]{Kotlin}
+fun leiturasMqtt(filtro: String): Flow<Pair<String, Double>> =
+  callbackFlow {
+    val cliente = MqttClient.builder()
+      .useMqttVersion5()
+      .identifier("app-" + UUID.randomUUID())
+      .serverHost("broker.labmonitor.ifma.edu.br")
+      .serverPort(8883).sslWithDefaultConfig()   // TLS
+      .buildAsync()
+    cliente.connectWith()
+      .simpleAuth().username(usuario)
+        .password(senha.toByteArray()).applySimpleAuth()
+      .send().await()
+    cliente.subscribeWith().topicFilter(filtro)
+      .callback { msg ->
+        val valor = String(msg.payloadAsBytes).toDouble()
+        trySend(msg.topic.toString() to valor)
+      }.send().await()
+    awaitClose { cliente.disconnect() }
+  }
+\end{codigo}
+    \end{column}
+    \begin{column}{0.4\textwidth}
+\begin{codigo}[title=ESP32 (PubSubClient)]{CPP}
+mqtt.setServer(BROKER, 1883);
+mqtt.connect("esp32-b3", USER, PASS,
+  "ifma/dee/lab1/b3/status", 1, true,
+  "offline");                 // LWT
+mqtt.publish("ifma/dee/lab1/b3/temp",
+  String(t, 2).c_str(), true); // retained
+\end{codigo}
+      \begin{atencao}[Segurança]
+        Broker público só para testes. Em produção: TLS (porta 8883), usuário e senha ou certificados, e regras de acesso por tópico.
+      \end{atencao}
+      \begin{dica}
+        \cod{await()} sobre \cod{CompletableFuture} vem de \cod{kotlinx-coroutines-jdk8}.
+      \end{dica}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Qual protocolo usar?}
+  \footnotesize
+  \begin{tabularx}{\textwidth}{@{}l L L L@{}}
+    \toprule
+    & \cabecalho{BLE} & \cabecalho{HTTP na rede local} & \cabecalho{MQTT via broker} \\
+    \midrule
+    Alcance & $\sim$10--30\,m, sem infraestrutura & a rede Wi-Fi & qualquer lugar com internet \\
+    Consumo no sensor & muito baixo (bateria) & alto (Wi-Fi) & médio (Wi-Fi, conexão persistente) \\
+    Tempo real & sim (notify) & não (\emph{polling}) & sim (push) \\
+    Vários clientes & um central por vez (em geral) & sim & sim, muitos \\
+    Histórico na nuvem & não & não & fácil (assinante no servidor) \\
+    Complexidade no app & alta (GATT) & baixa (Retrofit) & média \\
+    Caso ideal & configurar a placa, leitura de bancada ao lado & painel na rede do laboratório & monitoramento contínuo e alertas remotos \\
+    \bottomrule
+  \end{tabularx}
+  \vspace{4pt}
+  \begin{dica}[Arquitetura combinada]
+    Use BLE para o \emph{provisionamento} (enviar SSID e senha do Wi-Fi ao ESP32 pelo app) e MQTT para a telemetria do dia a dia.
+  \end{dica}
+\end{frame}
+
+% =============================================================================
+\section{Fechamento}
+
+\begin{frame}{Resumo}
+  \begin{resumo}
+    \begin{itemize}
+      \item Peça permissões no momento do uso, explique o motivo e funcione mesmo se negadas.
+      \item Photo Picker e leitor de códigos dispensam permissões; CameraX e localização exigem.
+      \item Notificações precisam de canal e, no Android 13+, de permissão; WorkManager garante tarefas adiáveis.
+      \item Sensores, scan BLE, GATT e MQTT viram \cod{Flow} com \cod{callbackFlow} + \cod{awaitClose}.
+      \item BLE: periférico, serviços, características e CCCD; firmware e app compartilham um contrato binário.
+      \item Escolha BLE, HTTP local ou MQTT conforme alcance, energia, tempo real e número de clientes.
+    \end{itemize}
+  \end{resumo}
+\end{frame}
+
+\begin{frame}{Exercícios}
+  \begin{exercicio}[Exercício 1 --- QR code]
+    Gere QR codes com números de patrimônio, cole em objetos e implemente a leitura que abre a ficha do equipamento.
+  \end{exercicio}
+  \begin{exercicio}[Exercício 2 --- BLE]
+    Com um ESP32 e um sensor (DHT22, DS18B20 ou o sensor interno), implemente o firmware GATT do slide e uma tela que lista os dispositivos encontrados e mostra a temperatura em tempo real.
+  \end{exercicio}
+  \begin{exercicio}[Exercício 3 --- Escrita GATT]
+    Adicione uma característica \emph{WRITE} que liga e desliga um relé (ou LED). Crie um \cod{Switch} no app para controlá-la.
+  \end{exercicio}
+  \begin{projeto}[LabMonitor --- Etapa 10]
+    Troque o simulador por leituras reais: BLE para a bancada próxima e MQTT para o painel geral. Gere uma notificação quando a temperatura passar do limite e agende a sincronização com WorkManager.
+  \end{projeto}
+\end{frame}
+
+\begin{frame}{Para aprofundar}
+  \small
+  \begin{itemize}
+    \item Permissões no Android: \url{https://developer.android.com/guide/topics/permissions/overview}
+    \item Photo Picker: \url{https://developer.android.com/training/data-storage/shared/photo-picker}
+    \item Leitor de códigos: \url{https://developers.google.com/ml-kit/vision/barcode-scanning/code-scanner}
+    \item WorkManager: \url{https://developer.android.com/develop/background-work/background-tasks/persistent}
+    \item Bluetooth Low Energy: \url{https://developer.android.com/develop/connectivity/bluetooth/ble/ble-overview}
+    \item ESP32 Arduino Core: \url{https://docs.espressif.com/projects/arduino-esp32}
+    \item HiveMQ MQTT Client: \url{https://github.com/hivemq/hivemq-mqtt-client} \quad MQTT: \url{https://mqtt.org}
+  \end{itemize}
+\end{frame}
+
+\encerramento{Módulo 11 --- Testes e qualidade: testes unitários e de UI, coroutines em testes, desempenho e acessibilidade.}
+
+\end{document}

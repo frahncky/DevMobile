@@ -1,0 +1,485 @@
+\documentclass[aspectratio=169,10pt]{beamer}
+\makeatletter\def\input@path{{../estilo/}{estilo/}}\makeatother
+\usepackage{devmobile}
+\modulo{00}{Apresentação e Ecossistema Mobile}{O que é desenvolvimento mobile, plataformas, arquitetura do Android e a stack do curso}
+
+\begin{document}
+\capa
+
+\begin{frame}{Objetivos do módulo}
+  \begin{conceito}[Ao final deste módulo você será capaz de]
+    \begin{itemize}
+      \item Explicar o que diferencia o desenvolvimento mobile do desenvolvimento web e desktop.
+      \item Comparar as abordagens \termo{nativa}, \termo{multiplataforma}, \termo{híbrida} e \termo{PWA}.
+      \item Descrever a arquitetura em camadas do Android e os componentes de um app.
+      \item Entender \cod{minSdk}, \cod{targetSdk} e \cod{compileSdk}.
+      \item Justificar a stack adotada no curso: Kotlin + Jetpack Compose.
+    \end{itemize}
+  \end{conceito}
+  \begin{dica}[Pré-requisitos]
+    Lógica de programação e noções de orientação a objetos. Experiência com Java, C, C++ ou Python ajuda, mas não é obrigatória.
+  \end{dica}
+\end{frame}
+
+\sumario
+
+% =============================================================================
+\section{Sobre o curso}
+
+\begin{frame}{Organização em módulos}
+  \small
+  \begin{columns}[T]
+    \begin{column}{0.49\textwidth}
+      \begin{tabularx}{\linewidth}{@{}>{\bfseries\color{ambar}}l L@{}}
+        \toprule
+        00 & Apresentação e ecossistema mobile \\
+        01 & Ambiente de desenvolvimento \\
+        02 & Kotlin essencial \\
+        03 & Kotlin assíncrono: coroutines e Flow \\
+        04 & Interfaces com Jetpack Compose \\
+        05 & Estado e navegação \\
+        06 & Arquitetura de apps \\
+        07 & Persistência local \\
+        \bottomrule
+      \end{tabularx}
+    \end{column}
+    \begin{column}{0.49\textwidth}
+      \begin{tabularx}{\linewidth}{@{}>{\bfseries\color{ambar}}l L@{}}
+        \toprule
+        08 & Rede e consumo de APIs \\
+        09 & Firebase: backend como serviço \\
+        10 & Recursos do dispositivo e IoT \\
+        11 & Testes e qualidade \\
+        12 & Publicação na Google Play \\
+        13 & Desenvolvimento multiplataforma \\
+        14 & Tópicos avançados e projeto final \\
+        & \\
+        \bottomrule
+      \end{tabularx}
+    \end{column}
+  \end{columns}
+  \vspace{4pt}
+  \begin{destaque}
+    Cada módulo é um conjunto de slides independente, com teoria, código, exercícios e uma etapa do projeto integrador.
+  \end{destaque}
+\end{frame}
+
+\begin{frame}{Metodologia de estudo}
+  \begin{center}
+  \begin{tikzpicture}[node distance=4mm and 9mm]
+    \node[caixaescura,minimum width=2.4cm] (t) {\textbf{Conceito}\\ teoria + diagramas};
+    \node[caixa,minimum width=2.4cm,right=of t] (c) {\textbf{Código}\\ exemplos comentados};
+    \node[caixaambar,minimum width=2.4cm,right=of c] (e) {\textbf{Exercícios}\\ fixação};
+    \node[caixaambarforte,minimum width=2.4cm,right=of e] (p) {\textbf{Projeto}\\ LabMonitor};
+    \draw[seta] (t) -- (c);
+    \draw[seta] (c) -- (e);
+    \draw[seta] (e) -- (p);
+    \draw[setaambar,rounded corners] (p.south) -- ++(0,-6mm) -| node[rotulo,pos=0.25,below]{revisão e refatoração a cada módulo} (t.south);
+  \end{tikzpicture}
+  \end{center}
+  \vspace{2pt}
+  \begin{columns}[T]
+    \begin{column}{0.48\textwidth}
+      \begin{dica}[Como estudar]
+        \begin{itemize}
+          \item Digite o código, não copie e cole.
+          \item Rode tudo no emulador \emph{e} num celular real.
+          \item Faça um commit no Git ao fim de cada etapa.
+        \end{itemize}
+      \end{dica}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \begin{atencao}[Carga sugerida]
+        \begin{itemize}
+          \item 6 a 10 horas por módulo.
+          \item Os módulos 02 a 06 são a base de tudo: não pule.
+        \end{itemize}
+      \end{atencao}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Projeto integrador: \emph{LabMonitor}}
+  \begin{columns}[c]
+    \begin{column}{0.30\textwidth}
+      \centering
+      \celular[0.9]{\textbf{LabMonitor}\\[3pt]
+        \textcolor{petroleo}{Bancada 3}\\ \textcolor{ambar}{\textbf{24,8\,°C}}\\[2pt]
+        Osciloscópio\\ \textcolor{verdeok}{disponível}}
+    \end{column}
+    \begin{column}{0.68\textwidth}
+      Um app para \termo{laboratórios de eletroeletrônica}, construído ao longo do curso:
+      \begin{itemize}
+        \item cadastro de equipamentos e bancadas (\textbf{M04--M07});
+        \item reservas e agenda sincronizadas na nuvem (\textbf{M08--M09});
+        \item leitura de sensores de um \textbf{ESP32} via BLE/MQTT (\textbf{M10});
+        \item testes automatizados (\textbf{M11}) e publicação na Play Store (\textbf{M12});
+        \item detecção de anomalias com IA no aparelho (\textbf{M14}).
+      \end{itemize}
+      \begin{projeto}[Por que um projeto integrador?]
+        Cada conceito novo é aplicado no mesmo código, como acontece num produto real que evolui.
+      \end{projeto}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% =============================================================================
+\section{O que é desenvolvimento mobile}
+
+\begin{frame}{O ambiente móvel é diferente}
+  \begin{columns}[T]
+    \begin{column}{0.5\textwidth}
+      \begin{itemize}
+        \item \termo{Recursos limitados:} bateria, memória e CPU são compartilhados com dezenas de apps.
+        \item \termo{Rede intermitente:} 4G/5G, Wi-Fi e modo avião; o app precisa funcionar \emph{offline}.
+        \item \termo{Telas diversas:} de relógios a tablets e dobráveis, em retrato e paisagem.
+        \item \termo{Interrupções:} chamadas, notificações e troca de app a qualquer momento.
+      \end{itemize}
+    \end{column}
+    \begin{column}{0.5\textwidth}
+      \begin{itemize}
+        \item \termo{Ciclo de vida controlado pelo sistema:} o SO pode encerrar o processo para liberar memória.
+        \item \termo{Sensores e hardware:} câmera, GPS, acelerômetro, Bluetooth, NFC.
+        \item \termo{Privacidade:} permissões explícitas e sandbox por app.
+        \item \termo{Distribuição por lojas:} revisão, políticas e atualizações graduais.
+      \end{itemize}
+    \end{column}
+  \end{columns}
+  \begin{atencao}[Consequência prática]
+    Um bom app mobile é projetado para \textbf{ser interrompido}, \textbf{perder a rede} e \textbf{ser destruído} sem perder dados do usuário.
+  \end{atencao}
+\end{frame}
+
+\begin{frame}{Abordagens de desenvolvimento}
+  \footnotesize
+  \begin{tabularx}{\textwidth}{@{}l L L L@{}}
+    \toprule
+    \cabecalho{Abordagem} & \cabecalho{Como funciona} & \cabecalho{Vantagens} & \cabecalho{Limitações} \\
+    \midrule
+    \textbf{Nativa} & Kotlin (Android) ou Swift (iOS), usando o SDK oficial & Desempenho máximo, acesso total a APIs e hardware & Dois códigos para duas plataformas \\
+    \textbf{Multiplataforma} & Flutter, React Native, Kotlin Multiplatform & Um código (ou lógica) para Android e iOS & Camada extra; recursos novos chegam depois \\
+    \textbf{Híbrida} & App web dentro de uma \emph{WebView} (Ionic, Cordova) & Reaproveita HTML/CSS/JS & Desempenho e aparência inferiores \\
+    \textbf{PWA} & Site instalável com \emph{service workers} & Sem loja, atualização imediata & Acesso limitado ao hardware, sobretudo no iOS \\
+    \bottomrule
+  \end{tabularx}
+  \vspace{4pt}
+  \begin{dica}
+    Não existe abordagem ``melhor''. Existe a mais adequada ao \textbf{público}, ao \textbf{orçamento}, à \textbf{equipe} e aos \textbf{recursos de hardware} exigidos.
+  \end{dica}
+\end{frame}
+
+\begin{frame}{Linha do tempo resumida}
+  \begin{center}
+  \begin{tikzpicture}[x=1.05cm]
+    \draw[line width=1.5pt,petroleo] (0,0) -- (12.6,0);
+    \foreach \x/\ano/\txt/\pos in {
+        0.3/2007/iPhone e\\iOS/above,
+        1.5/2008/Android 1.0 e\\Android Market/below,
+        3.0/2012/Google Play\\substitui o Market/above,
+        4.5/2014/Swift e\\ART no Android/below,
+        6.0/2017/Kotlin oficial\\no Android/above,
+        7.5/2018/Flutter 1.0 e\\Android App Bundle/below,
+        9.0/2019/Kotlin\\\emph{first}/above,
+        10.5/2021/Jetpack\\Compose 1.0/below,
+        12.0/2023+/Kotlin\\Multiplatform estável/above}{
+      \fill[ambar] (\x,0) circle (3pt);
+      \ifthenelse{\equal{\pos}{above}}{%
+        \node[above=4pt,font=\scriptsize\bfseries,text=petroleo] at (\x,0) {\ano};
+        \node[above=16pt,rotulo,text width=1.9cm] at (\x,0) {\txt};}{%
+        \node[below=4pt,font=\scriptsize\bfseries,text=petroleo] at (\x,0) {\ano};
+        \node[below=16pt,rotulo,text width=1.9cm] at (\x,0) {\txt};}
+    }
+  \end{tikzpicture}
+  \end{center}
+  \vspace{6pt}
+  \begin{conceito}[Tendência]
+    O desenvolvimento Android migrou de \textbf{Java + XML} (imperativo) para \textbf{Kotlin + Compose} (declarativo). Materiais antigos ainda usam o modelo anterior; saiba reconhecê-lo, mas comece pelo atual.
+  \end{conceito}
+\end{frame}
+
+% =============================================================================
+\section{Plataformas: Android e iOS}
+
+\begin{frame}{Android \emph{versus} iOS}
+  \footnotesize
+  \begin{tabularx}{\textwidth}{@{}l L L@{}}
+    \toprule
+    & \cabecalho{Android} & \cabecalho{iOS} \\
+    \midrule
+    Linguagem oficial & Kotlin (Java ainda suportado) & Swift (Objective-C legado) \\
+    UI moderna & Jetpack Compose & SwiftUI \\
+    IDE & Android Studio (Windows, Linux, macOS) & Xcode (somente macOS) \\
+    Loja & Google Play (e lojas alternativas) & App Store \\
+    Conta de desenvolvedor & Taxa única & Anuidade \\
+    Dispositivos & Milhares de modelos e fabricantes & Poucos modelos, da Apple \\
+    Desafio típico & Fragmentação de versões e telas & Revisão rigorosa e ecossistema fechado \\
+    \bottomrule
+  \end{tabularx}
+  \vspace{4pt}
+  \begin{columns}[T]
+    \begin{column}{0.48\textwidth}
+      \begin{conceito}[No Brasil]
+        O Android está na grande maioria dos smartphones em uso. Por isso o curso começa por ele.
+      \end{conceito}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \begin{dica}[iOS sem Mac?]
+        Com Flutter ou Kotlin Multiplatform é possível escrever o código, mas compilar e publicar para iOS exige macOS/Xcode (ou um serviço de CI na nuvem).
+      \end{dica}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% =============================================================================
+\section{Arquitetura do Android}
+
+\begin{frame}{A pilha de software do Android}
+  \begin{columns}[c]
+    \begin{column}{0.58\textwidth}
+      \centering
+      \begin{tikzpicture}[node distance=1.2mm]
+        \node[camada,caixaambarforte,minimum width=7.2cm] (apps) {\textbf{Aplicativos}\quad seu app, Contatos, Câmera, Chrome\ldots};
+        \node[camada,caixaescura,minimum width=7.2cm,below=of apps] (fw) {\textbf{Java/Kotlin API Framework}\quad Activity, View, Notification, Location\ldots};
+        \node[caixa,minimum width=3.52cm,minimum height=6.5mm,below=of fw.south west,anchor=north west] (nat) {\textbf{Bibliotecas nativas}\\ \tiny OpenGL ES, SQLite, Media};
+        \node[caixa,minimum width=3.52cm,minimum height=6.5mm,below=of fw.south east,anchor=north east] (art) {\textbf{Android Runtime (ART)}\\ \tiny bytecode DEX, AOT + JIT};
+        \node[camada,caixapetroleo,minimum width=7.2cm,below=of nat.south west,anchor=north west] (hal) {\textbf{HAL}\quad camada de abstração de hardware};
+        \node[camada,minimum width=7.2cm,below=of hal,fill=cinzaclaro] (k) {\textbf{Kernel Linux}\quad drivers, energia, memória, segurança};
+      \end{tikzpicture}
+    \end{column}
+    \begin{column}{0.40\textwidth}
+      \small
+      \begin{itemize}
+        \item O \termo{kernel Linux} gerencia processos, memória e drivers.
+        \item A \termo{HAL} padroniza o acesso a câmera, sensores e Bluetooth entre fabricantes.
+        \item O \termo{ART} executa o bytecode \arq{.dex} gerado a partir do Kotlin.
+        \item Seu app conversa quase sempre só com o \termo{framework}.
+      \end{itemize}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Do código-fonte ao aparelho}
+  \begin{center}
+  \begin{tikzpicture}[node distance=5mm and 6mm]
+    \node[caixa] (kt) {\arq{.kt}\\ código Kotlin};
+    \node[caixa,right=of kt] (cls) {\arq{.class}\\ bytecode JVM};
+    \node[caixa,right=of cls] (dex) {\arq{.dex}\\ bytecode Dalvik};
+    \node[caixaambar,right=of dex] (pkg) {\arq{.apk} / \arq{.aab}\\ pacote assinado};
+    \node[caixaescura,right=of pkg] (dev) {Aparelho\\ ART};
+    \node[caixa,below=7mm of dex,xshift=-6mm] (res) {recursos\\ \arq{res/}, \arq{assets/}};
+    \node[caixa,below=7mm of pkg,xshift=8mm] (man) {manifesto\\ \arq{AndroidManifest.xml}};
+    \draw[seta] (kt) -- node[rotulo,above]{kotlinc} (cls);
+    \draw[seta] (cls) -- node[rotulo,above]{D8/R8} (dex);
+    \draw[seta] (dex) -- (pkg);
+    \draw[seta] (res.east) -- node[rotulo,below,pos=0.4]{AAPT2} (pkg.south west);
+    \draw[seta] (man.north) -- (man.north |- pkg.south);
+    \draw[setaambar] (pkg) -- node[rotulo,above]{instala} (dev);
+  \end{tikzpicture}
+  \end{center}
+  \begin{columns}[T]
+    \begin{column}{0.48\textwidth}
+      \begin{conceito}[APK]
+        \emph{Android Package}: arquivo instalável com código, recursos e manifesto. É o que roda no aparelho.
+      \end{conceito}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \begin{conceito}[AAB]
+        \emph{Android App Bundle}: formato de \textbf{publicação} exigido pela Google Play, que gera APKs otimizados para cada aparelho.
+      \end{conceito}
+    \end{column}
+  \end{columns}
+  \small O \termo{Gradle} orquestra todas essas etapas (Módulo 01).
+\end{frame}
+
+\begin{frame}{Componentes fundamentais de um app}
+  \begin{columns}[T]
+    \begin{column}{0.55\textwidth}
+      \small
+      \begin{itemize}
+        \item \termo{Activity}: uma tela/janela com a qual o usuário interage. Com Compose, um app costuma ter \textbf{uma única} Activity.
+        \item \termo{Service}: trabalho sem interface (ex.: tocar música, sincronizar dados).
+        \item \termo{BroadcastReceiver}: reage a eventos do sistema (bateria fraca, boot concluído).
+        \item \termo{ContentProvider}: expõe dados a outros apps (ex.: contatos).
+        \item \termo{Intent}: mensagem que ativa componentes, do seu app ou de outros.
+      \end{itemize}
+    \end{column}
+    \begin{column}{0.43\textwidth}
+      \centering
+      \begin{tikzpicture}[node distance=5mm]
+        \node[caixaambarforte,minimum width=2.6cm] (int) {Intent};
+        \node[caixaescura,minimum width=1.9cm,above left=6mm and -3mm of int] (act) {Activity};
+        \node[caixaescura,minimum width=1.9cm,above right=6mm and -3mm of int] (ser) {Service};
+        \node[caixa,minimum width=1.9cm,below left=6mm and -3mm of int] (br) {Broadcast\\Receiver};
+        \node[caixa,minimum width=1.9cm,below right=6mm and -3mm of int] (cp) {Content\\Provider};
+        \draw[seta] (int) -- (act);
+        \draw[seta] (int) -- (ser);
+        \draw[seta] (int) -- (br);
+        \draw[setatrac] (cp) -- node[rotulo,right]{URI} (int);
+      \end{tikzpicture}
+    \end{column}
+  \end{columns}
+  \begin{dica}
+    Todos os componentes são declarados no \arq{AndroidManifest.xml}, junto com as permissões que o app pede.
+  \end{dica}
+\end{frame}
+
+\begin{frame}[fragile]{Níveis de API}{\cod{minSdk}, \cod{targetSdk} e \cod{compileSdk}}
+  \begin{columns}[T]
+    \begin{column}{0.52\textwidth}
+      \small
+      \begin{itemize}
+        \item \termo{API level}: número inteiro que identifica cada versão do Android (Android 16 = API 36).
+        \item \cod{minSdk}: versão \textbf{mínima} em que o app instala.
+        \item \cod{targetSdk}: versão para a qual o app foi \textbf{testado}; ativa os comportamentos novos do sistema.
+        \item \cod{compileSdk}: versão das APIs usadas na \textbf{compilação}.
+      \end{itemize}
+    \end{column}
+    \begin{column}{0.46\textwidth}
+\begin{codigo}[title=app/build.gradle.kts]{Kotlin}
+android {
+  compileSdk = 36
+  defaultConfig {
+    minSdk = 26     // Android 8.0
+    targetSdk = 36  // Android 16
+  }
+}
+\end{codigo}
+    \end{column}
+  \end{columns}
+  \begin{atencao}[Exigência da Google Play]
+    Desde \textbf{31/08/2026}, apps novos e atualizações enviados à Google Play precisam ter \cod{targetSdk} igual ou superior a \textbf{36} (Android 16). Esse requisito sobe todo ano.
+  \end{atencao}
+  \begin{dica}
+    Um \cod{minSdk} entre 24 e 26 cobre praticamente todos os aparelhos ativos e simplifica muito o código.
+  \end{dica}
+\end{frame}
+
+\begin{frame}{Segurança: sandbox e permissões}
+  \begin{columns}[c]
+    \begin{column}{0.45\textwidth}
+      \centering
+      \begin{tikzpicture}
+        \foreach \x/\n in {0/App A,2.1/App B,4.2/Seu app}{
+          \node[caixa,minimum width=1.8cm,minimum height=1.6cm] at (\x,0) {};
+          \node[font=\scriptsize\bfseries,text=petroleo] at (\x,0.45) {\n};
+          \node[rotulo] at (\x,-0.05) {UID próprio\\ dados privados};
+        }
+        \node[caixaescura,minimum width=6.1cm] at (2.1,-1.35) {Kernel Linux: isolamento por usuário};
+        \draw[setaambar] (4.2,0.85) -- ++(0,0.6) node[above,rotulo]{pede permissão};
+      \end{tikzpicture}
+    \end{column}
+    \begin{column}{0.53\textwidth}
+      \small
+      \begin{itemize}
+        \item Cada app roda em seu próprio processo, com um usuário Linux exclusivo.
+        \item Um app não lê os arquivos privados de outro.
+        \item Permissões \termo{normais} (internet) são concedidas na instalação.
+        \item Permissões \termo{perigosas} (câmera, localização) são pedidas \textbf{em tempo de execução} e o usuário pode negar.
+      \end{itemize}
+    \end{column}
+  \end{columns}
+  \begin{atencao}[Verificação de desenvolvedor no Brasil]
+    Desde \textbf{30/09/2026}, aparelhos Android certificados no Brasil só instalam normalmente apps registrados por \textbf{desenvolvedores verificados}, mesmo fora da Play Store. Durante o desenvolvimento a instalação via \textbf{ADB} continua funcionando (Módulos 01 e 12).
+  \end{atencao}
+\end{frame}
+
+% =============================================================================
+\section{A stack do curso}
+
+\begin{frame}{Como escolher a tecnologia}
+  \begin{center}
+  \begin{tikzpicture}[node distance=5mm and 8mm,
+      decisao/.style={caixaambar,diamond,aspect=2.4,inner sep=1pt,text width=2.3cm,font=\tiny}]
+    \node[decisao] (q1) {Precisa de Android \emph{e} iOS desde o início?};
+    \node[decisao,right=14mm of q1] (q2) {Equipe já domina web/React?};
+    \node[caixaescura,below=7mm of q1,text width=2.4cm] (nat) {\textbf{Nativo}\\ Kotlin + Compose};
+    \node[caixaescura,below=7mm of q2,text width=2.4cm] (rn) {\textbf{React Native}};
+    \node[decisao,right=14mm of q2] (q3) {Lógica complexa e acesso nativo intenso?};
+    \node[caixaescura,below=7mm of q3,xshift=-14mm,text width=2.0cm] (fl) {\textbf{Flutter}};
+    \node[caixaescura,below=7mm of q3,xshift=14mm,text width=2.2cm] (kmp) {\textbf{Kotlin}\\\textbf{Multiplatform}};
+    \draw[seta] (q1) -- node[rotulo,left]{não} (nat);
+    \draw[seta] (q1) -- node[rotulo,above]{sim} (q2);
+    \draw[seta] (q2) -- node[rotulo,left]{sim} (rn);
+    \draw[seta] (q2) -- node[rotulo,above]{não} (q3);
+    \draw[seta] (q3) -- node[rotulo,left]{não} (fl);
+    \draw[seta] (q3) -- node[rotulo,right]{sim} (kmp);
+  \end{tikzpicture}
+  \end{center}
+  \begin{dica}
+    Aprender Kotlin + Compose primeiro facilita a migração para Kotlin Multiplatform e torna Flutter e React Native mais fáceis de entender (Módulo 13).
+  \end{dica}
+\end{frame}
+
+\begin{frame}{A stack adotada}
+  \begin{columns}[c]
+    \begin{column}{0.55\textwidth}
+      \centering
+      \begin{tikzpicture}[node distance=1.2mm]
+        \node[camada,caixaambarforte,minimum width=6.5cm] (ui) {\textbf{UI}: Jetpack Compose + Material 3};
+        \node[camada,caixaescura,minimum width=6.5cm,below=of ui] (st) {\textbf{Estado}: ViewModel + StateFlow};
+        \node[camada,caixapetroleo,minimum width=6.5cm,below=of st] (nav) {\textbf{Navegação}: Navigation Compose};
+        \node[caixa,minimum width=3.2cm,minimum height=6.5mm,below=of nav.south west,anchor=north west] (db) {\textbf{Local}: Room, DataStore};
+        \node[caixa,minimum width=3.2cm,minimum height=6.5mm,below=of nav.south east,anchor=north east] (net) {\textbf{Rede}: Retrofit, Ktor};
+        \node[camada,minimum width=6.5cm,below=of db.south west,anchor=north west] (fb) {\textbf{Nuvem}: Firebase (Auth, Firestore, FCM)};
+        \node[camada,minimum width=6.5cm,below=of fb,fill=cinzaclaro] (base) {\textbf{Base}: Kotlin, Coroutines/Flow, Hilt, Gradle};
+      \end{tikzpicture}
+    \end{column}
+    \begin{column}{0.43\textwidth}
+      \small
+      \begin{itemize}
+        \item É a stack que o Google recomenda e documenta oficialmente.
+        \item É a mais pedida em vagas Android.
+        \item A arquitetura (MVVM, repositório, injeção de dependência) vale para \textbf{qualquer} plataforma.
+      \end{itemize}
+      \begin{conceito}[Jetpack]
+        Conjunto de bibliotecas oficiais (\cod{androidx.*}) que resolvem problemas comuns com compatibilidade entre versões do Android.
+      \end{conceito}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% =============================================================================
+\section{Fechamento}
+
+\begin{frame}{Resumo}
+  \begin{resumo}
+    \begin{itemize}
+      \item O ambiente móvel impõe restrições de energia, rede, tela e ciclo de vida.
+      \item Há quatro abordagens: nativa, multiplataforma, híbrida e PWA, cada uma com seus trade-offs.
+      \item O Android é uma pilha em camadas: kernel Linux, HAL, ART, framework e apps.
+      \item Os componentes de um app são Activity, Service, BroadcastReceiver e ContentProvider, ligados por Intents.
+      \item \cod{targetSdk} precisa acompanhar a exigência anual da Google Play (API 36 em 2026).
+      \item O curso usa Kotlin + Jetpack Compose + MVVM + Room + Retrofit + Firebase.
+    \end{itemize}
+  \end{resumo}
+\end{frame}
+
+\begin{frame}{Exercícios}
+  \begin{exercicio}[Exercício 1 --- Pesquisa]
+    Escolha três apps que você usa todos os dias e tente identificar a abordagem de cada um (nativa, multiplataforma, híbrida ou PWA). Que pistas você usou?
+  \end{exercicio}
+  \begin{exercicio}[Exercício 2 --- Análise]
+    Para cada cenário, indique e justifique uma abordagem: (a) app de lanterna; (b) app de um evento acadêmico com duração de uma semana; (c) app que lê um sensor BLE a 100\,Hz; (d) startup que precisa lançar em Android e iOS em três meses.
+  \end{exercicio}
+  \begin{exercicio}[Exercício 3 --- Conceitos]
+    Explique com suas palavras a diferença entre \cod{minSdk} e \cod{targetSdk}. O que acontece se o \cod{targetSdk} ficar desatualizado?
+  \end{exercicio}
+  \begin{projeto}[LabMonitor --- Etapa 0]
+    Escreva em uma página: quem usa o app, quais as 5 funcionalidades principais e quais recursos de hardware ele usa.
+  \end{projeto}
+\end{frame}
+
+\begin{frame}{Para aprofundar}
+  \small
+  \begin{itemize}
+    \item \textbf{Android Developers} --- Visão geral da plataforma: \url{https://developer.android.com/guide/platform}
+    \item \textbf{Fundamentos de apps}: \url{https://developer.android.com/guide/components/fundamentals}
+    \item \textbf{Requisitos de API de destino da Google Play}: \url{https://developer.android.com/google/play/requirements/target-sdk}
+    \item \textbf{Verificação de desenvolvedor Android}: \url{https://developer.android.com/developer-verification}
+    \item \textbf{Curso oficial gratuito}: Android Basics with Compose --- \url{https://developer.android.com/courses/android-basics-compose/course}
+  \end{itemize}
+\end{frame}
+
+\encerramento{Módulo 01 --- Ambiente de desenvolvimento: Android Studio, emulador, Gradle e o primeiro app.}
+
+\end{document}

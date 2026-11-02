@@ -1,0 +1,466 @@
+\documentclass[aspectratio=169,10pt]{beamer}
+\makeatletter\def\input@path{{../estilo/}{estilo/}}\makeatother
+\usepackage{devmobile}
+\modulo{11}{Testes e Qualidade}{Pirâmide de testes, testes unitários com coroutines, fakes e mocks, testes de UI em Compose, desempenho, acessibilidade e integração contínua}
+
+\begin{document}
+\capa
+
+\begin{frame}{Objetivos do módulo}
+  \begin{conceito}[Ao final deste módulo você será capaz de]
+    \begin{itemize}
+      \item Planejar testes segundo a pirâmide de testes.
+      \item Testar funções, casos de uso e ViewModels com JUnit, coroutines e Turbine.
+      \item Usar \emph{fakes} e \emph{mocks} para isolar dependências.
+      \item Escrever testes de interface em Compose e testes de banco com Room.
+      \item Diagnosticar problemas de desempenho e recomposição.
+      \item Tornar o app acessível e automatizar a verificação com integração contínua.
+    \end{itemize}
+  \end{conceito}
+\end{frame}
+
+\sumario
+
+% =============================================================================
+\section{Estratégia de testes}
+
+\begin{frame}{A pirâmide de testes}
+  \begin{columns}[c]
+    \begin{column}{0.5\textwidth}
+      \centering
+      \begin{tikzpicture}[x=0.9cm]
+        \fill[petroleo] (-3,0) -- (3,0) -- (2,1.1) -- (-2,1.1) -- cycle;
+        \fill[petroleoesc] (-2,1.15) -- (2,1.15) -- (1,2.25) -- (-1,2.25) -- cycle;
+        \fill[ambar] (-1,2.3) -- (1,2.3) -- (0,3.4) -- cycle;
+        \node[white,font=\scriptsize\bfseries,align=center] at (0,0.55) {Unitários\\ \tiny JVM, milissegundos};
+        \node[white,font=\scriptsize\bfseries,align=center] at (0,1.7) {Integração\\ \tiny Room, repositórios};
+        \node[white,font=\tiny\bfseries,align=center] at (0,2.75) {UI / E2E};
+        \draw[setaambar] (3.4,0.2) -- (3.4,3.2) node[rotulo,right,pos=0.5,align=left]{mais lentos,\\ caros e\\ frágeis};
+      \end{tikzpicture}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \small
+      \begin{itemize}
+        \item \textbf{Unitários} (\arq{src/test}): muitos, rápidos, rodam no computador.
+        \item \textbf{Integração}: várias peças juntas (DAO + banco em memória).
+        \item \textbf{UI / ponta a ponta} (\arq{src/androidTest}): poucos, verificam fluxos críticos no aparelho.
+      \end{itemize}
+      \begin{dica}[O que testar primeiro]
+        Regras de negócio (casos de uso), transformações de dados e os ViewModels. É onde estão os erros mais caros.
+      \end{dica}
+      \begin{conceito}[Arquitetura testável]
+        As camadas, as interfaces e a injeção de dependência dos Módulos 06--07 existem justamente para permitir isso.
+      \end{conceito}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% =============================================================================
+\section{Testes unitários}
+
+\begin{frame}[fragile]{Primeiro teste: funções puras}
+  \begin{columns}[T]
+    \begin{column}{0.54\textwidth}
+\begin{codigo}[title=src/test/.../ConversoesTest.kt]{Kotlin}
+class ConversoesTest {
+
+  @Test
+  fun `zero celsius é 32 fahrenheit`() {
+    assertEquals(32.0, 0.0.cParaF(), 0.001)
+  }
+
+  @Test
+  fun `adc de 12 bits no fundo de escala vale vref`() {
+    assertEquals(3.3, 4095.adcParaVolts(), 0.001)
+  }
+
+  @Test
+  fun `leitura fora da faixa gera alerta`() {
+    val alertas = VerificadorFaixa(10.0..40.0)
+      .verificar(listOf(25.0, 41.2, 9.0))
+    assertEquals(listOf(41.2, 9.0), alertas)
+  }
+}
+\end{codigo}
+    \end{column}
+    \begin{column}{0.44\textwidth}
+      \begin{conceito}[Estrutura AAA]
+        \textbf{Arrange} (prepare os dados), \textbf{Act} (execute) e \textbf{Assert} (verifique). Um comportamento por teste.
+      \end{conceito}
+      \begin{dica}[Nomes legíveis]
+        Kotlin aceita nomes de função entre crases: o relatório de testes vira uma especificação em português.
+      \end{dica}
+      \begin{terminal}[title=Executando]
+./gradlew test
+# relatório em app/build/reports/tests/
+      \end{terminal}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}[fragile]{Testando coroutines}
+  \begin{columns}[T]
+    \begin{column}{0.54\textwidth}
+\begin{codigo}[title=MainDispatcherRule.kt]{Kotlin}
+// Substitui Dispatchers.Main (inexistente na JVM)
+class MainDispatcherRule(
+  val dispatcher: TestDispatcher =
+    UnconfinedTestDispatcher()
+) : TestWatcher() {
+  override fun starting(d: Description) =
+    Dispatchers.setMain(dispatcher)
+  override fun finished(d: Description) =
+    Dispatchers.resetMain()
+}
+\end{codigo}
+\begin{codigo}[title=Teste com runTest]{Kotlin}
+@Test
+fun `sincronizar tenta de novo após falha`() = runTest {
+  val api = FakeApi(falhasAntesDeResponder = 2)
+  val repo = BancadaRepositoryImpl(FakeDao(), api)
+  repo.sincronizarComRetry()   // delays são "pulados"
+  assertEquals(3, api.chamadas)
+}
+\end{codigo}
+    \end{column}
+    \begin{column}{0.44\textwidth}
+      \begin{conceito}[\cod{runTest}]
+        Executa código \cod{suspend} em testes com \textbf{tempo virtual}: um \cod{delay(60\_000)} termina instantaneamente.
+      \end{conceito}
+      \begin{dica}[Dispatchers injetados]
+        Repositórios que recebem o dispatcher no construtor (Módulo 03) podem receber um \cod{StandardTestDispatcher} no teste.
+      \end{dica}
+      \begin{dica}[Dependência]
+        \cod{kotlinx-coroutines-test} em \cod{testImplementation}.
+      \end{dica}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}[fragile]{Fakes \emph{versus} mocks}
+  \begin{columns}[T]
+    \begin{column}{0.5\textwidth}
+\begin{codigo}[title=Fake: implementação simples]{Kotlin}
+class FakeBancadaRepository : BancadaRepository {
+  private val dados =
+    MutableStateFlow<List<Bancada>>(emptyList())
+  var falharSync = false
+
+  fun emitir(lista: List<Bancada>) { dados.value = lista }
+
+  override fun bancadas() = dados
+  override suspend fun sincronizar() {
+    if (falharSync) throw IOException("sem rede")
+  }
+  override suspend fun reservar(id: Int, ate: Instant) {}
+}
+\end{codigo}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+\begin{codigo}[title=Mock com MockK]{Kotlin}
+val api = mockk<LabApi>()
+coEvery { api.listarBancadas() } throws IOException()
+
+val repo = BancadaRepositoryImpl(FakeDao(), api)
+val r = runCatching { repo.sincronizar() }
+
+assertTrue(r.isFailure)
+coVerify(exactly = 1) { api.listarBancadas() }
+\end{codigo}
+      \begin{conceito}[Quando usar]
+        \textbf{Fake}: reutilizável, comportamento realista; preferido pelo Google. \textbf{Mock}: verificar \emph{interações} (foi chamado? quantas vezes?).
+      \end{conceito}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}[fragile]{Testando o ViewModel com Turbine}
+  \begin{columns}[T]
+    \begin{column}{0.58\textwidth}
+\begin{codigo}[title=PainelViewModelTest.kt]{Kotlin}
+class PainelViewModelTest {
+  @get:Rule val main = MainDispatcherRule()
+  private val repo = FakeBancadaRepository()
+  private val vm = PainelViewModel(repo)
+
+  @Test
+  fun `filtro mostra apenas bancadas correspondentes`() =
+    runTest {
+      repo.emitir(listOf(Bancada(1, "Eletrônica", 24.0),
+                         Bancada(2, "Máquinas", 22.0)))
+      vm.uiState.test {
+        assertEquals(2, awaitItem().bancadas.size)
+        vm.onFiltroChange("Máq")
+        val estado = awaitItem()
+        assertEquals(1, estado.bancadas.size)
+        assertEquals("Máquinas", estado.bancadas[0].titulo)
+        cancelAndIgnoreRemainingEvents()
+      }
+    }
+}
+\end{codigo}
+    \end{column}
+    \begin{column}{0.4\textwidth}
+      \begin{conceito}[Turbine]
+        Biblioteca da Cash App que coleta um \cod{Flow} e permite verificar cada emissão em sequência com \cod{awaitItem()}.
+      \end{conceito}
+      \begin{dica}
+        Teste o \textbf{estado} que o ViewModel expõe, não seus detalhes internos. Assim o teste sobrevive a refatorações.
+      \end{dica}
+      \begin{atencao}
+        \cod{stateIn(WhileSubscribed)} só calcula com alguém coletando. O \cod{test \{\}} do Turbine é esse coletor.
+      \end{atencao}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% =============================================================================
+\section{Testes de integração e de UI}
+
+\begin{frame}[fragile]{Room com banco em memória}
+  \begin{columns}[T]
+    \begin{column}{0.56\textwidth}
+\begin{codigo}[title=src/androidTest/.../BancadaDaoTest.kt]{Kotlin}
+@RunWith(AndroidJUnit4::class)
+class BancadaDaoTest {
+  private lateinit var db: AppDatabase
+  private lateinit var dao: BancadaDao
+
+  @Before fun criar() {
+    db = Room.inMemoryDatabaseBuilder(
+      ApplicationProvider.getApplicationContext(),
+      AppDatabase::class.java).build()
+    dao = db.bancadaDao()
+  }
+  @After fun fechar() = db.close()
+
+  @Test fun salvarEObservar() = runTest {
+    dao.salvar(BancadaEntity(1, "B1", "L-12"))
+    val lista = dao.observarTodas().first()
+    assertEquals("B1", lista.single().nome)
+  }
+}
+\end{codigo}
+    \end{column}
+    \begin{column}{0.42\textwidth}
+      \begin{conceito}[Banco em memória]
+        Criado do zero a cada teste e descartado no fim: testes independentes e rápidos, sem afetar dados reais.
+      \end{conceito}
+      \begin{dica}[Migrações]
+        \cod{MigrationTestHelper} cria o banco na versão antiga, aplica a migração e valida o esquema resultante.
+      \end{dica}
+      \begin{dica}
+        Os testes em \arq{androidTest} rodam com \cod{./gradlew connectedAndroidTest} em um aparelho ou emulador.
+      \end{dica}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}[fragile]{Testes de interface em Compose}
+  \begin{columns}[T]
+    \begin{column}{0.56\textwidth}
+\begin{codigo}[title=TelaPainelTest.kt]{Kotlin}
+class TelaPainelTest {
+  @get:Rule val compose = createComposeRule()
+
+  @Test fun mostraAlertaQuandoAcimaDoLimite() {
+    compose.setContent {
+      CartaoBancada(numero = 3, temperatura = 35.0)
+    }
+    compose.onNodeWithText("Acima do limite!")
+      .assertIsDisplayed()
+  }
+
+  @Test fun clicarNaBancadaChamaCallback() {
+    var aberta = -1
+    compose.setContent {
+      TelaPainel(estadoExemplo, {}, {}, onAbrir = { aberta = it })
+    }
+    compose.onNodeWithTag("bancada-2").performClick()
+    assertEquals(2, aberta)
+  }
+}
+\end{codigo}
+    \end{column}
+    \begin{column}{0.42\textwidth}
+      \begin{conceito}[Encontrar, agir, verificar]
+        \scriptsize
+        \textbf{Encontrar}: \cod{onNodeWithText}, \cod{onNodeWithTag}, \cod{onNodeWithContentDescription}.\\
+        \textbf{Agir}: \cod{performClick}, \cod{performTextInput}.\\
+        \textbf{Verificar}: \cod{assertIsDisplayed}, \cod{assertExists}.
+      \end{conceito}
+      \begin{conceito}[Telas sem estado]
+        A divisão \emph{Route}/\emph{Screen} do Módulo 06 permite testar a tela passando qualquer \cod{UiState}, sem ViewModel nem rede.
+      \end{conceito}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% =============================================================================
+\section{Desempenho}
+
+\begin{frame}{Diagnosticando desempenho}
+  \begin{columns}[T]
+    \begin{column}{0.5\textwidth}
+      \begin{conceito}[Ferramentas]
+        \begin{itemize}
+          \item \textbf{Profiler} do Android Studio: CPU, memória, energia; identifica \emph{jank} (quadros perdidos).
+          \item \textbf{Layout Inspector}: contagem de recomposições por composable.
+          \item \textbf{Macrobenchmark}: mede inicialização e rolagem de forma reproduzível.
+          \item \textbf{Android vitals} (Play Console): ANRs e falhas nos aparelhos reais.
+        \end{itemize}
+      \end{conceito}
+      \begin{atencao}
+        Meça sempre em build \textbf{release} e em aparelho real: o build debug é muito mais lento.
+      \end{atencao}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \begin{dica}[Compose rápido]
+        \begin{itemize}
+          \item Nada de trabalho pesado durante a composição: formate e filtre no ViewModel.
+          \item \cod{key} estável em listas \emph{lazy}.
+          \item \cod{derivedStateOf} para estados que mudam com frequência (ex.: posição de rolagem).
+          \item Classes de estado imutáveis (\cod{val}, \cod{List}).
+        \end{itemize}
+      \end{dica}
+      \begin{conceito}[Baseline Profiles]
+        Arquivo que lista o código usado na inicialização. A Play Store pré-compila esse código e o app abre bem mais rápido.
+      \end{conceito}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% =============================================================================
+\section{Acessibilidade}
+
+\begin{frame}[fragile]{Apps para todas as pessoas}
+  \begin{columns}[T]
+    \begin{column}{0.5\textwidth}
+\begin{codigo}[title=Semântica em Compose]{Kotlin}
+// imagem informativa: descreva
+Icon(Icons.Default.Warning,
+  contentDescription = "Temperatura acima do limite")
+
+// card inteiro lido como um único item
+Card(Modifier.semantics(mergeDescendants = true) {}) {
+  Text("Bancada 3"); Text("24,8 °C")
+}
+
+// estado anunciado pelo leitor de tela
+Switch(checked = ligado, onCheckedChange = { ligado = it },
+  modifier = Modifier.semantics {
+    stateDescription = if (ligado) "ligado" else "desligado"
+  })
+\end{codigo}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \begin{conceito}[Checklist]
+        \begin{itemize}
+          \item \cod{contentDescription} em ícones e imagens informativas.
+          \item Alvos de toque de pelo menos \textbf{48\,dp}.
+          \item Contraste mínimo de \textbf{4,5:1} para texto.
+          \item Funciona com fonte em \textbf{200\,\%} (use \cod{sp}).
+          \item Informação não depende só de cor (verde/vermelho + ícone ou texto).
+          \item Navegável com \textbf{TalkBack} e por teclado.
+        \end{itemize}
+      \end{conceito}
+      \begin{dica}
+        O app \textbf{Accessibility Scanner} analisa a tela aberta e aponta problemas automaticamente.
+      \end{dica}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% =============================================================================
+\section{Qualidade contínua}
+
+\begin{frame}[fragile]{Análise estática e integração contínua}
+  \begin{columns}[T]
+    \begin{column}{0.52\textwidth}
+\begin{codigo}[title=.github/workflows/android.yml]{bash}
+name: Android CI
+on: [push, pull_request]
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: 17 }
+      - uses: gradle/actions/setup-gradle@v4
+      - run: ./gradlew lint testDebugUnitTest assembleDebug
+      - uses: actions/upload-artifact@v4
+        with:
+          name: apk-debug
+          path: app/build/outputs/apk/debug/*.apk
+\end{codigo}
+    \end{column}
+    \begin{column}{0.46\textwidth}
+      \scriptsize
+      \begin{tabular}{@{}l p{3.9cm}@{}}
+        \toprule
+        \cabecalho{Ferramenta} & \cabecalho{Verifica} \\
+        \midrule
+        \textbf{Android Lint} & APIs incorretas, permissões, recursos não usados, acessibilidade \\
+        \textbf{ktlint} & formatação e estilo Kotlin \\
+        \textbf{detekt} & complexidade e más práticas \\
+        \textbf{Testes} & comportamento \\
+        \bottomrule
+      \end{tabular}
+      \begin{conceito}[Integração contínua]
+        A cada \emph{push}, um servidor compila, analisa e testa o projeto. Um \emph{pull request} só é aceito com tudo verde.
+      \end{conceito}
+      \begin{dica}
+        Cheque as versões atuais das \emph{actions} no GitHub Marketplace antes de usar.
+      \end{dica}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% =============================================================================
+\section{Fechamento}
+
+\begin{frame}{Resumo}
+  \begin{resumo}
+    \begin{itemize}
+      \item Muitos testes unitários, alguns de integração e poucos de UI.
+      \item \cod{runTest} + \cod{MainDispatcherRule} para coroutines; Turbine para \cod{Flow}.
+      \item Fakes para simular dependências; mocks (MockK) para verificar interações.
+      \item Room em memória e \cod{createComposeRule} para integração e interface.
+      \item Desempenho: meça em release, no aparelho, com Profiler, Layout Inspector e Baseline Profiles.
+      \item Acessibilidade e lint fazem parte da qualidade; a CI verifica tudo a cada \emph{push}.
+    \end{itemize}
+  \end{resumo}
+\end{frame}
+
+\begin{frame}{Exercícios}
+  \begin{exercicio}[Exercício 1 --- Unitários]
+    Escreva testes para \cod{VerificarAlertasUseCase} cobrindo: lista vazia, todas abaixo do limite, uma acima, temperatura nula e mudança do limite.
+  \end{exercicio}
+  \begin{exercicio}[Exercício 2 --- ViewModel]
+    Teste o \cod{PainelViewModel} para os estados carregando, sucesso, vazio e erro de sincronização usando \cod{FakeBancadaRepository} e Turbine.
+  \end{exercicio}
+  \begin{exercicio}[Exercício 3 --- Acessibilidade]
+    Rode o Accessibility Scanner nas telas do LabMonitor, navegue com TalkBack e corrija ao menos três problemas encontrados.
+  \end{exercicio}
+  \begin{projeto}[LabMonitor --- Etapa 11]
+    Atinja ao menos 70\,\% de cobertura nos casos de uso e ViewModels, escreva dois testes de UI para os fluxos de reserva e configure o GitHub Actions para rodar lint e testes.
+  \end{projeto}
+\end{frame}
+
+\begin{frame}{Para aprofundar}
+  \small
+  \begin{itemize}
+    \item Testes no Android: \url{https://developer.android.com/training/testing}
+    \item Testando coroutines: \url{https://developer.android.com/kotlin/coroutines/test}
+    \item Testes em Compose: \url{https://developer.android.com/develop/ui/compose/testing}
+    \item Turbine: \url{https://github.com/cashapp/turbine} \quad MockK: \url{https://mockk.io}
+    \item Desempenho em Compose: \url{https://developer.android.com/develop/ui/compose/performance}
+    \item Baseline Profiles: \url{https://developer.android.com/topic/performance/baselineprofiles}
+    \item Acessibilidade: \url{https://developer.android.com/guide/topics/ui/accessibility}
+  \end{itemize}
+\end{frame}
+
+\encerramento{Módulo 12 --- Publicação na Google Play: assinatura, AAB, Play Console, testes fechados, LGPD e CI/CD.}
+
+\end{document}

@@ -1,0 +1,17 @@
+# LaTeX
+*.aux
+*.log
+*.nav
+*.out
+*.snm
+*.toc
+*.vrb
+*.listing
+*.fls
+*.fdb_latexmk
+*.synctex.gz
+# PDFs de trabalho (os oficiais ficam em pdf/)
+modulos/*.pdf
+# Sistema
+.DS_Store
+__pycache__/

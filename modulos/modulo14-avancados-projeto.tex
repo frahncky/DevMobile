@@ -1,0 +1,422 @@
+\documentclass[aspectratio=169,10pt]{beamer}
+\makeatletter\def\input@path{{../estilo/}{estilo/}}\makeatother
+\usepackage{devmobile}
+\modulo{14}{Tópicos Avançados e Projeto Final}{IA no dispositivo e na nuvem, segurança, monetização, outras telas, carreira e o projeto integrador}
+
+\begin{document}
+\capa
+
+\begin{frame}{Objetivos do módulo}
+  \begin{conceito}[Ao final deste módulo você será capaz de]
+    \begin{itemize}
+      \item Integrar modelos de aprendizado de máquina no app, no aparelho e na nuvem.
+      \item Aplicar as principais práticas de segurança mobile (OWASP MASVS).
+      \item Conhecer os modelos de monetização e as APIs da Google Play.
+      \item Levar o app a widgets, relógios e carros.
+      \item Planejar, executar e apresentar o projeto final do curso.
+    \end{itemize}
+  \end{conceito}
+\end{frame}
+
+\sumario
+
+% =============================================================================
+\section{Inteligência artificial no app}
+
+\begin{frame}{Onde roda o modelo?}
+  \begin{columns}[c]
+    \begin{column}{0.54\textwidth}
+      \centering
+      \begin{tikzpicture}[node distance=4mm]
+        \node (cel) {\celular[0.5]{\tiny modelo\\ local}};
+        \node[caixaambar,right=12mm of cel,yshift=8mm,text width=3.4cm] (dev) {\textbf{No aparelho}\\ \tiny LiteRT, ML Kit, Gemini Nano};
+        \node[caixaescura,right=12mm of cel,yshift=-8mm,text width=3.4cm] (nuv) {\textbf{Na nuvem}\\ \tiny Firebase AI Logic, APIs de LLM};
+        \draw[seta] (cel.east) -- (dev.west);
+        \draw[seta] (cel.east) -- (nuv.west);
+      \end{tikzpicture}
+    \end{column}
+    \begin{column}{0.44\textwidth}
+      \scriptsize
+      \begin{tabularx}{\linewidth}{@{}l L L@{}}
+        \toprule
+        & \cabecalho{Aparelho} & \cabecalho{Nuvem} \\
+        \midrule
+        Latência & muito baixa & depende da rede \\
+        Offline & sim & não \\
+        Privacidade & dados ficam no aparelho & dados saem \\
+        Custo & nenhum por uso & por requisição \\
+        Tamanho do modelo & pequeno (KB--MB) & grande \\
+        \bottomrule
+      \end{tabularx}
+    \end{column}
+  \end{columns}
+  \vspace{4pt}
+  \begin{columns}[T]
+    \begin{column}{0.32\textwidth}
+      \begin{conceito}[ML Kit]
+        Modelos prontos do Google: texto em imagem (OCR), códigos de barras, rostos, rótulos, tradução.
+      \end{conceito}
+    \end{column}
+    \begin{column}{0.32\textwidth}
+      \begin{conceito}[LiteRT]
+        Novo nome do \textbf{TensorFlow Lite}: roda o \textbf{seu} modelo (\arq{.tflite}) com aceleração por GPU/NPU.
+      \end{conceito}
+    \end{column}
+    \begin{column}{0.32\textwidth}
+      \begin{conceito}[Gemini Nano]
+        LLM do sistema em aparelhos compatíveis, acessível pelas APIs de IA generativa do ML Kit.
+      \end{conceito}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}[fragile]{Detectando anomalias nas leituras}
+  \begin{columns}[T]
+    \begin{column}{0.5\textwidth}
+\begin{codigo}[title=1) Linha de base estatística (z-score)]{Kotlin}
+fun Flow<Double>.anomalias(
+  janela: Int = 60, limiar: Double = 3.0
+): Flow<Double> = flow {
+  val buf = ArrayDeque<Double>()
+  collect { x ->
+    if (buf.size == janela) {
+      val m = buf.average()
+      val dp = sqrt(buf.sumOf { (it - m).pow(2) } / janela)
+      if (dp > 0 && abs(x - m) / dp > limiar) emit(x)
+      buf.removeFirst()
+    }
+    buf.addLast(x)
+  }
+}
+\end{codigo}
+      \begin{dica}
+        Sempre compare o modelo de IA com uma linha de base simples como esta. Às vezes ela basta.
+      \end{dica}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+\begin{codigo}[title=2) Modelo próprio com LiteRT]{Kotlin}
+class DetectorAnomalia(ctx: Context) {
+  private val modelo = Interpreter(
+    FileUtil.loadMappedFile(ctx, "anomalia.tflite"))
+
+  // janela de 60 leituras normalizadas -> prob.
+  fun probabilidade(janela: FloatArray): Float {
+    val entrada = arrayOf(janela)          // [1, 60]
+    val saida = Array(1) { FloatArray(1) } // [1, 1]
+    modelo.run(entrada, saida)
+    return saida[0][0]
+  }
+}
+\end{codigo}
+\begin{terminal}[title=Treino em Python (Keras) e conversão]
+conv = tf.lite.TFLiteConverter.from_keras_model(m)
+conv.optimizations = [tf.lite.Optimize.DEFAULT]
+open("anomalia.tflite", "wb").write(conv.convert())
+\end{terminal}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{IA na nuvem e boas práticas}
+  \begin{columns}[T]
+    \begin{column}{0.5\textwidth}
+      \begin{conceito}[Firebase AI Logic]
+        SDK para chamar modelos Gemini a partir do app \textbf{sem expor chaves}: o Firebase intermedeia a chamada e o \textbf{App Check} garante que só o seu app usa a cota.
+      \end{conceito}
+      \begin{exemplo}[Ideias para o LabMonitor]
+        \begin{itemize}
+          \item ``Explique este alerta'' a partir das últimas leituras.
+          \item Fotografar a placa do equipamento e preencher o cadastro (OCR).
+          \item Resumo semanal de uso das bancadas em linguagem natural.
+        \end{itemize}
+      \end{exemplo}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \begin{atencao}[Cuidados]
+        \begin{itemize}
+          \item Respostas de LLM podem estar erradas: mostre como sugestão e deixe o usuário confirmar.
+          \item Não envie dados pessoais sem necessidade e sem informar o usuário (LGPD).
+          \item Defina limites de uso e trate falhas e lentidão da rede.
+          \item Quantize modelos locais (\emph{int8}) para reduzir tamanho e consumo.
+        \end{itemize}
+      \end{atencao}
+      \begin{dica}
+        Valide o desempenho do modelo no aparelho mais fraco que seu público usa, não só no seu celular.
+      \end{dica}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% =============================================================================
+\section{Segurança mobile}
+
+\begin{frame}{OWASP MASVS: os pilares}
+  \footnotesize
+  \begin{tabularx}{\textwidth}{@{}l L@{}}
+    \toprule
+    \cabecalho{Área} & \cabecalho{Práticas no Android} \\
+    \midrule
+    \textbf{Armazenamento} & dados sensíveis só no armazenamento interno; chaves no \textbf{Android Keystore}; nada sensível em logs ou backups \\
+    \textbf{Criptografia} & algoritmos padrão (AES-GCM, RSA/EC) via Keystore; nunca criptografia ``caseira'' \\
+    \textbf{Autenticação} & tokens de curta duração; biometria com \cod{BiometricPrompt}; \emph{passkeys} com Credential Manager \\
+    \textbf{Rede} & HTTPS sempre; \emph{network security config}; \emph{pinning} só com plano de rotação \\
+    \textbf{Plataforma} & expor o mínimo de componentes; validar \emph{intents} e \emph{deep links}; WebView sem JavaScript desnecessário \\
+    \textbf{Código} & dependências atualizadas; R8; nenhum segredo no APK \\
+    \textbf{Resiliência} & \textbf{Play Integrity API} para verificar app e aparelho no servidor \\
+    \bottomrule
+  \end{tabularx}
+  \vspace{4pt}
+  \begin{destaque}
+    O cliente nunca é confiável: toda regra importante precisa ser verificada também no servidor.
+  \end{destaque}
+\end{frame}
+
+% =============================================================================
+\section{Monetização e outras telas}
+
+\begin{frame}{Modelos de monetização}
+  \begin{columns}[T]
+    \begin{column}{0.5\textwidth}
+      \scriptsize
+      \begin{tabularx}{\linewidth}{@{}l L@{}}
+        \toprule
+        \cabecalho{Modelo} & \cabecalho{Como funciona} \\
+        \midrule
+        Pago & usuário paga para baixar \\
+        Freemium & grátis com recursos pagos (compras no app) \\
+        Assinatura & cobrança recorrente por acesso \\
+        Anúncios & receita por exibição (AdMob) \\
+        B2B / institucional & a organização paga pelo app e pelo serviço \\
+        Gratuito & projetos acadêmicos, públicos e de extensão \\
+        \bottomrule
+      \end{tabularx}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \begin{conceito}[Google Play Billing]
+        Bens digitais vendidos dentro de apps distribuídos pela Play usam o sistema de faturamento da Play, que retém uma taxa de serviço. Bens físicos e serviços prestados fora do app seguem outras regras.
+      \end{conceito}
+      \begin{atencao}
+        Valide as compras \textbf{no servidor} com a API da Play antes de liberar o conteúdo.
+      \end{atencao}
+      \begin{dica}
+        Para apps institucionais, o modelo comum é gratuito, sem anúncios, com o custo coberto pelo projeto.
+      \end{dica}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Além do celular}
+  \begin{columns}[T]
+    \begin{column}{0.32\textwidth}
+      \centering
+      \begin{tikzpicture}
+        \draw[petroleo,rounded corners=4pt,fill=petroleo!6] (0,0) rectangle (2.6,1.4);
+        \node[font=\tiny\bfseries,text=petroleo] at (1.3,1.15) {LabMonitor};
+        \node[font=\large\bfseries,text=ambar] at (1.3,0.65) {24,8\,°C};
+        \node[font=\tiny,text=cinzamedio] at (1.3,0.25) {Bancada 3 $\cdot$ há 1 min};
+      \end{tikzpicture}
+      \begin{conceito}[Widgets (Glance)]
+        Informação na tela inicial, escrita com uma API no estilo Compose.
+      \end{conceito}
+    \end{column}
+    \begin{column}{0.32\textwidth}
+      \centering
+      \begin{tikzpicture}
+        \draw[petroleo,line width=1.4pt,fill=petroleoesc] (0,0) circle (0.72);
+        \node[font=\small\bfseries,text=white] at (0,0.1) {24,8°};
+        \node[font=\tiny,text=ambarclaro] at (0,-0.3) {B3};
+      \end{tikzpicture}
+      \begin{conceito}[Wear OS]
+        Apps e \emph{tiles} no relógio com Compose for Wear OS; ideal para alertas rápidos.
+      \end{conceito}
+    \end{column}
+    \begin{column}{0.32\textwidth}
+      \centering
+      \begin{tikzpicture}
+        \draw[petroleo,rounded corners=3pt,fill=petroleo!6] (0,0) rectangle (2.8,1.4);
+        \fill[petroleo] (0,1.1) rectangle (2.8,1.4);
+        \node[font=\tiny,white] at (1.4,1.25) {Android Auto};
+        \node[font=\tiny,text=cinzatexto] at (1.4,0.6) {lista simples, voz};
+      \end{tikzpicture}
+      \begin{conceito}[Carro e TV]
+        Android Auto, Automotive e TV usam \emph{templates} e regras de segurança próprias.
+      \end{conceito}
+    \end{column}
+  \end{columns}
+  \begin{dica}
+    A arquitetura em camadas permite reaproveitar repositórios e casos de uso em todas essas superfícies; só a camada de UI muda.
+  \end{dica}
+\end{frame}
+
+% =============================================================================
+\section{Carreira e portfólio}
+
+\begin{frame}{Do curso ao mercado}
+  \begin{columns}[T]
+    \begin{column}{0.48\textwidth}
+      \begin{conceito}[Portfólio que convence]
+        \begin{itemize}
+          \item 2--3 apps completos no GitHub, com README, capturas e arquitetura explicada.
+          \item Pelo menos um app publicado na Play (mesmo em teste aberto).
+          \item Testes e CI visíveis no repositório.
+          \item Um projeto com hardware (BLE/IoT) é um diferencial raro.
+        \end{itemize}
+      \end{conceito}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \begin{dica}[Continue aprendendo]
+        \begin{itemize}
+          \item Código-fonte do \emph{Now in Android} e dos \emph{samples} oficiais.
+          \item Blog \emph{Android Developers} e as notas de versão do Jetpack.
+          \item Comunidades: GDG, Kotlin User Groups, eventos locais.
+          \item Contribua com bibliotecas de código aberto.
+        \end{itemize}
+      \end{dica}
+      \begin{atencao}[Assistentes de IA]
+        Use-os para acelerar, mas entenda e revise cada linha: você responde pelo código que publica.
+      \end{atencao}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% =============================================================================
+\section{Projeto final}
+
+\begin{frame}{Projeto final: requisitos}
+  \begin{columns}[T]
+    \begin{column}{0.5\textwidth}
+      \begin{conceito}[Requisitos mínimos]
+        \begin{enumerate}
+          \item Pelo menos 4 telas com Navigation 3 e Material 3.
+          \item Arquitetura MVVM com repositórios e Hilt.
+          \item Persistência local (Room e DataStore).
+          \item Integração com API REST ou Firebase.
+          \item Funcionamento offline nas telas principais.
+          \item Pelo menos um recurso do dispositivo (BLE, câmera, sensores, localização).
+          \item Testes unitários dos ViewModels e casos de uso.
+          \item Acessibilidade verificada e tema escuro.
+        \end{enumerate}
+      \end{conceito}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \begin{projeto}[Sugestões de tema]
+        \begin{itemize}
+          \item Concluir e publicar o \textbf{LabMonitor}.
+          \item Controle de empréstimo de equipamentos do laboratório via QR code.
+          \item Medidor de consumo de energia com ESP32 e sensor de corrente.
+          \item App de acompanhamento de estágio ou TCC.
+          \item Coletor de dados de vibração de motores pelo acelerômetro.
+        \end{itemize}
+      \end{projeto}
+      \begin{dica}
+        Resolva um problema real de alguém que você conhece.
+      \end{dica}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Entregáveis, cronograma e avaliação}
+  \begin{columns}[T]
+    \begin{column}{0.48\textwidth}
+      \scriptsize
+      \begin{tabularx}{\linewidth}{@{}l L@{}}
+        \toprule
+        \cabecalho{Semana} & \cabecalho{Marco} \\
+        \midrule
+        1 & proposta: problema, público, telas (protótipo) e arquitetura \\
+        2 & navegação, UI e dados locais \\
+        3 & rede/Firebase, recurso do dispositivo e offline \\
+        4 & testes, acessibilidade, release e apresentação \\
+        \bottomrule
+      \end{tabularx}
+      \begin{conceito}[Entregáveis]
+        Repositório GitHub com README, APK/AAB de release, vídeo de 3 minutos e apresentação de 10 minutos.
+      \end{conceito}
+    \end{column}
+    \begin{column}{0.5\textwidth}
+      \scriptsize
+      \begin{tabularx}{\linewidth}{@{}L r@{}}
+        \toprule
+        \cabecalho{Critério de avaliação} & \cabecalho{Peso} \\
+        \midrule
+        Funcionalidades e requisitos atendidos & 25\,\% \\
+        Arquitetura e qualidade do código & 20\,\% \\
+        Experiência do usuário, UI e acessibilidade & 15\,\% \\
+        Testes automatizados e CI & 15\,\% \\
+        Uso de recursos do dispositivo / integração & 10\,\% \\
+        Documentação (README, diagramas) & 5\,\% \\
+        Apresentação e demonstração & 10\,\% \\
+        \midrule
+        \textbf{Total} & \textbf{100\,\%} \\
+        \bottomrule
+      \end{tabularx}
+      \begin{dica}
+        Pesos sugeridos: ajuste conforme o plano de ensino da disciplina.
+      \end{dica}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% =============================================================================
+\section{Fechamento do curso}
+
+\begin{frame}{A jornada completa}
+  \begin{center}
+  \begin{tikzpicture}[x=1.08cm,
+      etapa/.style={caixa,minimum width=1.75cm,minimum height=9mm,font=\tiny,text width=1.6cm}]
+    \foreach \i/\t/\s in {0/Ecossistema/caixa,1/Ambiente/caixa,2/Kotlin/caixa,3/Coroutines/caixa,4/Compose/caixaambar,
+                          5/Estado e navegação/caixaambar,6/Arquitetura/caixaambar}{
+      \node[etapa,\s] (a\i) at (\i*1.9,0) {M\i\\ \t};}
+    \foreach \i/\t/\s [count=\k from 7] in {0/Persistência/caixapetroleo,1/Rede e APIs/caixapetroleo,2/Firebase/caixapetroleo,
+                          3/Dispositivo e IoT/caixapetroleo,4/Testes/caixaescura,5/Publicação/caixaescura,6/Multiplataforma/caixaescura}{
+      \node[etapa,\s] (b\i) at (\i*1.9,-1.5) {M\k\\ \t};}
+    \foreach \i [evaluate=\i as \j using int(\i+1)] in {0,...,5}{\draw[seta] (a\i) -- (a\j); \draw[seta] (b\i) -- (b\j);}
+    \draw[seta,rounded corners] (a6.south) -- ++(0,-2mm) -| (b0.north);
+    \node[caixaambarforte,minimum width=12cm,minimum height=8mm] at (5.7,-2.9) {\textbf{M14 --- IA, segurança e projeto final: o LabMonitor publicado}};
+  \end{tikzpicture}
+  \end{center}
+  \begin{resumo}[O que você construiu]
+    Um app Android completo e publicado, com arquitetura profissional, dados locais e remotos, integração com hardware, testes e entrega contínua, além da base para levá-lo a outras plataformas.
+  \end{resumo}
+\end{frame}
+
+\begin{frame}{Exercícios finais}
+  \begin{exercicio}[Exercício 1 --- IA]
+    Gere 24\,h de leituras simuladas com picos artificiais e compare o detector por z-score com um modelo treinado em Python e convertido para LiteRT: quantos picos cada um encontra?
+  \end{exercicio}
+  \begin{exercicio}[Exercício 2 --- Segurança]
+    Faça uma revisão do LabMonitor com o checklist MASVS do slide e registre ao menos três correções em \emph{issues} no GitHub.
+  \end{exercicio}
+  \begin{exercicio}[Exercício 3 --- Widget]
+    Crie um widget Glance que mostre a última temperatura da bancada favorita e abra o app ao ser tocado.
+  \end{exercicio}
+  \begin{projeto}[Projeto final]
+    Escolha o tema, entregue a proposta na semana 1 e siga o cronograma de 4 semanas.
+  \end{projeto}
+\end{frame}
+
+\begin{frame}{Para aprofundar}
+  \small
+  \begin{itemize}
+    \item IA no Android: \url{https://developer.android.com/ai}
+    \item LiteRT: \url{https://ai.google.dev/edge/litert} \quad ML Kit: \url{https://developers.google.com/ml-kit}
+    \item Firebase AI Logic: \url{https://firebase.google.com/docs/ai-logic}
+    \item OWASP MASVS: \url{https://mas.owasp.org/MASVS/}
+    \item Segurança no Android: \url{https://developer.android.com/privacy-and-security/security-tips}
+    \item Google Play Billing: \url{https://developer.android.com/google/play/billing}
+    \item Glance (widgets): \url{https://developer.android.com/develop/ui/compose/glance}
+  \end{itemize}
+\end{frame}
+
+\begin{frame}[plain,noframenumbering]
+  \begin{tikzpicture}[remember picture,overlay]
+    \fill[petroleo] (current page.south west) rectangle (current page.north east);
+    \fill[ambar] ([yshift=-0.9cm]current page.west) rectangle ([yshift=-0.82cm]current page.east);
+    \node[font=\Huge\bfseries,text=white] at ([yshift=0.7cm]current page.center) {Obrigado!};
+    \node[font=\large,text=ambarclaro] at ([yshift=-0.2cm]current page.center) {Fim do curso \nomecurso};
+    \node[font=\small,text=white!80,text width=11cm,align=center] at ([yshift=-1.7cm]current page.center)
+      {\autorcurso\\ \instituicaocurso\\ \departamentocurso};
+  \end{tikzpicture}
+\end{frame}
+
+\end{document}

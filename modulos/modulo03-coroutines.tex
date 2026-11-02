@@ -1,0 +1,570 @@
+\documentclass[aspectratio=169,10pt]{beamer}
+\makeatletter\def\input@path{{../estilo/}{estilo/}}\makeatother
+\usepackage{devmobile}
+\modulo{03}{Kotlin Assíncrono: Coroutines e Flow}{Thread principal, funções suspensas, dispatchers, concorrência estruturada, Flow e StateFlow}
+
+\begin{document}
+\capa
+
+\begin{frame}{Objetivos do módulo}
+  \begin{conceito}[Ao final deste módulo você será capaz de]
+    \begin{itemize}
+      \item Explicar por que operações lentas não podem rodar na \emph{thread} principal.
+      \item Escrever funções \cod{suspend} e iniciar coroutines com \cod{launch} e \cod{async}.
+      \item Escolher o \emph{dispatcher} adequado com \cod{withContext}.
+      \item Aplicar concorrência estruturada, cancelamento e tratamento de exceções.
+      \item Produzir e consumir fluxos de dados com \cod{Flow}.
+      \item Expor estado observável com \cod{StateFlow} e eventos com \cod{SharedFlow}.
+    \end{itemize}
+  \end{conceito}
+\end{frame}
+
+\sumario
+
+% =============================================================================
+\section{Por que programação assíncrona?}
+
+\begin{frame}{A \emph{thread} principal (UI thread)}
+  \begin{columns}[c]
+    \begin{column}{0.52\textwidth}
+      \small
+      \begin{itemize}
+        \item Todo app tem uma \termo{thread principal} que desenha a tela e responde a toques.
+        \item Para 60\,Hz, cada quadro precisa ficar pronto em cerca de \textbf{16\,ms}.
+        \item Rede, banco de dados, arquivos e processamento pesado levam de dezenas de ms a vários segundos.
+        \item Se a thread principal ficar bloqueada por $\sim$5\,s, o sistema mostra o diálogo \termo{ANR} (\emph{Application Not Responding}).
+      \end{itemize}
+    \end{column}
+    \begin{column}{0.46\textwidth}
+      \centering
+      \begin{tikzpicture}[x=0.52cm,y=0.55cm]
+        \node[rotulo,anchor=east] at (0,2) {bloqueada};
+        \foreach \x in {0,2}{\fill[petroleo!70] (\x,1.6) rectangle ++(1.8,0.8);}
+        \fill[vermelhoerro!80] (4,1.6) rectangle ++(5.5,0.8) node[midway,white,font=\tiny]{rede (2 s)};
+        \node[rotulo,anchor=east] at (0,0) {assíncrona};
+        \foreach \x in {0,2,4,6,8}{\fill[petroleo!70] (\x,-0.4) rectangle ++(1.8,0.8);}
+        \fill[ambar!80] (4,-1.6) rectangle ++(5.5,0.8) node[midway,white,font=\tiny]{rede em outra thread};
+        \draw[->,cinzamedio] (0,-2.4) -- (10,-2.4) node[rotulo,right]{t};
+        \node[rotulo] at (5,3.2) {cada bloco azul = um quadro desenhado};
+      \end{tikzpicture}
+    \end{column}
+  \end{columns}
+  \begin{atencao}[Regra de ouro]
+    Nunca faça I/O nem cálculo pesado na thread principal. Desde o Android 3.0, uma requisição de rede na thread principal gera \cod{NetworkOnMainThreadException}.
+  \end{atencao}
+\end{frame}
+
+\begin{frame}[fragile]{Callbacks \emph{versus} coroutines}
+  \begin{columns}[T]
+    \begin{column}{0.49\textwidth}
+\begin{codigo}[title=Callbacks (\emph{callback hell})]{Kotlin}
+login(usuario) { token ->
+  buscarBancadas(token) { bancadas ->
+    buscarLeituras(bancadas[0]) { leituras ->
+      runOnUiThread {
+        mostrar(leituras)
+      }
+    }
+  }
+}
+// erros? cancelamento? cada nível trata o seu
+\end{codigo}
+    \end{column}
+    \begin{column}{0.49\textwidth}
+\begin{codigo}[title=Coroutines]{Kotlin}
+scope.launch {
+  val token = login(usuario)          // suspende
+  val bancadas = buscarBancadas(token)
+  val leituras = buscarLeituras(bancadas[0])
+  mostrar(leituras)                   // de volta à UI
+}
+// try/catch normal, cancelamento automático
+\end{codigo}
+    \end{column}
+  \end{columns}
+  \begin{conceito}[Coroutine]
+    Uma computação que pode ser \textbf{suspensa} e \textbf{retomada} sem bloquear a thread. É muito mais leve que uma thread: dá para ter milhares ao mesmo tempo. O código assíncrono fica com cara de código sequencial.
+  \end{conceito}
+\end{frame}
+
+% =============================================================================
+\section{Fundamentos de coroutines}
+
+\begin{frame}[fragile]{Funções \cod{suspend}}
+  \begin{columns}[T]
+    \begin{column}{0.52\textwidth}
+\begin{codigo}[title=Suspensão]{Kotlin}
+suspend fun lerTemperatura(): Double {
+  delay(500)          // suspende, NÃO bloqueia
+  return 24.7
+}
+
+suspend fun relatorio(): String {
+  val t = lerTemperatura()   // pode chamar suspend
+  return "Temperatura: $t"
+}
+
+fun naoSuspensa() {
+  // lerTemperatura()  // ERRO: só dentro de
+  //                   // coroutine ou de suspend
+}
+\end{codigo}
+    \end{column}
+    \begin{column}{0.46\textwidth}
+      \centering
+      \begin{tikzpicture}[node distance=2mm]
+        \node[caixaescura,minimum width=4.4cm] (a) {\cod{relatorio()} começa};
+        \node[caixaambar,minimum width=4.4cm,below=of a] (b) {\cod{delay(500)}: \textbf{suspende}};
+        \node[caixa,minimum width=4.4cm,below=of b,fill=cinzaclaro] (c) {thread livre para outras tarefas};
+        \node[caixaambar,minimum width=4.4cm,below=of c] (d) {500 ms depois: \textbf{retoma}};
+        \node[caixaescura,minimum width=4.4cm,below=of d] (e) {devolve o texto};
+        \draw[seta] (a) -- (b); \draw[seta] (b) -- (c); \draw[seta] (c) -- (d); \draw[seta] (d) -- (e);
+      \end{tikzpicture}
+      \begin{dica}
+        \cod{suspend} não cria thread nem torna nada assíncrono sozinho: só indica que a função \textbf{pode} suspender.
+      \end{dica}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}[fragile]{Construtores: \cod{launch}, \cod{async} e \cod{runBlocking}}
+  \begin{columns}[T]
+    \begin{column}{0.52\textwidth}
+\begin{codigo}[title=Iniciando coroutines]{Kotlin}
+// launch: "dispare e esqueça", devolve Job
+val job: Job = scope.launch {
+  salvarLeitura(leitura)
+}
+job.cancel()
+
+// async: devolve Deferred<T>, use await()
+scope.launch {
+  val t = async { lerTemperatura() }
+  val u = async { lerUmidade() }
+  // as duas rodam em paralelo
+  mostrar(t.await(), u.await())
+}
+
+// runBlocking: BLOQUEIA a thread.
+// Só em main() de exemplos e em testes antigos.
+fun main() = runBlocking {
+  println(relatorio())
+}
+\end{codigo}
+    \end{column}
+    \begin{column}{0.46\textwidth}
+      \footnotesize
+      \begin{tabularx}{\linewidth}{@{}l l L@{}}
+        \toprule
+        \cabecalho{Construtor} & \cabecalho{Retorno} & \cabecalho{Uso} \\
+        \midrule
+        \cod{launch} & \cod{Job} & tarefa sem resultado \\
+        \cod{async} & \cod{Deferred<T>} & resultado em paralelo \\
+        \cod{runBlocking} & \cod{T} & ponte com código bloqueante \\
+        \bottomrule
+      \end{tabularx}
+      \begin{erro}
+        Usar \cod{runBlocking} no código do app trava a thread principal, que é justamente o que as coroutines evitam.
+      \end{erro}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}[fragile]{Dispatchers e \cod{withContext}}
+  \begin{columns}[T]
+    \begin{column}{0.5\textwidth}
+      \footnotesize
+      \begin{tabularx}{\linewidth}{@{}l L@{}}
+        \toprule
+        \cabecalho{Dispatcher} & \cabecalho{Quando usar} \\
+        \midrule
+        \cod{Dispatchers.Main} & atualizar a UI; chamadas rápidas \\
+        \cod{Dispatchers.IO} & rede, banco, arquivos (I/O bloqueante) \\
+        \cod{Dispatchers.Default} & CPU: ordenar, filtrar, FFT, JSON grande \\
+        \bottomrule
+      \end{tabularx}
+      \vspace{3pt}
+      \begin{conceito}[Main-safety]
+        Uma função é \emph{main-safe} quando pode ser chamada da thread principal com segurança, porque ela própria troca de dispatcher. Room, Retrofit e Firebase já são main-safe.
+      \end{conceito}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+\begin{codigo}[title=Repositório main-safe]{Kotlin}
+class LeituraRepository(
+  private val io: CoroutineDispatcher = Dispatchers.IO
+) {
+  suspend fun exportarCsv(dados: List<Leitura>): File =
+    withContext(io) {               // troca de thread
+      val f = File(dir, "leituras.csv")
+      f.writeText(dados.joinToString("\n") {
+        "${it.instante};${it.valor}"
+      })
+      f
+    }                               // volta ao chamador
+}
+\end{codigo}
+      \begin{dica}
+        Receber o dispatcher no construtor permite trocá-lo por um dispatcher de teste (Módulo 11).
+      \end{dica}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Concorrência estruturada}
+  \begin{columns}[c]
+    \begin{column}{0.5\textwidth}
+      \centering
+      \begin{tikzpicture}
+        \node[caixaescura,minimum width=3.4cm] (s) at (0,0) {\cod{viewModelScope}};
+        \node[caixa,minimum width=1.9cm] (j1) at (-1.6,-1.3) {\cod{launch} A};
+        \node[caixa,minimum width=1.9cm] (j2) at (1.6,-1.3) {\cod{launch} B};
+        \node[caixaambar,minimum width=1.5cm] (a1) at (0.7,-2.6) {\cod{async} B1};
+        \node[caixaambar,minimum width=1.5cm] (a2) at (2.5,-2.6) {\cod{async} B2};
+        \draw[seta] (s) -- (j1); \draw[seta] (s) -- (j2);
+        \draw[seta] (j2) -- (a1); \draw[seta] (j2) -- (a2);
+        \node[rotulo,text width=2.4cm] at (-1.6,-2.6) {cancelar o escopo cancela toda a árvore};
+      \end{tikzpicture}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \small
+      \begin{itemize}
+        \item Toda coroutine nasce dentro de um \termo{CoroutineScope}.
+        \item O pai espera os filhos terminarem.
+        \item Cancelar o pai \textbf{cancela todos os filhos}.
+        \item Uma exceção em um filho cancela o pai e os irmãos (exceto com \cod{SupervisorJob}).
+      \end{itemize}
+      \begin{conceito}[Resultado]
+        Nenhuma coroutine fica ``solta'' consumindo bateria e rede depois que a tela que a criou é fechada.
+      \end{conceito}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}[fragile]{Escopos no Android}
+  \begin{columns}[T]
+    \begin{column}{0.52\textwidth}
+\begin{codigo}[title=Os três escopos do dia a dia]{Kotlin}
+// 1) No ViewModel: vive enquanto o ViewModel viver
+class PainelViewModel : ViewModel() {
+  fun atualizar() = viewModelScope.launch {
+    _estado.value = repo.carregar()
+  }
+}
+
+// 2) Em Compose: ligado à composição
+@Composable
+fun BotaoSincronizar(onSync: suspend () -> Unit) {
+  val scope = rememberCoroutineScope()
+  Button(onClick = { scope.launch { onSync() } }) {
+    Text("Sincronizar")
+  }
+}
+
+// 3) Em Activity/Fragment: ligado ao ciclo de vida
+lifecycleScope.launch { /* ... */ }
+\end{codigo}
+    \end{column}
+    \begin{column}{0.46\textwidth}
+      \footnotesize
+      \begin{tabularx}{\linewidth}{@{}l L@{}}
+        \toprule
+        \cabecalho{Escopo} & \cabecalho{Cancelado quando} \\
+        \midrule
+        \cod{viewModelScope} & o ViewModel é destruído \\
+        \cod{rememberCoroutineScope} & o composable sai da tela \\
+        \cod{LaunchedEffect} & a chave muda ou sai da tela \\
+        \cod{lifecycleScope} & a Activity é destruída \\
+        \bottomrule
+      \end{tabularx}
+      \begin{erro}[Evite \cod{GlobalScope}]
+        Coroutines em \cod{GlobalScope} não são canceladas automaticamente: causam vazamentos e trabalho desnecessário.
+      \end{erro}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}[fragile]{Cancelamento e exceções}
+  \begin{columns}[T]
+    \begin{column}{0.5\textwidth}
+\begin{codigo}[title=Cancelamento é cooperativo]{Kotlin}
+val job = scope.launch(Dispatchers.Default) {
+  for (amostra in amostras) {
+    ensureActive()      // ou: if (!isActive) return
+    processar(amostra)  // laço de CPU
+  }
+}
+job.cancel()
+
+// Timeout
+val r = withTimeoutOrNull(3_000) {
+  conectarSensor()
+} ?: "sensor não respondeu"
+\end{codigo}
+      \begin{dica}
+        Funções da biblioteca (\cod{delay}, \cod{withContext}, chamadas Room/Retrofit) já verificam o cancelamento.
+      \end{dica}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+\begin{codigo}[title=Tratando falhas]{Kotlin}
+viewModelScope.launch {
+  try {
+    val dados = repo.carregar()
+    _estado.value = Estado.Sucesso(dados)
+  } catch (e: CancellationException) {
+    throw e           // nunca engula!
+  } catch (e: IOException) {
+    _estado.value = Estado.Erro("Sem conexão")
+  }
+}
+
+// Filhos independentes: falha de um
+// não cancela os outros
+val escopo = CoroutineScope(
+  SupervisorJob() + Dispatchers.Main
+)
+\end{codigo}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% =============================================================================
+\section{Flow: fluxos de dados}
+
+\begin{frame}[fragile]{O que é um \cod{Flow}}
+  \begin{columns}[T]
+    \begin{column}{0.5\textwidth}
+      \small
+      \begin{itemize}
+        \item Uma \cod{suspend fun} devolve \textbf{um} valor. Um \termo{Flow} emite \textbf{vários valores ao longo do tempo}.
+        \item É \termo{frio} (\emph{cold}): o código só roda quando alguém chama \cod{collect}, e roda de novo a cada coletor.
+        \item Ideal para leituras de sensor, atualizações do banco e mensagens em tempo real.
+      \end{itemize}
+      \centering
+      \begin{tikzpicture}[node distance=4mm]
+        \node[caixaescura] (p) {produtor\\ \cod{emit()}};
+        \node[caixaambar,right=of p] (o) {operadores\\ \cod{map}, \cod{filter}};
+        \node[caixa,right=of o] (c) {coletor\\ \cod{collect}};
+        \draw[seta] (p) -- (o); \draw[seta] (o) -- (c);
+      \end{tikzpicture}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+\begin{codigo}[title=Simulando um sensor]{Kotlin}
+fun temperaturaFlow(): Flow<Double> = flow {
+  var t = 24.0
+  while (true) {
+    t += Random.nextDouble(-0.3, 0.3)
+    emit(t)          // envia um valor
+    delay(1_000)     // 1 Hz
+  }
+}
+
+// consumindo
+scope.launch {
+  temperaturaFlow()
+    .map { "%.1f °C".format(it) }
+    .collect { texto -> println(texto) }
+}
+\end{codigo}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}[fragile]{Operadores úteis}
+  \begin{columns}[T]
+    \begin{column}{0.52\textwidth}
+\begin{codigo}[title=Pipeline reativo]{Kotlin}
+val alertas: Flow<String> = temperaturaFlow()
+  .onEach { Log.d(TAG, "bruto: $it") }
+  .map { it.arredondar(1) }
+  .distinctUntilChanged()        // ignora repetidos
+  .filter { it > 30.0 }
+  .map { "Alerta: $it °C" }
+  .catch { e -> emit("Erro: ${e.message}") }
+  .flowOn(Dispatchers.Default)   // upstream em Default
+
+// Combinar dois fluxos
+val conforto = combine(tempFlow, umidFlow) { t, u ->
+  indiceDeCalor(t, u)
+}
+
+// Busca com espera de digitação
+consultaFlow
+  .debounce(300)
+  .flatMapLatest { termo -> repo.buscar(termo) }
+\end{codigo}
+    \end{column}
+    \begin{column}{0.46\textwidth}
+      \scriptsize
+      \begin{tabularx}{\linewidth}{@{}l L@{}}
+        \toprule
+        \cabecalho{Operador} & \cabecalho{Efeito} \\
+        \midrule
+        \cod{map}, \cod{filter} & transformar e selecionar \\
+        \cod{onEach} & efeito colateral (log) \\
+        \cod{distinctUntilChanged} & descarta valores repetidos \\
+        \cod{debounce(ms)} & espera o fluxo ``acalmar'' \\
+        \cod{sample(ms)} & um valor a cada período \\
+        \cod{combine} & junta os últimos valores de vários fluxos \\
+        \cod{flatMapLatest} & troca de fluxo e cancela o anterior \\
+        \cod{catch} & trata exceções do upstream \\
+        \cod{flowOn} & muda o dispatcher do upstream \\
+        \cod{take}, \cod{first} & limita a quantidade \\
+        \bottomrule
+      \end{tabularx}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}[fragile]{Convertendo callbacks em Flow: \cod{callbackFlow}}
+  \begin{columns}[T]
+    \begin{column}{0.56\textwidth}
+\begin{codigo}[title=Sensor do aparelho como Flow]{Kotlin}
+fun SensorManager.leituras(tipo: Int): Flow<FloatArray> =
+  callbackFlow {
+    val sensor = getDefaultSensor(tipo)
+    val listener = object : SensorEventListener {
+      override fun onSensorChanged(e: SensorEvent) {
+        trySend(e.values.clone())   // envia ao Flow
+      }
+      override fun onAccuracyChanged(s: Sensor?, a: Int) {}
+    }
+    registerListener(listener, sensor,
+      SensorManager.SENSOR_DELAY_UI)
+    // obrigatório: limpa ao cancelar a coleta
+    awaitClose { unregisterListener(listener) }
+  }
+\end{codigo}
+    \end{column}
+    \begin{column}{0.42\textwidth}
+      \begin{conceito}[Quando usar]
+        APIs baseadas em \emph{listeners}: sensores, localização, BLE, Firebase, MQTT. O \cod{callbackFlow} transforma tudo isso em \cod{Flow}, com cancelamento correto.
+      \end{conceito}
+      \begin{atencao}
+        Esquecer o \cod{awaitClose} deixa o listener registrado, gastando bateria mesmo depois que ninguém mais observa. Voltaremos a esse padrão nos Módulos 09 e 10.
+      \end{atencao}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% =============================================================================
+\section{StateFlow e SharedFlow}
+
+\begin{frame}[fragile]{\cod{StateFlow}: estado observável}
+  \begin{columns}[T]
+    \begin{column}{0.53\textwidth}
+\begin{codigo}[title=Padrão do ViewModel]{Kotlin}
+class PainelViewModel(
+  private val repo: LeituraRepository
+) : ViewModel() {
+  // mutável e privado / somente leitura e público
+  private val _ultima = MutableStateFlow<Double?>(null)
+  val ultima: StateFlow<Double?> = _ultima.asStateFlow()
+
+  fun simular() {
+    _ultima.value = 25.3     // emite para os coletores
+    _ultima.update { (it ?: 0.0) + 0.1 }  // atômico
+  }
+
+  // Converter um Flow frio em StateFlow
+  val media: StateFlow<Double> = repo.leituras()
+    .map { lista -> lista.map { it.valor }.average() }
+    .stateIn(
+      scope = viewModelScope,
+      started = SharingStarted.WhileSubscribed(5_000),
+      initialValue = 0.0
+    )
+}
+\end{codigo}
+    \end{column}
+    \begin{column}{0.45\textwidth}
+      \begin{conceito}[StateFlow]
+        Fluxo \textbf{quente} que sempre tem um valor atual (\cod{.value}). Novos coletores recebem imediatamente o último valor. Valores iguais em sequência não são reemitidos.
+      \end{conceito}
+      \begin{dica}[\cod{WhileSubscribed(5\_000)}]
+        Mantém o fluxo ativo por 5\,s após o último coletor sair. Assim uma rotação de tela não reinicia a consulta, mas sair da tela para tudo.
+      \end{dica}
+      \begin{conceito}[Na UI (Módulo 05)]
+        \cod{val v by vm.ultima}\\\cod{\ \ .collectAsStateWithLifecycle()}
+      \end{conceito}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}[fragile]{\cod{SharedFlow} e comparação}
+  \begin{columns}[T]
+    \begin{column}{0.48\textwidth}
+\begin{codigo}[title=Eventos de uso único]{Kotlin}
+private val _eventos = MutableSharedFlow<String>()
+val eventos = _eventos.asSharedFlow()
+
+fun salvar() = viewModelScope.launch {
+  repo.salvar()
+  _eventos.emit("Leitura salva!")   // ex.: Snackbar
+}
+\end{codigo}
+      \begin{dica}
+        A recomendação atual é modelar até mensagens como parte do estado (ex.: \cod{mensagem: String?} no \emph{UiState}) e limpá-las depois de exibidas. Use \cod{SharedFlow} quando o evento realmente não for estado.
+      \end{dica}
+    \end{column}
+    \begin{column}{0.50\textwidth}
+      \scriptsize
+      \begin{tabularx}{\linewidth}{@{}l L L L@{}}
+        \toprule
+        & \cabecalho{Flow} & \cabecalho{StateFlow} & \cabecalho{SharedFlow} \\
+        \midrule
+        Tipo & frio & quente & quente \\
+        Valor atual & não & sim (\cod{.value}) & não (ou \emph{replay}) \\
+        Valor inicial & --- & obrigatório & --- \\
+        Coletores & cada um roda o produtor & compartilham & compartilham \\
+        Uso típico & dados do repositório & estado da tela & eventos \\
+        \bottomrule
+      \end{tabularx}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% =============================================================================
+\section{Fechamento}
+
+\begin{frame}{Resumo}
+  \begin{resumo}
+    \begin{itemize}
+      \item A thread principal só desenha a UI; I/O e CPU pesada vão para \cod{Dispatchers.IO}/\cod{Default}.
+      \item \cod{suspend} marca funções que podem suspender; \cod{launch} e \cod{async} criam coroutines.
+      \item Use os escopos com ciclo de vida (\cod{viewModelScope}, \cod{rememberCoroutineScope}) e nunca \cod{GlobalScope}.
+      \item Cancelamento é cooperativo; relance \cod{CancellationException}.
+      \item \cod{Flow} representa vários valores no tempo; operadores montam pipelines reativos.
+      \item \cod{StateFlow} expõe o estado da tela; \cod{stateIn} converte fluxos frios.
+    \end{itemize}
+  \end{resumo}
+\end{frame}
+
+\begin{frame}{Exercícios}
+  \begin{exercicio}[Exercício 1 --- Paralelismo]
+    Escreva três funções \cod{suspend} que simulam leituras com \cod{delay} de 1\,s, 2\,s e 3\,s. Meça o tempo total chamando-as em sequência e depois com \cod{async}. Explique a diferença.
+  \end{exercicio}
+  \begin{exercicio}[Exercício 2 --- Flow]
+    Crie um \cod{Flow<Int>} que simula um ADC de 12 bits a 10\,Hz. Monte um pipeline que converte para volts, calcula a média de janelas de 10 amostras e emite alerta acima de 3,0\,V.
+  \end{exercicio}
+  \begin{exercicio}[Exercício 3 --- Cancelamento]
+    Inicie um laço de CPU com \cod{launch(Dispatchers.Default)} sem \cod{ensureActive()} e cancele após 100\,ms. O que acontece? Corrija.
+  \end{exercicio}
+  \begin{projeto}[LabMonitor --- Etapa 3]
+    Implemente \cod{SimuladorSensor} com um \cod{Flow<Leitura>} por bancada e um \cod{PainelViewModel} que expõe a última leitura e a média dos últimos 60\,s via \cod{StateFlow}.
+  \end{projeto}
+\end{frame}
+
+\begin{frame}{Para aprofundar}
+  \small
+  \begin{itemize}
+    \item Coroutines no Android: \url{https://developer.android.com/kotlin/coroutines}
+    \item Boas práticas com coroutines: \url{https://developer.android.com/kotlin/coroutines/coroutines-best-practices}
+    \item Guia oficial do Kotlin: \url{https://kotlinlang.org/docs/coroutines-guide.html}
+    \item Flow no Android: \url{https://developer.android.com/kotlin/flow}
+    \item StateFlow e SharedFlow: \url{https://developer.android.com/kotlin/flow/stateflow-and-sharedflow}
+  \end{itemize}
+\end{frame}
+
+\encerramento{Módulo 04 --- Interfaces com Jetpack Compose: composables, layouts, modifiers, listas e Material 3.}
+
+\end{document}

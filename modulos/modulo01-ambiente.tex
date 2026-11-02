@@ -1,0 +1,629 @@
+\documentclass[aspectratio=169,10pt]{beamer}
+\makeatletter\def\input@path{{../estilo/}{estilo/}}\makeatother
+\usepackage{devmobile}
+\modulo{01}{Ambiente de Desenvolvimento}{Android Studio, SDK, emulador, celular real, estrutura de projeto, Gradle e o primeiro app}
+
+\begin{document}
+\capa
+
+\begin{frame}{Objetivos do módulo}
+  \begin{conceito}[Ao final deste módulo você será capaz de]
+    \begin{itemize}
+      \item Instalar e configurar o Android Studio e o Android SDK.
+      \item Executar apps no emulador e em um celular real (USB e Wi-Fi).
+      \item Navegar pela estrutura de um projeto Android e entender cada arquivo.
+      \item Entender o papel do Gradle, do \emph{version catalog} e das variantes de build.
+      \item Criar, executar e depurar o primeiro app com Jetpack Compose.
+      \item Versionar o projeto com Git e GitHub.
+    \end{itemize}
+  \end{conceito}
+\end{frame}
+
+\sumario
+
+% =============================================================================
+\section{Ferramentas}
+
+\begin{frame}{Android Studio}
+  \begin{columns}[T]
+    \begin{column}{0.55\textwidth}
+      \begin{itemize}
+        \item IDE oficial do Android, baseada no IntelliJ IDEA (JetBrains).
+        \item Gratuita, para Windows, macOS, Linux e ChromeOS.
+        \item Inclui o JDK, o SDK Manager, o emulador, o \emph{profiler} e o inspetor de layout.
+        \item Traz assistente de IA integrado (Gemini) para gerar e explicar código.
+      \end{itemize}
+      \begin{atencao}[Requisitos práticos]
+        \begin{itemize}
+          \item \textbf{RAM:} 16\,GB é o confortável; com 8\,GB use celular real em vez do emulador.
+          \item \textbf{Disco:} SSD com pelo menos 20\,GB livres (SDK + imagens do emulador).
+          \item \textbf{CPU:} virtualização ativada na BIOS (VT-x/AMD-V).
+        \end{itemize}
+      \end{atencao}
+    \end{column}
+    \begin{column}{0.42\textwidth}
+      \begin{tikzpicture}[node distance=1.5mm]
+        \node[caixaescura,minimum width=4.6cm] (as) {\textbf{Android Studio}};
+        \node[caixa,minimum width=2.25cm,below=of as.south west,anchor=north west] (ed) {Editor\\ + Compose Preview};
+        \node[caixa,minimum width=2.25cm,below=of as.south east,anchor=north east] (gr) {Gradle\\ (build)};
+        \node[caixa,minimum width=2.25cm,below=of ed] (sdk) {SDK Manager};
+        \node[caixa,minimum width=2.25cm,below=of gr] (avd) {Device Manager\\ (emulador)};
+        \node[caixaambar,minimum width=2.25cm,below=of sdk] (lc) {Logcat};
+        \node[caixaambar,minimum width=2.25cm,below=of avd] (pf) {Profiler e\\ App Inspection};
+      \end{tikzpicture}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Instalação passo a passo}
+  \begin{enumerate}
+    \item Baixe o instalador em \url{https://developer.android.com/studio}.
+    \item \textbf{Windows:} execute o \arq{.exe}. \textbf{Linux:} extraia o \arq{.tar.gz} em \arq{/opt} e rode \arq{bin/studio.sh}. \textbf{macOS:} arraste para Aplicativos.
+    \item No assistente de primeira execução escolha \textbf{Standard}: ele baixa o SDK, as ferramentas de build e uma imagem do emulador.
+    \item Abra \textbf{Settings $\rightarrow$ Languages \& Frameworks $\rightarrow$ Android SDK} e confira os pacotes.
+  \end{enumerate}
+  \vspace{2pt}
+  \begin{columns}[T]
+    \begin{column}{0.48\textwidth}
+      \begin{conceito}[Pacotes essenciais do SDK]
+        \begin{itemize}
+          \item \textbf{SDK Platform} da API alvo (ex.: Android 16).
+          \item \textbf{Build-Tools} e \textbf{Platform-Tools} (contém o \cod{adb}).
+          \item \textbf{Android Emulator} e uma \emph{system image}.
+        \end{itemize}
+      \end{conceito}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \begin{dica}[Linux: aceleração do emulador]
+        Instale o KVM e adicione seu usuário ao grupo \cod{kvm}. Sem aceleração por hardware o emulador fica lento demais para uso.
+      \end{dica}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% =============================================================================
+\section{Executando o app}
+
+\begin{frame}{Emulador (AVD)}
+  \begin{columns}[T]
+    \begin{column}{0.56\textwidth}
+      \small
+      \termo{AVD} (\emph{Android Virtual Device}) é uma configuração de aparelho virtual: modelo, tela, versão do Android e memória.
+      \begin{enumerate}
+        \item \textbf{Device Manager $\rightarrow$ +} (Create Virtual Device).
+        \item Escolha um perfil (ex.: \emph{Pixel}, \emph{Medium Phone}).
+        \item Escolha uma \emph{system image} com \textbf{Google Play} ou \textbf{Google APIs}.
+        \item Prefira imagens \textbf{x86\_64} (PC) ou \textbf{arm64} (Mac Apple Silicon).
+      \end{enumerate}
+      \begin{dica}
+        O emulador simula GPS, rotação, bateria, rede lenta e sensores em \emph{Extended Controls} (\textbf{\ldots}).
+      \end{dica}
+    \end{column}
+    \begin{column}{0.40\textwidth}
+      \centering
+      \begin{tikzpicture}
+        \node[caixaescura,minimum width=3.8cm] (pc) {Computador};
+        \node[caixa,minimum width=3.8cm,below=2mm of pc] (hyp) {Hipervisor\\ (KVM, WHPX, HVF)};
+        \node[caixaambar,minimum width=3.8cm,below=2mm of hyp] (emu) {Emulador QEMU};
+        \node[below=2mm of emu] (cel) {\celular[0.45]{Android}};
+        \draw[seta] (emu) -- (cel);
+      \end{tikzpicture}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Celular real: depuração USB e Wi-Fi}
+  \begin{columns}[T]
+    \begin{column}{0.5\textwidth}
+      \begin{conceito}[Ativando as opções do desenvolvedor]
+        \begin{enumerate}
+          \item \textbf{Configurações $\rightarrow$ Sobre o telefone}.
+          \item Toque 7 vezes em \textbf{Número da versão}.
+          \item Em \textbf{Opções do desenvolvedor}, ative \textbf{Depuração USB}.
+          \item Conecte o cabo e aceite a impressão digital RSA no celular.
+        \end{enumerate}
+      \end{conceito}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \begin{conceito}[Depuração por Wi-Fi (Android 11+)]
+        \begin{enumerate}
+          \item Celular e computador na mesma rede.
+          \item Ative \textbf{Depuração por Wi-Fi}.
+          \item No Android Studio: \textbf{Device Manager $\rightarrow$ Pair devices using Wi-Fi} e leia o QR code.
+        \end{enumerate}
+      \end{conceito}
+    \end{column}
+  \end{columns}
+  \begin{atencao}[Aparelho real é obrigatório para]
+    Bluetooth/BLE, NFC, câmera de verdade, sensores físicos e medições realistas de desempenho e bateria. Projetos com ESP32 (Módulo 10) \textbf{exigem} celular real.
+  \end{atencao}
+\end{frame}
+
+\begin{frame}[fragile]{ADB: \emph{Android Debug Bridge}}
+  \begin{columns}[T]
+    \begin{column}{0.56\textwidth}
+\begin{terminal}[title=Comandos úteis]
+adb devices                 # lista aparelhos conectados
+adb install app-debug.apk   # instala um APK
+adb uninstall com.exemplo.app
+adb logcat -s LabMonitor    # filtra logs pela tag
+adb shell                   # terminal no aparelho
+adb shell pm list packages | grep exemplo
+adb push foto.jpg /sdcard/Download/
+adb pull /sdcard/Download/log.txt .
+adb shell screencap -p /sdcard/tela.png
+adb reverse tcp:8080 tcp:8080  # localhost do PC
+\end{terminal}
+    \end{column}
+    \begin{column}{0.42\textwidth}
+      \centering
+      \begin{tikzpicture}[node distance=6mm]
+        \node[caixaescura,minimum width=3.4cm] (cli) {cliente \cod{adb}\\ (terminal / IDE)};
+        \node[caixa,minimum width=3.4cm,below=of cli] (srv) {servidor \cod{adb}\\ (porta 5037 no PC)};
+        \node[caixaambar,minimum width=3.4cm,below=of srv] (d) {\cod{adbd}\\ (no aparelho)};
+        \draw[seta] (cli) -- (srv);
+        \draw[seta] (srv) -- node[rotulo,right]{USB ou Wi-Fi} (d);
+      \end{tikzpicture}
+      \begin{dica}
+        \cod{adb reverse} permite que o app no celular acesse uma API rodando no seu computador.
+      \end{dica}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% =============================================================================
+\section{Estrutura de um projeto}
+
+\begin{frame}{Criando o projeto}
+  \begin{columns}[T]
+    \begin{column}{0.5\textwidth}
+      \begin{enumerate}
+        \item \textbf{File $\rightarrow$ New $\rightarrow$ New Project}.
+        \item Modelo \textbf{Empty Activity} (já vem com Compose).
+        \item Preencha:
+          \begin{itemize}
+            \item \textbf{Name}: LabMonitor
+            \item \textbf{Package name}: \cod{br.edu.ifma.labmonitor}
+            \item \textbf{Minimum SDK}: API 26
+            \item \textbf{Build configuration language}: Kotlin DSL
+          \end{itemize}
+        \item Aguarde o \textbf{Gradle Sync} terminar.
+      \end{enumerate}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \begin{conceito}[Package name / applicationId]
+        Identificador \textbf{único e permanente} do app na Google Play. Use o domínio invertido da instituição ou o seu. Depois de publicado, \textbf{não pode ser alterado}.
+      \end{conceito}
+      \begin{dica}
+        Use a visualização \textbf{Android} no painel de projeto para ver a estrutura lógica, e \textbf{Project} para ver as pastas reais no disco.
+      \end{dica}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}[fragile]{Árvore de diretórios}
+  \begin{columns}[T]
+    \begin{column}{0.46\textwidth}
+\begin{codigo}[title=LabMonitor/,listing options={style=dm,language=bash,basicstyle=\ttfamily\tiny}]{bash}
+LabMonitor/
+|-- app/
+|   |-- build.gradle.kts      (módulo)
+|   |-- proguard-rules.pro
+|   `-- src/
+|       |-- main/
+|       |   |-- AndroidManifest.xml
+|       |   |-- java/.../labmonitor/
+|       |   |   |-- MainActivity.kt
+|       |   |   `-- ui/theme/
+|       |   `-- res/
+|       |       |-- drawable/  mipmap-*/
+|       |       `-- values/strings.xml
+|       |-- test/            (unitários)
+|       `-- androidTest/     (instrumentados)
+|-- gradle/
+|   |-- libs.versions.toml   (catálogo)
+|   `-- wrapper/
+|-- build.gradle.kts          (projeto)
+|-- settings.gradle.kts
+|-- gradle.properties
+`-- gradlew, gradlew.bat
+\end{codigo}
+    \end{column}
+    \begin{column}{0.52\textwidth}
+      \small
+      \begin{itemize}
+        \item \arq{app/}: o módulo do aplicativo. Projetos grandes têm vários módulos.
+        \item \arq{src/main/java}: código Kotlin (o nome da pasta é histórico).
+        \item \arq{res/}: recursos que não são código: imagens, textos, ícones, cores.
+        \item \arq{test/}: testes que rodam na JVM do computador.
+        \item \arq{androidTest/}: testes que rodam no aparelho.
+        \item \arq{gradlew}: \emph{wrapper} que baixa a versão certa do Gradle. Sempre use-o, inclusive na integração contínua.
+      \end{itemize}
+      \begin{dica}
+        Os textos da interface ficam em \arq{strings.xml}. Isso facilita a tradução do app.
+      \end{dica}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}[fragile]{AndroidManifest.xml}
+  \begin{columns}[T]
+    \begin{column}{0.58\textwidth}
+\begin{codigo}[title=app/src/main/AndroidManifest.xml]{XML}
+<manifest xmlns:android=
+    "http://schemas.android.com/apk/res/android">
+
+  <uses-permission
+      android:name="android.permission.INTERNET" />
+
+  <application
+      android:icon="@mipmap/ic_launcher"
+      android:label="@string/app_name"
+      android:theme="@style/Theme.LabMonitor">
+    <activity
+        android:name=".MainActivity"
+        android:exported="true">
+      <intent-filter>
+        <action android:name="android.intent.action.MAIN" />
+        <category android:name="android.intent.category.LAUNCHER" />
+      </intent-filter>
+    </activity>
+  </application>
+</manifest>
+\end{codigo}
+    \end{column}
+    \begin{column}{0.40\textwidth}
+      \small
+      O manifesto declara ao sistema:
+      \begin{itemize}
+        \item as \textbf{permissões} necessárias;
+        \item o \textbf{ícone}, o \textbf{nome} e o \textbf{tema};
+        \item os \textbf{componentes} (Activities, Services\ldots);
+        \item qual Activity abre pelo \textbf{ícone do launcher} (\cod{MAIN} + \cod{LAUNCHER}).
+      \end{itemize}
+      \begin{atencao}
+        \cod{android:exported="true"} é obrigatório em componentes com \cod{intent-filter}.
+      \end{atencao}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}[fragile]{MainActivity.kt: o ponto de entrada}
+  \begin{columns}[T]
+    \begin{column}{0.58\textwidth}
+\begin{codigo}[title=MainActivity.kt]{Kotlin}
+class MainActivity : ComponentActivity() {
+  override fun onCreate(savedInstanceState: Bundle?) {
+    super.onCreate(savedInstanceState)
+    enableEdgeToEdge()  // desenha atrás das barras
+    setContent {        // a partir daqui é Compose
+      LabMonitorTheme {
+        Scaffold(Modifier.fillMaxSize()) { padding ->
+          Saudacao(
+            nome = "Laboratório",
+            modifier = Modifier.padding(padding)
+          )
+        }
+      }
+    }
+  }
+}
+
+@Composable
+fun Saudacao(nome: String, modifier: Modifier = Modifier) {
+  Text(text = "Olá, $nome!", modifier = modifier)
+}
+\end{codigo}
+    \end{column}
+    \begin{column}{0.40\textwidth}
+      \small
+      \begin{itemize}
+        \item \cod{ComponentActivity}: Activity base para Compose.
+        \item \cod{onCreate}: chamado quando a tela é criada (Módulo 05).
+        \item \cod{setContent \{\}}: define a interface com funções \cod{@Composable}.
+        \item \cod{LabMonitorTheme}: tema Material 3 gerado em \arq{ui/theme/}.
+        \item \cod{Scaffold}: estrutura básica de tela (barras, FAB).
+      \end{itemize}
+      \begin{dica}
+        Os detalhes de Compose ficam para o Módulo 04. Por enquanto, rode e altere o texto.
+      \end{dica}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% =============================================================================
+\section{Gradle}
+
+\begin{frame}{O que é o Gradle}
+  \begin{columns}[c]
+    \begin{column}{0.48\textwidth}
+      \small
+      \termo{Gradle} é o sistema de build: ele baixa dependências, compila, empacota, assina e roda testes.
+      \begin{itemize}
+        \item Os scripts são escritos em \textbf{Kotlin DSL} (\arq{.gradle.kts}).
+        \item O \termo{Android Gradle Plugin (AGP)} ensina o Gradle a construir apps Android.
+        \item \textbf{Gradle Sync}: a IDE lê os scripts e configura o projeto. Rode-o após qualquer mudança nos arquivos de build.
+      \end{itemize}
+    \end{column}
+    \begin{column}{0.50\textwidth}
+      \centering
+      \begin{tikzpicture}[node distance=2.5mm]
+        \node[caixaescura,minimum width=5.2cm] (set) {\arq{settings.gradle.kts}\\ \tiny repositórios e módulos incluídos};
+        \node[caixa,minimum width=5.2cm,below=of set] (proj) {\arq{build.gradle.kts} (projeto)\\ \tiny plugins disponíveis para os módulos};
+        \node[caixaambar,minimum width=5.2cm,below=of proj] (app) {\arq{app/build.gradle.kts}\\ \tiny configuração do app e dependências};
+        \node[caixa,minimum width=5.2cm,below=of app,fill=cinzaclaro] (toml) {\arq{gradle/libs.versions.toml}\\ \tiny versões centralizadas (catálogo)};
+        \draw[seta] (set) -- (proj);
+        \draw[seta] (proj) -- (app);
+        \draw[setatrac] (toml.east) -- ++(4mm,0) |- (app.east);
+        \draw[setatrac] (toml.east) -- ++(4mm,0) |- (proj.east);
+      \end{tikzpicture}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}[fragile]{Version catalog e dependências}
+  \begin{columns}[T]
+    \begin{column}{0.48\textwidth}
+\begin{codigo}[title=gradle/libs.versions.toml,listing options={style=dm,language=bash,basicstyle=\ttfamily\tiny}]{bash}
+[versions]
+agp = "..."             # versões atuais
+kotlin = "..."          # o assistente
+composeBom = "..."      # preenche
+
+[libraries]
+androidx-compose-bom = { group = "androidx.compose",
+  name = "compose-bom", version.ref = "composeBom" }
+androidx-material3 = { group = "androidx.compose.material3",
+  name = "material3" }
+
+[plugins]
+android-application = { id = "com.android.application",
+  version.ref = "agp" }
+\end{codigo}
+    \end{column}
+    \begin{column}{0.50\textwidth}
+\begin{codigo}[title=app/build.gradle.kts,listing options={style=dm,language=Kotlin,basicstyle=\ttfamily\tiny}]{Kotlin}
+plugins {
+  alias(libs.plugins.android.application)
+  alias(libs.plugins.kotlin.compose)
+}
+android {
+  namespace = "br.edu.ifma.labmonitor"
+  compileSdk = 36
+  defaultConfig {
+    applicationId = "br.edu.ifma.labmonitor"
+    minSdk = 26
+    targetSdk = 36
+    versionCode = 1
+    versionName = "1.0"
+  }
+}
+dependencies {
+  implementation(platform(libs.androidx.compose.bom))
+  implementation(libs.androidx.material3)
+  testImplementation(libs.junit)
+}
+\end{codigo}
+    \end{column}
+  \end{columns}
+  \begin{dica}[BOM (\emph{Bill of Materials})]
+    Fixa versões compatíveis entre si de todas as bibliotecas Compose: a versão é declarada uma única vez.
+  \end{dica}
+\end{frame}
+
+\begin{frame}[fragile]{Configurações de dependência, tarefas e variantes}
+  \begin{columns}[T]
+    \begin{column}{0.5\textwidth}
+      \footnotesize
+      \begin{tabularx}{\linewidth}{@{}l L@{}}
+        \toprule
+        \cabecalho{Configuração} & \cabecalho{Uso} \\
+        \midrule
+        \cod{implementation} & código do app \\
+        \cod{testImplementation} & testes unitários \\
+        \cod{androidTestImplementation} & testes no aparelho \\
+        \cod{debugImplementation} & só no build de debug \\
+        \cod{ksp} & processadores de anotação \\
+        \bottomrule
+      \end{tabularx}
+      \vspace{4pt}
+      \begin{conceito}[Build types]
+        \textbf{debug}: depurável, assinado com chave de teste. \textbf{release}: otimizado (R8), assinado com a sua chave, vai para a loja.
+      \end{conceito}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+\begin{terminal}[title=Tarefas pelo terminal]
+./gradlew tasks            # lista tarefas
+./gradlew assembleDebug    # gera APK debug
+./gradlew installDebug     # instala no aparelho
+./gradlew test             # testes unitários
+./gradlew lint             # análise estática
+./gradlew bundleRelease    # gera AAB (loja)
+./gradlew clean            # limpa o build
+\end{terminal}
+      \begin{dica}
+        Os APKs gerados ficam em \arq{app/build/outputs/apk/}.
+      \end{dica}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% =============================================================================
+\section{Primeiro app e depuração}
+
+\begin{frame}[fragile]{Compose Preview e execução}
+  \begin{columns}[T]
+    \begin{column}{0.52\textwidth}
+\begin{codigo}[title=Preview]{Kotlin}
+@Preview(showBackground = true, name = "Claro")
+@Preview(
+  uiMode = Configuration.UI_MODE_NIGHT_YES,
+  name = "Escuro"
+)
+@Composable
+fun SaudacaoPreview() {
+  LabMonitorTheme {
+    Saudacao("Bancada 3")
+  }
+}
+\end{codigo}
+      \begin{dica}
+        O \emph{Preview} renderiza a função na IDE sem instalar o app. Use vários \cod{@Preview} para comparar tema claro e escuro, fontes grandes e telas diferentes.
+      \end{dica}
+    \end{column}
+    \begin{column}{0.46\textwidth}
+      \begin{conceito}[Executando]
+        \begin{enumerate}
+          \item Escolha o aparelho na barra superior.
+          \item Clique em \textbf{Run} (\textcolor{verdeok}{$\blacktriangleright$}) ou \textbf{Shift+F10}.
+          \item O Gradle compila, instala e abre o app.
+        \end{enumerate}
+      \end{conceito}
+      \begin{conceito}[Live Edit]
+        Com o app rodando, mudanças em funções Compose aparecem no aparelho sem reinstalar (\emph{Live Edit}).
+      \end{conceito}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}[fragile]{Logcat e depurador}
+  \begin{columns}[T]
+    \begin{column}{0.5\textwidth}
+\begin{codigo}[title=Registrando logs]{Kotlin}
+private const val TAG = "LabMonitor"
+
+fun lerSensor(valor: Double) {
+  Log.d(TAG, "Leitura recebida: $valor")
+  if (valor > 80.0) {
+    Log.w(TAG, "Temperatura alta: $valor")
+  }
+}
+\end{codigo}
+      \footnotesize
+      \begin{tabularx}{\linewidth}{@{}l l L@{}}
+        \toprule
+        \cod{Log.v} & verbose & detalhes extremos \\
+        \cod{Log.d} & debug & desenvolvimento \\
+        \cod{Log.i} & info & eventos normais \\
+        \cod{Log.w} & warn & situação suspeita \\
+        \cod{Log.e} & error & falhas \\
+        \bottomrule
+      \end{tabularx}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \begin{conceito}[Depurador]
+        \begin{itemize}
+          \item Clique na margem para criar um \emph{breakpoint}.
+          \item Rode com \textbf{Debug} (ícone de inseto).
+          \item Inspecione variáveis, avalie expressões e avance linha a linha (F8/F7).
+        \end{itemize}
+      \end{conceito}
+      \begin{dica}[Filtro do Logcat]
+        \cod{package:mine tag:LabMonitor level:debug} mostra só os logs do seu app.
+      \end{dica}
+      \begin{atencao}
+        Nunca registre senhas, tokens ou dados pessoais em logs.
+      \end{atencao}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Outras ferramentas da IDE}
+  \small
+  \begin{tabularx}{\textwidth}{@{}l L@{}}
+    \toprule
+    \cabecalho{Ferramenta} & \cabecalho{Para que serve} \\
+    \midrule
+    \textbf{Layout Inspector} & Ver a árvore de componentes do app em execução e contar recomposições \\
+    \textbf{App Inspection} & Inspecionar o banco de dados (Room), o tráfego de rede e os \emph{workers} em tempo real \\
+    \textbf{Profiler} & Medir CPU, memória e energia; achar travamentos (Módulo 11) \\
+    \textbf{Device Explorer} & Navegar pelos arquivos do aparelho \\
+    \textbf{Running Devices} & Espelhar e controlar o celular físico dentro da IDE \\
+    \textbf{Gemini no Android Studio} & Gerar código, explicar erros e sugerir testes (sempre revise o resultado) \\
+    \bottomrule
+  \end{tabularx}
+  \vspace{4pt}
+  \begin{dica}[Atalhos que valem ouro]
+    \textbf{Shift Shift}: busca global \quad \textbf{Alt+Enter}: correções rápidas \quad \textbf{Ctrl+Alt+L}: formatar \quad \textbf{Ctrl+B}: ir para a definição
+  \end{dica}
+\end{frame}
+
+% =============================================================================
+\section{Versionamento com Git}
+
+\begin{frame}[fragile]{Git e GitHub no projeto}
+  \begin{columns}[T]
+    \begin{column}{0.52\textwidth}
+\begin{terminal}[title=Fluxo básico]
+git init
+git add .
+git commit -m "Projeto LabMonitor criado"
+git branch -M main
+git remote add origin https://github.com/<usuario>/LabMonitor.git
+git push -u origin main
+# a cada etapa:
+git checkout -b feature/lista-equipamentos
+git commit -am "Tela de lista de equipamentos"
+\end{terminal}
+    \end{column}
+    \begin{column}{0.46\textwidth}
+      \begin{conceito}[O que NÃO versionar]
+        O \arq{.gitignore} gerado pelo Android Studio já exclui:
+        \begin{itemize}
+          \item \arq{build/}, \arq{.gradle/}, \arq{.idea/} (parcial);
+          \item \arq{local.properties} (caminho do SDK na sua máquina).
+        \end{itemize}
+      \end{conceito}
+      \begin{atencao}
+        Nunca faça commit de \textbf{chaves de API}, \textbf{keystores} (\arq{.jks}) ou senhas. Se isso acontecer, considere a chave comprometida e gere outra.
+      \end{atencao}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% =============================================================================
+\section{Fechamento}
+
+\begin{frame}{Resumo}
+  \begin{resumo}
+    \begin{itemize}
+      \item Android Studio = editor + SDK + emulador + Gradle + ferramentas de inspeção.
+      \item Rode apps no emulador (AVD) ou no celular real com depuração USB/Wi-Fi; o \cod{adb} faz a ponte.
+      \item \arq{AndroidManifest.xml} declara componentes e permissões; \arq{MainActivity.kt} chama \cod{setContent}.
+      \item O Gradle constrói o app; o \emph{version catalog} centraliza versões e o BOM alinha as bibliotecas Compose.
+      \item \cod{minSdk}, \cod{targetSdk} e \cod{applicationId} ficam no \arq{app/build.gradle.kts}.
+      \item Logcat, depurador e Layout Inspector são as ferramentas de diagnóstico do dia a dia.
+    \end{itemize}
+  \end{resumo}
+\end{frame}
+
+\begin{frame}{Exercícios}
+  \begin{exercicio}[Exercício 1 --- Ambiente]
+    Crie dois AVDs: um celular com a API mais recente e um com API 26. Rode o app nos dois e anote as diferenças visuais.
+  \end{exercicio}
+  \begin{exercicio}[Exercício 2 --- ADB]
+    Pelo terminal, instale o APK de debug no seu celular, capture uma tela com \cod{adb shell screencap} e copie a imagem para o computador.
+  \end{exercicio}
+  \begin{exercicio}[Exercício 3 --- Gradle]
+    Altere \cod{versionName} para \cod{"1.0-aula"}, gere o APK com \cod{./gradlew assembleDebug} e localize o arquivo gerado. O que acontece se \cod{minSdk} for maior que a API do seu emulador?
+  \end{exercicio}
+  \begin{projeto}[LabMonitor --- Etapa 1]
+    Crie o projeto LabMonitor (\cod{br.edu.ifma.labmonitor}), troque o texto inicial por ``LabMonitor --- DEE/IFMA'', adicione um \cod{Log.i} no \cod{onCreate} e publique o repositório no GitHub.
+  \end{projeto}
+\end{frame}
+
+\begin{frame}{Para aprofundar}
+  \small
+  \begin{itemize}
+    \item Conheça o Android Studio: \url{https://developer.android.com/studio/intro}
+    \item Rodar apps em aparelho físico: \url{https://developer.android.com/studio/run/device}
+    \item Emulador: \url{https://developer.android.com/studio/run/emulator}
+    \item ADB: \url{https://developer.android.com/tools/adb}
+    \item Configurar o build: \url{https://developer.android.com/build}
+    \item Version catalogs: \url{https://developer.android.com/build/migrate-to-catalogs}
+  \end{itemize}
+\end{frame}
+
+\encerramento{Módulo 02 --- Kotlin essencial: tipos, null safety, funções, classes e coleções.}
+
+\end{document}
