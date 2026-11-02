@@ -31,13 +31,13 @@
         \item IDE oficial do Android, baseada no IntelliJ IDEA (JetBrains).
         \item Gratuita, para Windows, macOS, Linux e ChromeOS.
         \item Inclui o JDK, o SDK Manager, o emulador, o \emph{profiler} e o inspetor de layout.
-        \item Traz assistente de IA integrado (Gemini) para gerar e explicar código.
+        \item Assistente de IA integrado (Gemini).
       \end{itemize}
       \begin{atencao}[Requisitos práticos]
         \begin{itemize}
-          \item \textbf{RAM:} 16\,GB é o confortável; com 8\,GB use celular real em vez do emulador.
-          \item \textbf{Disco:} SSD com pelo menos 20\,GB livres (SDK + imagens do emulador).
-          \item \textbf{CPU:} virtualização ativada na BIOS (VT-x/AMD-V).
+          \item \textbf{RAM:} 16\,GB; com 8\,GB, prefira o celular real.
+          \item \textbf{Disco:} SSD com 20\,GB livres.
+          \item \textbf{CPU:} virtualização ativada na BIOS.
         \end{itemize}
       \end{atencao}
     \end{column}
@@ -406,9 +406,9 @@ dependencies {
 \end{codigo}
     \end{column}
   \end{columns}
-  \begin{dica}[BOM (\emph{Bill of Materials})]
-    Fixa versões compatíveis entre si de todas as bibliotecas Compose: a versão é declarada uma única vez.
-  \end{dica}
+  \begin{caixadestaque}
+    \textbf{BOM} (\emph{Bill of Materials}): fixa versões compatíveis de todas as bibliotecas Compose.
+  \end{caixadestaque}
 \end{frame}
 
 \begin{frame}[fragile]{Configurações de dependência, tarefas e variantes}

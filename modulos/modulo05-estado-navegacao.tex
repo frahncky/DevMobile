@@ -182,9 +182,9 @@ fun TelaConfig() {
       decisao/.style={caixaambar,diamond,aspect=2.6,inner sep=1pt,text width=2.5cm,font=\tiny}]
     \node[decisao] (q1) {É só aparência da UI? (expandido, rolagem, foco)};
     \node[caixaescura,right=12mm of q1,text width=3.2cm] (r1) {No próprio composable,\\ com \cod{remember(Saveable)}};
-    \node[decisao,below=6mm of q1] (q2) {Vários composables usam?};
+    \node[decisao,below=3mm of q1] (q2) {Vários composables usam?};
     \node[caixa,right=12mm of q2,text width=3.2cm] (r2) {No ancestral comum mais baixo (hoisting)};
-    \node[decisao,below=6mm of q2] (q3) {Envolve regras de negócio ou dados?};
+    \node[decisao,below=3mm of q2] (q3) {Envolve regras de negócio ou dados?};
     \node[caixaambarforte,right=12mm of q3,text width=3.2cm] (r3) {No \textbf{ViewModel} (\emph{state holder} da tela)};
     \draw[seta] (q1) -- node[rotulo,above]{sim} (r1);
     \draw[seta] (q1) -- node[rotulo,left]{não} (q2);

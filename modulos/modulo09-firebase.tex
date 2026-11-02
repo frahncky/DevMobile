@@ -162,10 +162,10 @@ class AuthRepository @Inject constructor() {
         As APIs do Firebase devolvem \cod{Task}. A extensão \cod{await()} (de \cod{kotlinx-coroutines-play-services}) as transforma em chamadas \cod{suspend}.
       \end{conceito}
       \begin{dica}[Navegação condicionada]
-        Observe \cod{usuario} no ViewModel principal: \cod{null} leva ao login; caso contrário, ao painel. A sessão persiste entre aberturas do app.
+        \cod{usuario} nulo leva ao login; senão, ao painel. A sessão persiste entre aberturas.
       \end{dica}
       \begin{atencao}
-        O app nunca guarda a senha: o Firebase cuida disso e da recuperação.
+        O app nunca guarda a senha.
       \end{atencao}
     \end{column}
   \end{columns}
@@ -184,7 +184,7 @@ class AuthRepository @Inject constructor() {
   \begin{columns}[T]
     \begin{column}{0.48\textwidth}
       \begin{conceito}[Credential Manager]
-        API do Android que unifica senhas, \emph{passkeys} e login federado (Google) numa única folha de seleção. Substitui o antigo \emph{Google Sign-In for Android}.
+        Unifica senhas, \emph{passkeys} e login Google numa única folha de seleção (substitui o antigo \emph{Google Sign-In}).
       \end{conceito}
     \end{column}
     \begin{column}{0.48\textwidth}
@@ -199,7 +199,7 @@ class AuthRepository @Inject constructor() {
     \end{column}
   \end{columns}
   \begin{atencao}
-    O SHA-1 cadastrado no console precisa corresponder à chave que assinou o app: debug, upload e a chave da Play App Signing (Módulo 12).
+    Cadastre o SHA-1 de cada chave que assina o app: debug, upload e Play App Signing (Módulo 12).
   \end{atencao}
 \end{frame}
 
@@ -268,10 +268,10 @@ class ReservaRepository @Inject constructor() {
         Transforma o \emph{listener} em tempo real do Firestore em \cod{Flow}. Quando outra pessoa cria uma reserva, todas as telas abertas atualizam.
       \end{conceito}
       \begin{conceito}[Offline]
-        No Android o cache local vem ativado: leituras funcionam sem rede e escritas são enviadas quando a conexão volta.
+        Cache local ativo: lê sem rede e envia as escritas quando a conexão volta.
       \end{conceito}
       \begin{atencao}[Índices]
-        Filtros em campos diferentes exigem índice composto; o erro no Logcat traz o link para criá-lo.
+        Filtros em campos diferentes exigem índice composto (o Logcat traz o link).
       \end{atencao}
     \end{column}
   \end{columns}
@@ -346,7 +346,7 @@ service cloud.firestore {
         Publicar com \cod{allow read, write: if true;} (``modo de teste''). Qualquer pessoa na internet lê e apaga todo o banco.
       \end{erro}
       \begin{conceito}[Como pensar]
-        O app \textbf{não é confiável}: alguém pode chamar a API do Firebase diretamente. As regras são a única barreira real e rodam no servidor.
+        O app \textbf{não é confiável}: as regras, que rodam no servidor, são a única barreira real.
       \end{conceito}
       \begin{dica}[Emulator Suite]
         \cod{firebase emulators:start} roda Auth, Firestore e Storage localmente, sem custo e sem dados reais.

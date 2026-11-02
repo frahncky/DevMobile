@@ -32,7 +32,7 @@
         Você cria a árvore de \emph{widgets} e a \textbf{modifica} manualmente quando os dados mudam:\\[2pt]
         \cod{texto.setText("25 °C")}\\
         \cod{alerta.setVisibility(View.VISIBLE)}\\[2pt]
-        É fácil esquecer de atualizar algum elemento e deixar a tela inconsistente.
+        Fácil esquecer algo e deixar a tela inconsistente.
       \end{exemplo}
     \end{column}
     \begin{column}{0.48\textwidth}
@@ -41,11 +41,10 @@
         Você descreve \textbf{como a tela deve ser} para um dado estado. Quando o estado muda, o Compose \textbf{redesenha} o que for necessário:\\[2pt]
         \cod{Text("\$temp °C")}\\
         \cod{if (temp > 30) Alerta()}\\[2pt]
-        A tela é sempre consistente com os dados.
+        A tela fica sempre consistente.
       \end{exemplo}
     \end{column}
   \end{columns}
-  \vspace{4pt}
   \begin{center}
   \begin{tikzpicture}[node distance=10mm]
     \node[caixaambar,minimum width=2.6cm] (e) {\textbf{Estado}\\ \cod{temp = 31.2}};
@@ -454,8 +453,7 @@ private val Claro = lightColorScheme(
 private val Escuro = darkColorScheme(
   primary = Color(0xFF9CC4EA),
   secondary = Color(0xFFE69A1F))
-@Composable
-fun LabMonitorTheme(
+@Composable fun LabMonitorTheme(
   escuro: Boolean = isSystemInDarkTheme(),
   dinamica: Boolean = true,
   content: @Composable () -> Unit

@@ -1,51 +1,61 @@
 % =============================================================================
-%  devmobile.sty — Estilo compartilhado dos slides do curso DevMobile
-%  Paleta: azul-petróleo (#0D3052 / #0E3B43) e âmbar (#DE8A1C / #E69A1F)
+%  devmobile.sty --- Estilo dos slides do curso DevMobile
+%  Baseado no modelo Beamer da casa (paleta azul-petróleo + âmbar):
+%    * título do slide em azul-petróleo sobre fundo branco, com filete âmbar;
+%    * rodapé limpo (título curto à esquerda, número em âmbar à direita);
+%    * marcadores quadrados em âmbar;
+%    * capa, páginas de seção e encerramento em azul-petróleo sólido;
+%    * caixas caixadestaque, caixaambar e caixatitulo.
 %  Uso (no preâmbulo de cada módulo, após \documentclass{beamer}):
 %      \makeatletter\def\input@path{{../estilo/}{estilo/}}\makeatother
 %      \usepackage{devmobile}
 %      \modulo{03}{Título do módulo}{Subtítulo}
 % =============================================================================
 \NeedsTeXFormat{LaTeX2e}
-\ProvidesPackage{devmobile}[2026/11/01 Estilo dos slides DevMobile]
+\ProvidesPackage{devmobile}[2026/11/01 Estilo dos slides DevMobile (modelo da casa)]
 
 % ---------------------------------------------------------------- pacotes ----
-\RequirePackage[shorthands=off,brazilian]{babel}
 \RequirePackage[utf8]{inputenc}
 \RequirePackage[T1]{fontenc}
-\RequirePackage{lmodern}
-\RequirePackage[scaled=0.92]{helvet}
-\renewcommand{\familydefault}{\sfdefault}
+\IfFileExists{portuges.ldf}{\RequirePackage[shorthands=off,brazil]{babel}}{}
+\IfFileExists{lmodern.sty}{%
+  \RequirePackage{lmodern}%
+  \IfFileExists{microtype.sty}{\RequirePackage{microtype}}{}%
+}{}
 \RequirePackage{textcomp}
-\RequirePackage{microtype}
 \RequirePackage{booktabs}
 \RequirePackage{tabularx}
 \RequirePackage{array}
 \RequirePackage{multicol}
 \RequirePackage{ifthen}
 \RequirePackage{tikz}
-\usetikzlibrary{arrows.meta,positioning,shapes.geometric,shapes.misc,calc,fit,backgrounds,shadows,decorations.pathmorphing,decorations.pathreplacing}
+\usetikzlibrary{arrows.meta,positioning,shapes.geometric,shapes.misc,calc,fit,backgrounds,
+  shadows,decorations.pathmorphing,decorations.pathreplacing}
 \RequirePackage[most]{tcolorbox}
 \tcbuselibrary{listings}
 \RequirePackage{listings}
 
-% ------------------------------------------------------------------ cores ----
-\definecolor{petroleo}{HTML}{0D3052}
-\definecolor{petroleoesc}{HTML}{0E3B43}
-\definecolor{ambar}{HTML}{DE8A1C}
-\definecolor{ambarclaro}{HTML}{E69A1F}
-\definecolor{cinzatexto}{HTML}{2F3A45}
+% ------------------------------------------------------- paleta da casa ----
+\definecolor{azulpetroleo}{HTML}{0D3052}
+\definecolor{azulprofundo}{HTML}{0E3B43}
+\definecolor{ambar}{HTML}{F2A104}
+\definecolor{ambarclaro}{HTML}{FFD8A0}
+\definecolor{cinzafundo}{HTML}{F3F5F7}
+\definecolor{cinzatexto}{HTML}{3C4A55}
+% nomes usados nos módulos (apelidos da paleta)
+\colorlet{petroleo}{azulpetroleo}
+\colorlet{petroleoesc}{azulprofundo}
 \definecolor{cinzamedio}{HTML}{6B7785}
 \definecolor{cinzaclaro}{HTML}{E3E8ED}
-\definecolor{codefundo}{HTML}{F4F6F9}
+\colorlet{codefundo}{cinzafundo}
 \definecolor{verdeok}{HTML}{2E7D5B}
-\definecolor{vermelhoerro}{HTML}{B03A2E}
+\definecolor{vermelhoerro}{HTML}{A33B20}
 
 % ------------------------------------------------------- metadados do curso --
 \newcommand{\nomecurso}{Desenvolvimento de Aplicativos Mobile}
-\newcommand{\autorcurso}{Prof. Dr. Francisco}            % edite aqui
-\newcommand{\instituicaocurso}{IFMA -- Campus São Luís -- Monte Castelo}
-\newcommand{\departamentocurso}{Departamento de Eletroeletrônica (DEE)}
+\newcommand{\autorcurso}{Prof. Dr. Francisco dos Santos Viana}
+\newcommand{\localcurso}{São Luís -- Maranhão -- Brasil}
+\newcommand{\anocurso}{\the\year}
 \newcommand{\nummodulo}{00}
 
 % \modulo{número}{título}{subtítulo}
@@ -54,180 +64,165 @@
   \title[Módulo #1 · #2]{#2}%
   \subtitle{#3}%
   \author{\autorcurso}%
-  \institute{\instituicaocurso\\\departamentocurso}%
-  \date{\today}%
+  \date{\localcurso\quad$\cdot$\quad\anocurso}%
 }
 
-% ------------------------------------------------------------ beamer base ----
+% marcadores do modelo da casa
+\newcommand{\pd}[1]{\textcolor{ambar}{\textbf{[#1]}}}          % dado a confirmar
+\newcommand{\dest}[1]{\textcolor{azulpetroleo}{\textbf{#1}}}    % destaque no texto
+
+% ---------------------------------------------------------- estilo Beamer ----
+\usetheme{default}
 \setbeamertemplate{navigation symbols}{}
-\setbeamersize{text margin left=7mm,text margin right=7mm}
+\setbeamersize{text margin left=6mm,text margin right=6mm}
 \setbeamercolor{normal text}{fg=cinzatexto}
-\setbeamercolor{structure}{fg=petroleo}
+\setbeamercolor{structure}{fg=azulpetroleo}
 \setbeamercolor{alerted text}{fg=ambar}
 \setbeamercolor{example text}{fg=verdeok}
-\setbeamercolor{frametitle}{fg=white,bg=petroleo}
-\setbeamercolor{framesubtitle}{fg=ambarclaro}
-\setbeamercolor{linhaambar}{bg=ambar}
-\setbeamercolor{rodape esq}{fg=white,bg=petroleoesc}
-\setbeamercolor{rodape dir}{fg=white,bg=petroleo}
-\setbeamercolor{item projected}{fg=white,bg=petroleo}
-\setbeamerfont{frametitle}{size=\large,series=\bfseries}
-\setbeamerfont{framesubtitle}{size=\footnotesize,series=\mdseries}
-\setbeamerfont{footline}{size=\tiny}
-\setbeamerfont{block title}{size=\small,series=\bfseries}
+\setbeamercolor{itemize/enumerate body}{fg=cinzatexto}
+\setbeamerfont{frametitle}{series=\bfseries,size=\large}
+\setbeamerfont{title}{series=\bfseries,size=\LARGE}
 
-% marcadores de lista
-\setbeamertemplate{itemize item}{\textcolor{ambar}{\small$\blacktriangleright$}}
-\setbeamertemplate{itemize subitem}{\textcolor{petroleo}{\scriptsize$\bullet$}}
+% marcadores: quadrado âmbar e travessão azul
+\setbeamertemplate{itemize item}{\textcolor{ambar}{\rule[0.35ex]{0.5em}{0.5em}}}
+\setbeamertemplate{itemize subitem}{\textcolor{azulpetroleo}{--}}
 \setbeamertemplate{itemize subsubitem}{\textcolor{cinzamedio}{\tiny$\circ$}}
-\setbeamertemplate{enumerate item}{\textcolor{petroleo}{\bfseries\insertenumlabel.}}
-\setbeamertemplate{enumerate subitem}{\textcolor{ambar}{\insertsubenumlabel)}}
+\setbeamertemplate{enumerate item}{\textcolor{azulpetroleo}{\bfseries\insertenumlabel.}}
+\setbeamertemplate{enumerate subitem}{\textcolor{ambar!85!black}{\insertsubenumlabel)}}
 
 % sumário
 \setbeamertemplate{section in toc}{%
-  \leavevmode\textcolor{ambar}{\bfseries\inserttocsectionnumber}\enspace
-  \textcolor{petroleo}{\inserttocsection}\par}
+  \leavevmode\textcolor{ambar}{\rule[0.35ex]{0.5em}{0.5em}}\enspace
+  \textcolor{azulpetroleo}{\inserttocsection}\par}
 \setbeamertemplate{subsection in toc}{}
 
-% título do slide: faixa azul-petróleo + filete âmbar
+% título do slide: texto azul-petróleo + filete âmbar curto
 \setbeamertemplate{frametitle}{%
-  \nointerlineskip%
-  \begin{beamercolorbox}[wd=\paperwidth,ht=3.1ex,dp=1.3ex,leftskip=7mm,rightskip=7mm plus1fil]{frametitle}%
-    \def\cod##1{{\ttfamily\color{ambarclaro}##1}}%
-    \usebeamerfont{frametitle}\insertframetitle%
+  \nointerlineskip
+  \begin{beamercolorbox}[wd=\paperwidth,ht=2.8ex,dp=1.1ex,leftskip=0.6cm,rightskip=0.4cm plus1fil]{}%
+    \codclarotrue\color{azulpetroleo}\usebeamerfont{frametitle}\insertframetitle%
     \ifx\insertframesubtitle\@empty\else%
-      \hspace{0.6em}{\usebeamerfont{framesubtitle}\usebeamercolor[fg]{framesubtitle}\insertframesubtitle}%
+      \hspace{0.6em}{\normalfont\footnotesize\color{cinzatexto}\insertframesubtitle}%
     \fi%
   \end{beamercolorbox}%
-  \nointerlineskip%
-  \begin{beamercolorbox}[wd=\paperwidth,ht=1.6pt,dp=0pt]{linhaambar}\end{beamercolorbox}%
-  \vskip2pt%
+  \hspace*{0.6cm}\textcolor{ambar}{\rule{2.2cm}{2.2pt}}\vspace{0.1em}
 }
 
-% rodapé: barra de progresso + identificação + número do slide
+% rodapé: título curto à esquerda, número do slide em âmbar à direita
 \setbeamertemplate{footline}{%
-  \leavevmode%
-  \begin{tikzpicture}[x=1pt,y=1pt]
-    \fill[cinzaclaro] (0,0) rectangle (\the\paperwidth,1.4);
-    \pgfmathsetmacro{\progresso}{min(1,\insertframenumber/max(1,\inserttotalframenumber))}
-    \fill[ambar] (0,0) rectangle ({\progresso*\the\paperwidth},1.4);
-  \end{tikzpicture}\par\nointerlineskip%
   \hbox{%
-  \begin{beamercolorbox}[wd=.78\paperwidth,ht=2.3ex,dp=0.9ex,leftskip=7mm]{rodape esq}%
-    \usebeamerfont{footline}\textbf{DevMobile}\enspace\textcolor{ambarclaro}{|}\enspace\insertshorttitle%
-  \end{beamercolorbox}%
-  \begin{beamercolorbox}[wd=.22\paperwidth,ht=2.3ex,dp=0.9ex,rightskip=7mm,right]{rodape dir}%
-    \usebeamerfont{footline}\insertframenumber\,/\,\inserttotalframenumber%
-  \end{beamercolorbox}}%
+    \begin{beamercolorbox}[wd=0.5\paperwidth,ht=2.2ex,dp=1.0ex,leftskip=0.6cm]{}%
+      \tiny\color{azulpetroleo}\insertshorttitle%
+    \end{beamercolorbox}%
+    \begin{beamercolorbox}[wd=0.5\paperwidth,ht=2.2ex,dp=1.0ex,rightskip=0.6cm]{}%
+      \hfill\tiny\color{ambar}\textbf{\insertframenumber}%
+    \end{beamercolorbox}%
+  }%
 }
 
-% ----------------------------------------------------------- celular TikZ ----
-% \celular[escala]{conteúdo da tela} — ícone de smartphone decorativo
-\newcommand{\celular}[2][1]{%
-  \begin{tikzpicture}[scale=#1,every node/.style={transform shape}]
-    \draw[line width=1.6pt,rounded corners=6pt,fill=petroleoesc] (0,0) rectangle (2.2,4.2);
-    \fill[white!96!petroleo,rounded corners=2pt] (0.15,0.45) rectangle (2.05,3.85);
-    \fill[ambar] (0.85,4.0) rectangle (1.35,4.06);
-    \draw[line width=0.8pt,ambar] (1.1,0.22) circle (0.1);
-    \node[align=center,text width=1.7cm,font=\tiny] at (1.1,2.15) {#2};
-  \end{tikzpicture}}
-
-% ------------------------------------------------------------------ capa ----
-\setbeamertemplate{title page}{%
+% ------------------------------------------------------------------- capa ----
+\newcommand{\capa}{%
+\begin{frame}[plain,noframenumbering]
   \begin{tikzpicture}[remember picture,overlay]
-    \fill[petroleo] (current page.south west) rectangle (current page.north east);
-    \fill[petroleoesc] (current page.south west) rectangle ([yshift=1.25cm]current page.south east);
-    \fill[ambar] ([yshift=1.25cm]current page.south west) rectangle ([yshift=1.33cm]current page.south east);
-    % padrão decorativo de pontos
-    \foreach \i in {0,...,9}{\foreach \j in {0,...,5}{
-      \fill[white,opacity=0.07] ([xshift=-0.4cm-\i*0.42cm,yshift=-0.5cm-\j*0.42cm]current page.north east) circle (1.3pt);}}
-    % smartphone estilizado
-    \begin{scope}[shift={([xshift=-4.0cm,yshift=-2.55cm]current page.east)},scale=1.15]
-      \draw[white,line width=1.8pt,rounded corners=7pt] (0,0) rectangle (2.3,4.4);
-      \fill[white,opacity=0.10,rounded corners=3pt] (0.16,0.5) rectangle (2.14,4.0);
-      \fill[ambar] (0.9,4.16) rectangle (1.4,4.23);
-      \draw[ambar,line width=1pt] (1.15,0.25) circle (0.11);
-      \foreach \y in {3.55,3.15,2.75}{\fill[white,opacity=0.55,rounded corners=1pt] (0.35,\y) rectangle (1.95,\y+0.22);}
-      \fill[ambar,rounded corners=2pt] (0.35,1.0) rectangle (1.95,1.45);
-      \fill[white,opacity=0.35,rounded corners=1pt] (0.35,1.7) rectangle (1.15,2.45);
-      \fill[white,opacity=0.35,rounded corners=1pt] (1.25,1.7) rectangle (1.95,2.45);
-    \end{scope}
-    \node[anchor=north west,font=\footnotesize\bfseries,text=ambarclaro]
-      at ([xshift=7mm,yshift=-9mm]current page.north west) {\MakeUppercase{\nomecurso}};
-    \node[anchor=south west,font=\Large\bfseries,text=ambar]
-      at ([xshift=7mm,yshift=0.95cm]current page.west) {MÓDULO \nummodulo};
-    \node[anchor=north west,text width=8.6cm,font=\LARGE\bfseries,text=white,align=left]
-      (titulo) at ([xshift=7mm,yshift=0.85cm]current page.west) {\inserttitle};
-    \node[anchor=north west,text width=8.6cm,font=\small,text=white!80!ambar,align=left]
-      at ([yshift=-1mm]titulo.south west) {\insertsubtitle};
-    \node[anchor=south west,font=\scriptsize,text=white,align=left]
-      at ([xshift=7mm,yshift=2.5mm]current page.south west) {\textbf{\insertauthor}\\\insertinstitute};
-    \node[anchor=south east,font=\scriptsize,text=white!70]
-      at ([xshift=-7mm,yshift=3mm]current page.south east) {\insertdate};
-  \end{tikzpicture}%
-}
-\newcommand{\capa}{\begin{frame}[plain,noframenumbering]\titlepage\end{frame}}
+    \fill[azulpetroleo] (current page.north west) rectangle (current page.south east);
+    \fill[ambar] (current page.north west) rectangle ([xshift=0.22cm]current page.south west);
+    \node[anchor=south west,font=\footnotesize\bfseries,text=ambarclaro]
+      at ([xshift=1.45cm,yshift=2.75cm]current page.west)
+      {\MakeUppercase{\nomecurso}\quad$\cdot$\quad MÓDULO \nummodulo};
+    \node[anchor=north west,text width=0.78\paperwidth,align=left]
+      at ([xshift=1.4cm,yshift=2.6cm]current page.west)
+      {\color{white}\LARGE\bfseries\inserttitle};
+    \draw[ambar,line width=3pt] ([xshift=1.45cm,yshift=0.55cm]current page.west) -- ++(3.5,0);
+    \node[anchor=north west,text width=0.78\paperwidth]
+      at ([xshift=1.45cm,yshift=0.10cm]current page.west)
+      {\color{ambarclaro}\normalsize\insertsubtitle};
+    \node[anchor=north west,text width=0.78\paperwidth]
+      at ([xshift=1.45cm,yshift=-1.05cm]current page.west)
+      {\color{white}\large\bfseries\insertauthor};
+    \node[anchor=south west] at ([xshift=1.45cm,yshift=1.0cm]current page.south west)
+      {\color{white!70}\footnotesize\insertdate};
+  \end{tikzpicture}
+\end{frame}}
 
-% ------------------------------------------------------- divisor de seção ----
+% ------------------------------------------------------- página de seção ----
 \AtBeginSection[]{%
-  \begin{frame}[plain,noframenumbering]
-    \begin{tikzpicture}[remember picture,overlay]
-      \fill[petroleoesc] (current page.south west) rectangle (current page.north east);
-      \fill[ambar] ([xshift=7mm,yshift=-0.2cm]current page.west) rectangle ([xshift=9mm,yshift=1.9cm]current page.west);
-      \node[anchor=south west,font=\fontsize{40}{40}\selectfont\bfseries,text=ambar]
-        at ([xshift=12mm,yshift=0.55cm]current page.west) {\insertsectionnumber};
-      \node[anchor=north west,text width=11cm,font=\LARGE\bfseries,text=white,align=left]
-        at ([xshift=12mm,yshift=0.45cm]current page.west) {\insertsectionhead};
-      \node[anchor=south west,font=\scriptsize,text=white!65]
-        at ([xshift=7mm,yshift=4mm]current page.south west) {DevMobile \textbullet\ Módulo \nummodulo\ \textbullet\ \inserttitle};
-    \end{tikzpicture}
-  \end{frame}
-}
+\begin{frame}[plain,noframenumbering]
+  \begin{tikzpicture}[remember picture,overlay]
+    \fill[azulpetroleo] (current page.north west) rectangle (current page.south east);
+    \node[anchor=west,text width=0.8\paperwidth] at ([xshift=1.2cm,yshift=0.3cm]current page.west)
+      {\color{white}\Huge\bfseries\insertsectionhead};
+    \draw[ambar,line width=2.5pt] ([xshift=1.2cm,yshift=-0.9cm]current page.west) -- ++(3.2,0);
+  \end{tikzpicture}
+\end{frame}}
 
-% sumário do módulo
+% -------------------------------------------------------- roteiro e fim ----
 \newcommand{\sumario}{%
-  \begin{frame}{Roteiro do módulo}
-    \begin{multicols}{2}\tableofcontents\end{multicols}
+  \begin{frame}{Roteiro}
+    \vspace{0.3em}
+    \begin{caixatitulo}{Neste módulo}
+      \begin{multicols}{2}\small\tableofcontents\end{multicols}
+    \end{caixatitulo}
   \end{frame}}
 
-% slide de encerramento
 \newcommand{\encerramento}[1]{%
   \begin{frame}[plain,noframenumbering]
     \begin{tikzpicture}[remember picture,overlay]
-      \fill[petroleo] (current page.south west) rectangle (current page.north east);
-      \fill[ambar] ([yshift=-0.9cm]current page.west) rectangle ([yshift=-0.82cm]current page.east);
-      \node[font=\Huge\bfseries,text=white] at ([yshift=0.6cm]current page.center) {Fim do Módulo \nummodulo};
-      \node[font=\small,text=white!80,text width=11cm,align=center] at ([yshift=-1.7cm]current page.center)
-        {\textcolor{ambarclaro}{\textbf{Próximo:}} #1};
+      \fill[azulpetroleo] (current page.north west) rectangle (current page.south east);
+      \draw[ambar,line width=3pt] ([xshift=1.2cm,yshift=1.6cm]current page.west) -- ++(3.5,0);
+      \node[anchor=west,text width=0.8\paperwidth] at ([xshift=1.2cm,yshift=0.6cm]current page.west)
+        {\color{white}\Huge\bfseries Fim do Módulo \nummodulo};
+      \node[anchor=north west,text width=0.72\paperwidth] at ([xshift=1.25cm,yshift=-0.4cm]current page.west)
+        {\color{ambarclaro}\normalsize\textbf{Próximo:} #1};
     \end{tikzpicture}
   \end{frame}}
 
-% ------------------------------------------------------- caixas tcolorbox ----
+% \codclarotrue: \cod herda a cor do texto (títulos, caixas escuras)
+\newif\ifcodclaro
+
+% ---------------------------------------------------------------- caixas ----
+% As três caixas do modelo da casa
+\newtcolorbox{caixadestaque}[1][]{%
+  enhanced, colback=cinzafundo, colframe=azulpetroleo,
+  boxrule=0pt, leftrule=3pt, arc=1pt, left=6pt, right=6pt, top=5pt, bottom=5pt,
+  before skip=4pt, after skip=4pt, fontupper=\small, #1}
+\newtcolorbox{caixaambar}[1][]{%
+  enhanced, colback=ambarclaro!35, colframe=ambar,
+  boxrule=0pt, leftrule=3pt, arc=1pt, left=6pt, right=6pt, top=5pt, bottom=5pt,
+  before skip=4pt, after skip=4pt, fontupper=\small, #1}
+\newtcolorbox{caixatitulo}[2][]{%
+  enhanced, colback=white, colframe=azulpetroleo, boxrule=0.8pt, arc=2pt,
+  fonttitle=\small\bfseries\codclarotrue, colbacktitle=azulpetroleo, coltitle=white, halign title=flush left,
+  toptitle=0.5pt, bottomtitle=0.5pt, title={#2}, fontupper=\footnotesize,
+  left=5pt, right=5pt, top=3pt, bottom=3pt, before skip=3pt, after skip=3pt, #1}
+
+% Caixas semânticas do curso, construídas sobre as três acima
 \tcbset{
-  dmbase/.style={enhanced,arc=2pt,boxrule=0.6pt,left=5pt,right=5pt,top=3pt,bottom=3pt,
-    fonttitle=\bfseries\scriptsize\codclarotrue,fontupper=\small,coltitle=white,halign=left,
-    before skip=4pt,after skip=4pt,attach boxed title to top left={xshift=6pt,yshift=-2mm},
-    boxed title style={arc=1pt,boxrule=0pt,top=1pt,bottom=1pt}},
+  casatitulo/.style={enhanced, colback=white, boxrule=0.8pt, arc=2pt,
+    fonttitle=\small\bfseries\codclarotrue, coltitle=white, halign title=flush left, toptitle=0.5pt, bottomtitle=0.5pt,
+    fontupper=\footnotesize, halign=left, left=5pt, right=5pt, top=3pt, bottom=3pt,
+    before skip=3pt, after skip=3pt},
+  casafaixa/.style={enhanced, boxrule=0pt, leftrule=3pt, arc=1pt,
+    left=6pt, right=6pt, top=3pt, bottom=3pt, fontupper=\small, halign=left,
+    before skip=3pt, after skip=3pt},
 }
-\newtcolorbox{conceito}[1][Conceito]{dmbase,colback=petroleo!5,colframe=petroleo,
-  boxed title style={colback=petroleo},title={#1},top=6pt}
-\newtcolorbox{dica}[1][Dica]{dmbase,colback=petroleoesc!6,colframe=petroleoesc,
-  boxed title style={colback=petroleoesc},title={#1},top=6pt}
-\newtcolorbox{atencao}[1][Atenção]{dmbase,colback=ambar!9,colframe=ambar,
-  boxed title style={colback=ambar},title={#1},top=6pt}
-\newtcolorbox{exemplo}[1][Exemplo]{dmbase,colback=verdeok!6,colframe=verdeok,
-  boxed title style={colback=verdeok},title={#1},top=6pt}
-\newtcolorbox{erro}[1][Erro comum]{dmbase,colback=vermelhoerro!6,colframe=vermelhoerro,
-  boxed title style={colback=vermelhoerro},title={#1},top=6pt}
-\newtcolorbox{exercicio}[1][Exercício]{dmbase,colback=white,colframe=ambar,
-  boxed title style={colback=petroleo},title={#1},top=6pt,borderline west={3pt}{0pt}{ambar}}
-\newtcolorbox{projeto}[1][Projeto LabMonitor]{dmbase,colback=ambar!5,colframe=petroleo,
-  boxed title style={colback=ambar},title={#1},top=6pt,borderline west={3pt}{0pt}{petroleo}}
-\newtcolorbox{resumo}[1][Resumo]{dmbase,colback=petroleo!4,colframe=petroleo!60,
-  boxed title style={colback=petroleo!80},title={#1},top=6pt}
-% caixa simples sem título (para destacar uma ideia)
-\newtcolorbox{destaque}[1][]{enhanced,arc=2pt,boxrule=0pt,colback=petroleo,colupper=white,
-  left=6pt,right=6pt,top=4pt,bottom=4pt,fontupper=\small,halign=center,#1}
+% com faixa de título (caixatitulo)
+\newtcolorbox{conceito}[1][Conceito]{casatitulo, colframe=azulpetroleo, colbacktitle=azulpetroleo, title={#1}}
+\newtcolorbox{resumo}[1][Resumo]{casatitulo, colframe=azulpetroleo, colbacktitle=azulpetroleo, title={#1}}
+\newtcolorbox{exemplo}[1][Exemplo]{casatitulo, colframe=azulprofundo, colbacktitle=azulprofundo, title={#1}}
+\newtcolorbox{exercicio}[1][Exercício]{casatitulo, colframe=ambar, colbacktitle=ambar,
+  coltitle=azulpetroleo, title={#1}}
+% com faixa lateral (caixadestaque / caixaambar) e título na primeira linha
+\newtcolorbox{dica}[1][Dica]{casafaixa, colback=cinzafundo, colframe=azulpetroleo,
+  before upper={{\bfseries\color{azulpetroleo}#1}\par\vspace{2pt}}}
+\newtcolorbox{atencao}[1][Atenção]{casafaixa, colback=ambarclaro!35, colframe=ambar,
+  before upper={{\bfseries\color{ambar!70!black}#1}\par\vspace{2pt}}}
+\newtcolorbox{projeto}[1][Projeto LabMonitor]{casafaixa, colback=ambarclaro!35, colframe=azulpetroleo,
+  before upper={{\bfseries\color{azulpetroleo}#1}\par\vspace{2pt}}}
+\newtcolorbox{erro}[1][Erro comum]{casafaixa, colback=vermelhoerro!6, colframe=vermelhoerro,
+  before upper={{\bfseries\color{vermelhoerro}#1}\par\vspace{2pt}}}
+% frase de efeito centralizada (estilo caixaambar)
+\newtcolorbox{destaque}[1][]{casafaixa, colback=ambarclaro!35, colframe=ambar, halign=center,
+  top=5pt, bottom=5pt, #1}
 
 % ----------------------------------------------------------- linguagens ----
 \lstdefinelanguage{Kotlin}{
@@ -287,12 +282,12 @@
 }
 
 \lstdefinestyle{dm}{
-  basicstyle=\ttfamily\fontsize{6.6}{7.7}\selectfont\color{cinzatexto},
+  basicstyle=\ttfamily\fontsize{6.4}{7.35}\selectfont\color{cinzatexto},
   keywordstyle=\color{petroleo}\bfseries,
   keywordstyle=[2]\color{petroleoesc!85!cyan},
-  keywordstyle=[3]\color{ambar!85!black}\bfseries,
+  keywordstyle=[3]\color{ambar!75!black}\bfseries,
   commentstyle=\color{cinzamedio}\itshape,
-  stringstyle=\color{ambar!65!black},
+  stringstyle=\color{ambar!60!black},
   showstringspaces=false,
   columns=flexible,
   keepspaces=true,
@@ -317,45 +312,55 @@
 %   ex.: \begin{codigo}[title=MainActivity.kt]{Kotlin}
 \newtcblisting{codigo}[2][]{enhanced,listing only,
   listing options={style=dm,language=#2},
-  colback=codefundo,colframe=cinzaclaro,boxrule=0.4pt,arc=2pt,
-  borderline west={2.2pt}{0pt}{ambar},
+  colback=cinzafundo,colframe=azulpetroleo,boxrule=0.6pt,arc=2pt,
   left=6pt,right=3pt,top=2pt,bottom=2pt,before skip=3pt,after skip=3pt,
-  fonttitle=\ttfamily\scriptsize\bfseries,coltitle=white,colbacktitle=petroleo,
+  fonttitle=\ttfamily\scriptsize\bfseries,coltitle=white,colbacktitle=azulpetroleo,
   toptitle=0.5pt,bottomtitle=0.5pt,#1}
 % terminal (fundo escuro)
 \newtcblisting{terminal}[1][]{enhanced,listing only,
-  listing options={style=dm,language=bash,basicstyle=\ttfamily\fontsize{6.6}{7.7}\selectfont\color{white},
+  listing options={style=dm,language=bash,basicstyle=\ttfamily\fontsize{6.4}{7.35}\selectfont\color{white},
     keywordstyle=\color{ambarclaro},commentstyle=\color{white!60}\itshape,stringstyle=\color{ambarclaro}},
-  colback=petroleoesc,colframe=petroleoesc,boxrule=0pt,arc=2pt,
+  colback=azulprofundo,colframe=azulprofundo,boxrule=0pt,arc=2pt,
   left=6pt,right=3pt,top=2pt,bottom=2pt,before skip=3pt,after skip=3pt,
-  fonttitle=\ttfamily\scriptsize\bfseries,coltitle=petroleoesc,colbacktitle=ambar,
+  fonttitle=\ttfamily\scriptsize\bfseries,coltitle=azulpetroleo,colbacktitle=ambar,
   toptitle=0.5pt,bottomtitle=0.5pt,#1}
 
 % código em linha (sem caracteres especiais de TeX: use \_ \# \{ \})
-\newif\ifcodclaro
-\newcommand{\cod}[1]{{\ttfamily\ifcodclaro\else\color{petroleoesc}\fi#1}}
-\newcommand{\arq}[1]{{\ttfamily\color{ambar!80!black}#1}}
-\newcommand{\termo}[1]{\textbf{\textcolor{petroleo}{#1}}}
+\newcommand{\cod}[1]{{\ttfamily\ifcodclaro\else\color{azulprofundo}\fi#1}}
+\newcommand{\arq}[1]{{\ttfamily\color{ambar!70!black}#1}}
+\newcommand{\termo}[1]{\textbf{\textcolor{azulpetroleo}{#1}}}
 
 % ----------------------------------------------------------- estilos TikZ ----
+% diagramas no padrão da casa: cinza-fundo com contorno azul-petróleo
 \tikzset{
-  caixa/.style={draw=petroleo,fill=petroleo!7,rounded corners=3pt,align=center,
-    font=\scriptsize,minimum height=7mm,inner sep=3pt,text=cinzatexto,line width=0.6pt},
-  caixaescura/.style={caixa,fill=petroleo,text=white,execute at begin node=\codclarotrue},
-  caixapetroleo/.style={caixa,draw=petroleoesc,fill=petroleoesc,text=white,execute at begin node=\codclarotrue},
-  caixaambar/.style={caixa,draw=ambar,fill=ambar!15},
-  caixaambarforte/.style={caixa,draw=ambar,fill=ambar,text=white,execute at begin node=\codclarotrue},
+  caixa/.style={draw=azulpetroleo,fill=cinzafundo,rounded corners=3pt,align=center,
+    font=\scriptsize,minimum height=7mm,inner sep=3pt,text=cinzatexto,line width=0.8pt},
+  caixaescura/.style={caixa,fill=azulpetroleo,text=white,execute at begin node=\codclarotrue},
+  caixapetroleo/.style={caixa,draw=azulprofundo,fill=azulprofundo,text=white,execute at begin node=\codclarotrue},
+  caixaambar/.style={caixa,draw=ambar,fill=ambarclaro!45},
+  caixaambarforte/.style={caixa,draw=ambar,fill=ambar,text=azulpetroleo,font=\scriptsize\bfseries,
+    execute at begin node=\codclarotrue},
   camada/.style={caixa,minimum width=8.5cm,minimum height=6.5mm},
-  seta/.style={-{Stealth[length=2mm]},line width=0.8pt,petroleo},
+  seta/.style={-{Stealth[length=2mm]},line width=0.8pt,azulpetroleo},
   setaambar/.style={seta,ambar},
   setatrac/.style={seta,dashed},
   rotulo/.style={font=\tiny,text=cinzamedio,align=center},
-  pontilhado/.style={draw=cinzamedio,dashed,rounded corners=4pt,inner sep=5pt},
+  pontilhado/.style={draw=azulpetroleo!50,dashed,rounded corners=4pt,inner sep=5pt},
 }
+
+% \celular[escala]{conteúdo da tela} --- smartphone decorativo
+\newcommand{\celular}[2][1]{%
+  \begin{tikzpicture}[scale=#1,every node/.style={transform shape}]
+    \draw[line width=1.6pt,rounded corners=6pt,fill=azulprofundo,draw=azulpetroleo] (0,0) rectangle (2.2,4.2);
+    \fill[white,rounded corners=2pt] (0.15,0.45) rectangle (2.05,3.85);
+    \fill[ambar] (0.85,4.0) rectangle (1.35,4.06);
+    \draw[line width=0.8pt,ambar] (1.1,0.22) circle (0.1);
+    \node[align=center,text width=1.7cm,font=\tiny] at (1.1,2.15) {#2};
+  \end{tikzpicture}}
 
 % tabelas mais arejadas
 \renewcommand{\arraystretch}{1.25}
 \newcolumntype{L}{>{\raggedright\arraybackslash}X}
-\newcommand{\cabecalho}[1]{\textcolor{petroleo}{\textbf{#1}}}
+\newcommand{\cabecalho}[1]{\textcolor{azulpetroleo}{\textbf{#1}}}
 
 \endinput

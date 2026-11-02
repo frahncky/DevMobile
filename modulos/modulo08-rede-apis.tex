@@ -442,10 +442,10 @@ override suspend fun reservar(r: NovaReserva) {
     \end{column}
     \begin{column}{0.42\textwidth}
       \begin{atencao}[Conflitos]
-        Se duas pessoas reservarem a mesma bancada offline, o servidor decide. Trate \cod{409 Conflict} avisando o usuário e removendo a reserva local.
+        Reservas offline conflitantes: o servidor decide. Trate \cod{409 Conflict} avisando o usuário.
       \end{atencao}
       \begin{dica}[Mostre a idade dos dados]
-        ``Atualizado há 3 min'' e um ícone de nuvem riscado quando offline deixam claro o que o usuário está vendo.
+        ``Atualizado há 3 min'' e um ícone de offline deixam claro o que se vê.
       \end{dica}
       \begin{dica}
         Monitore a conectividade com o \cod{ConnectivityManager} (\cod{registerDefault}\-\cod{NetworkCallback}) convertido em \cod{Flow} via \cod{callbackFlow}.

@@ -134,14 +134,14 @@ open("anomalia.tflite", "wb").write(conv.convert())
     \begin{column}{0.48\textwidth}
       \begin{atencao}[Cuidados]
         \begin{itemize}
-          \item Respostas de LLM podem estar erradas: mostre como sugestão e deixe o usuário confirmar.
-          \item Não envie dados pessoais sem necessidade e sem informar o usuário (LGPD).
-          \item Defina limites de uso e trate falhas e lentidão da rede.
-          \item Quantize modelos locais (\emph{int8}) para reduzir tamanho e consumo.
+          \item LLMs erram: mostre como sugestão e peça confirmação.
+          \item Dados pessoais só com necessidade e aviso (LGPD).
+          \item Limite o uso e trate falhas da rede.
+          \item Quantize modelos locais (\emph{int8}).
         \end{itemize}
       \end{atencao}
       \begin{dica}
-        Valide o desempenho do modelo no aparelho mais fraco que seu público usa, não só no seu celular.
+        Teste o modelo no aparelho mais fraco do seu público.
       \end{dica}
     \end{column}
   \end{columns}
@@ -287,14 +287,14 @@ open("anomalia.tflite", "wb").write(conv.convert())
     \begin{column}{0.5\textwidth}
       \begin{conceito}[Requisitos mínimos]
         \begin{enumerate}
-          \item Pelo menos 4 telas com Navigation 3 e Material 3.
-          \item Arquitetura MVVM com repositórios e Hilt.
-          \item Persistência local (Room e DataStore).
-          \item Integração com API REST ou Firebase.
-          \item Funcionamento offline nas telas principais.
-          \item Pelo menos um recurso do dispositivo (BLE, câmera, sensores, localização).
-          \item Testes unitários dos ViewModels e casos de uso.
-          \item Acessibilidade verificada e tema escuro.
+          \item 4+ telas com Navigation 3 e Material 3.
+          \item MVVM com repositórios e Hilt.
+          \item Room e DataStore.
+          \item API REST ou Firebase.
+          \item Offline nas telas principais.
+          \item Um recurso do dispositivo (BLE, câmera\ldots).
+          \item Testes de ViewModels e casos de uso.
+          \item Acessibilidade e tema escuro.
         \end{enumerate}
       \end{conceito}
     \end{column}
@@ -305,7 +305,6 @@ open("anomalia.tflite", "wb").write(conv.convert())
           \item Controle de empréstimo de equipamentos do laboratório via QR code.
           \item Medidor de consumo de energia com ESP32 e sensor de corrente.
           \item App de acompanhamento de estágio ou TCC.
-          \item Coletor de dados de vibração de motores pelo acelerômetro.
         \end{itemize}
       \end{projeto}
       \begin{dica}
@@ -362,17 +361,17 @@ open("anomalia.tflite", "wb").write(conv.convert())
 
 \begin{frame}{A jornada completa}
   \begin{center}
-  \begin{tikzpicture}[x=1.08cm,
-      etapa/.style={caixa,minimum width=1.75cm,minimum height=9mm,font=\tiny,text width=1.6cm}]
+  \begin{tikzpicture}[x=1.0cm,
+      etapa/.style={caixa,minimum width=1.75cm,minimum height=9mm,font=\tiny,text width=1.55cm,inner sep=2pt}]
     \foreach \i/\t/\s in {0/Ecossistema/caixa,1/Ambiente/caixa,2/Kotlin/caixa,3/Coroutines/caixa,4/Compose/caixaambar,
                           5/Estado e navegação/caixaambar,6/Arquitetura/caixaambar}{
       \node[etapa,\s] (a\i) at (\i*1.9,0) {M\i\\ \t};}
     \foreach \i/\t/\s [count=\k from 7] in {0/Persistência/caixapetroleo,1/Rede e APIs/caixapetroleo,2/Firebase/caixapetroleo,
-                          3/Dispositivo e IoT/caixapetroleo,4/Testes/caixaescura,5/Publicação/caixaescura,6/Multiplataforma/caixaescura}{
+                          3/Dispositivo e IoT/caixapetroleo,4/Testes/caixaescura,5/Publicação/caixaescura,6/Multi-\\plataforma/caixaescura}{
       \node[etapa,\s] (b\i) at (\i*1.9,-1.5) {M\k\\ \t};}
     \foreach \i [evaluate=\i as \j using int(\i+1)] in {0,...,5}{\draw[seta] (a\i) -- (a\j); \draw[seta] (b\i) -- (b\j);}
     \draw[seta,rounded corners] (a6.south) -- ++(0,-2mm) -| (b0.north);
-    \node[caixaambarforte,minimum width=12cm,minimum height=8mm] at (5.7,-2.9) {\textbf{M14 --- IA, segurança e projeto final: o LabMonitor publicado}};
+    \node[caixaambarforte,minimum width=11.4cm,minimum height=8mm] at (5.7,-2.9) {\textbf{M14 --- IA, segurança e projeto final: o LabMonitor publicado}};
   \end{tikzpicture}
   \end{center}
   \begin{resumo}[O que você construiu]
@@ -410,12 +409,13 @@ open("anomalia.tflite", "wb").write(conv.convert())
 
 \begin{frame}[plain,noframenumbering]
   \begin{tikzpicture}[remember picture,overlay]
-    \fill[petroleo] (current page.south west) rectangle (current page.north east);
-    \fill[ambar] ([yshift=-0.9cm]current page.west) rectangle ([yshift=-0.82cm]current page.east);
-    \node[font=\Huge\bfseries,text=white] at ([yshift=0.7cm]current page.center) {Obrigado!};
-    \node[font=\large,text=ambarclaro] at ([yshift=-0.2cm]current page.center) {Fim do curso \nomecurso};
-    \node[font=\small,text=white!80,text width=11cm,align=center] at ([yshift=-1.7cm]current page.center)
-      {\autorcurso\\ \instituicaocurso\\ \departamentocurso};
+    \fill[azulpetroleo] (current page.north west) rectangle (current page.south east);
+    \draw[ambar,line width=3pt] ([xshift=1.2cm,yshift=1.6cm]current page.west) -- ++(3.5,0);
+    \node[anchor=west,text width=0.8\paperwidth] at ([xshift=1.2cm,yshift=0.6cm]current page.west)
+      {\color{white}\Huge\bfseries Obrigado!};
+    \node[anchor=west,text width=0.72\paperwidth] at ([xshift=1.25cm,yshift=-0.9cm]current page.west)
+      {\color{ambarclaro}\normalsize \autorcurso\\[2pt]
+       \color{white!75}\footnotesize Fim do curso \nomecurso};
   \end{tikzpicture}
 \end{frame}
 

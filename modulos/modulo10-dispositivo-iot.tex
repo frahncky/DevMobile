@@ -136,10 +136,10 @@ suspend fun lerPatrimonio(ctx: Context): String? =
     \end{column}
     \begin{column}{0.46\textwidth}
       \begin{conceito}[Menos permissões, mais privacidade]
-        O \textbf{Photo Picker} e o \textbf{leitor de códigos} rodam em processos do sistema: o app recebe só o resultado e não precisa de permissão de câmera nem de acesso à galeria.
+        \textbf{Photo Picker} e \textbf{leitor de códigos} rodam no sistema: o app recebe só o resultado, sem permissão de câmera ou galeria.
       \end{conceito}
       \begin{dica}[Ideia para o laboratório]
-        Cole etiquetas com QR code do número de patrimônio nos equipamentos. Ler o código abre direto a ficha do equipamento no LabMonitor.
+        QR code com o patrimônio em cada equipamento: ler o código abre a ficha no LabMonitor.
       \end{dica}
       \begin{dica}
         Para preview de câmera personalizado, análise quadro a quadro ou visão computacional, use \textbf{CameraX} (exige a permissão \cod{CAMERA}).
@@ -361,7 +361,6 @@ class InclinacaoViewModel @Inject constructor(
 #define SVC_UUID  "4fafc201-1fb5-459e-8fcc-c5c9c331914b"
 #define TEMP_UUID "beb5483e-36e1-4688-b7f5-ea07361b26a8"
 BLECharacteristic *temp;
-
 void setup() {
   BLEDevice::init("LabMonitor-B3");
   BLEServer *srv = BLEDevice::createServer();
@@ -390,7 +389,7 @@ void loop() {
         \cod{int16\_t} em centésimos de grau: 2 bytes, \emph{little-endian}.
       \end{conceito}
       \begin{atencao}[Contrato]
-        UUIDs, escala e ordem dos bytes formam o contrato firmware--app. Documente-o e gere UUIDs próprios (\cod{uuidgen}).
+        UUIDs, escala e ordem dos bytes: documente o contrato e gere UUIDs próprios.
       \end{atencao}
     \end{column}
   \end{columns}

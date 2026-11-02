@@ -159,7 +159,7 @@ sealed interface DetalheUiState {
 }
 \end{codigo}
       \begin{dica}[Qual escolher?]
-        \textbf{sealed}: estados mutuamente exclusivos (carregando \emph{ou} pronto \emph{ou} erro). \textbf{data class}: vários aspectos convivem (lista + filtro + mensagem).
+        \textbf{sealed}: estados exclusivos (carregando, pronto ou erro). \textbf{data class}: aspectos que convivem (lista, filtro, mensagem).
       \end{dica}
       \begin{conceito}
         O \cod{UiState} é \textbf{imutável}: cada mudança gera uma cópia com \cod{copy()}.

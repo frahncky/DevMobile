@@ -1,6 +1,6 @@
 # DevMobile: Desenvolvimento de Aplicativos Mobile
 
-Material de estudo em **slides Beamer (LaTeX)**, organizado em **15 módulos independentes**, que vai do ecossistema mobile até a publicação na Google Play, com IoT (ESP32 via BLE e MQTT), multiplataforma e IA no dispositivo.
+Material de estudo em **slides Beamer (LaTeX)** no modelo da casa (azul-petróleo e âmbar), organizado em **15 módulos independentes**, que vai do ecossistema mobile até a publicação na Google Play, com IoT (ESP32 via BLE e MQTT), multiplataforma e IA no dispositivo.
 
 A stack principal é **Kotlin + Jetpack Compose**, com a arquitetura recomendada pelo Google (MVVM, repositórios e Hilt), Room, Retrofit e Firebase. Um projeto integrador, o **LabMonitor** (um app para laboratórios de eletroeletrônica), evolui ao longo de todos os módulos.
 
@@ -33,7 +33,7 @@ Cada módulo traz objetivos, roteiro, teoria com diagramas em TikZ, código come
 ```
 DevMobile/
 ├── estilo/
-│   └── devmobile.sty          # tema compartilhado (cores, caixas, código, TikZ)
+│   └── devmobile.sty          # modelo da casa: cores, capa, seções, caixas, código, TikZ
 ├── modulos/
 │   ├── modulo00-apresentacao.tex
 │   ├── ...
@@ -65,18 +65,37 @@ latexmk -pdf modulo04-compose.tex
 
 **Overleaf:** envie o repositório inteiro (mantendo as pastas `estilo/` e `modulos/`) e escolha o módulo desejado como documento principal. O estilo é encontrado tanto ao compilar dentro de `modulos/` quanto a partir da raiz.
 
+## Modelo visual
+
+Todos os módulos usam o **modelo Beamer da casa**, definido em `estilo/devmobile.sty`:
+
+- paleta azul-petróleo (`#0D3052`, `#0E3B43`) e âmbar (`#F2A104`, `#FFD8A0`), com fundo `#F3F5F7` e texto `#3C4A55`;
+- título do slide em azul-petróleo sobre fundo branco, com filete âmbar curto;
+- rodapé limpo: título curto à esquerda e número do slide em âmbar à direita;
+- marcadores quadrados em âmbar;
+- capa, páginas de seção e encerramento em azul-petróleo sólido, com filete âmbar;
+- caixas `caixadestaque`, `caixaambar` e `caixatitulo`.
+
 ## Personalização
 
 Os dados do curso ficam no início de `estilo/devmobile.sty`:
 
 ```latex
 \newcommand{\nomecurso}{Desenvolvimento de Aplicativos Mobile}
-\newcommand{\autorcurso}{Prof. Dr. Francisco}
-\newcommand{\instituicaocurso}{IFMA -- Campus São Luís -- Monte Castelo}
-\newcommand{\departamentocurso}{Departamento de Eletroeletrônica (DEE)}
+\newcommand{\autorcurso}{Prof. Dr. Francisco dos Santos Viana}
+\newcommand{\localcurso}{São Luís -- Maranhão -- Brasil}
 ```
 
-Ambientes disponíveis para novos slides: `conceito`, `dica`, `atencao`, `exemplo`, `erro`, `exercicio`, `projeto`, `resumo` e `destaque`; código com `\begin{codigo}[title=Arquivo.kt]{Kotlin}` (também `Dart`, `TypeScript`, `XML`, `JSON`, `CPP`, `bash`) e terminal com `\begin{terminal}`. Slides com código precisam da opção `[fragile]`.
+Caixas disponíveis:
+
+| Ambiente | Aparência |
+|----------|-----------|
+| `caixadestaque`, `dica` | fundo cinza com faixa lateral azul-petróleo |
+| `caixaambar`, `atencao`, `projeto`, `destaque` | fundo âmbar claro com faixa lateral |
+| `caixatitulo{Título}`, `conceito`, `resumo`, `exemplo`, `exercicio` | moldura com faixa de título |
+| `erro` | faixa lateral vermelha |
+
+Também há `\dest{texto}` (destaque em azul-petróleo), `\pd{dado}` (marcador âmbar de dado a confirmar), código com `\begin{codigo}[title=Arquivo.kt]{Kotlin}` (também `Dart`, `TypeScript`, `XML`, `JSON`, `CPP`, `bash`) e terminal com `\begin{terminal}`. Slides com código precisam da opção `[fragile]`.
 
 ## Observação sobre atualidade
 

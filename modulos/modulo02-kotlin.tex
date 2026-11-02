@@ -192,10 +192,8 @@ var nome: String = "LDR"
 
 var apelido: String? = null   // pode ser nulo
 // apelido.length       // ERRO: pode ser nulo
-
 // 1) chamada segura: devolve null se for null
 val tam: Int? = apelido?.length
-
 // 2) elvis: valor padrão quando null
 val tam2: Int = apelido?.length ?: 0
 
@@ -225,7 +223,7 @@ val tam3 = apelido!!.length  // lança NPE se null
       \end{tikzpicture}
       \end{center}
       \begin{erro}
-        Usar \cod{!!} para ``calar'' o compilador traz de volta o \cod{NullPointerException} que o Kotlin tenta evitar.
+        Usar \cod{!!} para ``calar'' o compilador traz de volta o \cod{NullPointerException}.
       \end{erro}
     \end{column}
   \end{columns}

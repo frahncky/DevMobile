@@ -48,10 +48,10 @@ android {
     \end{column}
     \begin{column}{0.44\textwidth}
       \begin{conceito}[Versionamento]
-        \cod{versionCode} identifica a versão para a loja: cada envio precisa de um número maior. \cod{versionName} segue o \emph{versionamento semântico} (maior.menor.correção).
+        \cod{versionCode} cresce a cada envio. \cod{versionName} segue o versionamento semântico (maior.menor.correção).
       \end{conceito}
       \begin{atencao}[R8]
-        A ofuscação renomeia classes. Bibliotecas que usam reflexão podem precisar de regras \cod{-keep}. \textbf{Teste o build release} antes de enviar.
+        Renomeia classes: bibliotecas com reflexão podem exigir regras \cod{-keep}. \textbf{Teste o build release.}
       \end{atencao}
       \begin{dica}
         Guarde o \arq{mapping.txt} de cada versão: ele desofusca as pilhas de erro no Crashlytics e na Play Console.
@@ -313,7 +313,7 @@ signingConfigs {
   \begin{columns}[T]
     \begin{column}{0.5\textwidth}
       \begin{conceito}[Lei Geral de Proteção de Dados (Lei 13.709/2018)]
-        Regula o tratamento de \textbf{dados pessoais} no Brasil: qualquer informação que identifique uma pessoa (nome, e-mail, matrícula, localização, identificadores do aparelho).
+        Regula o tratamento de \textbf{dados pessoais} no Brasil: tudo que identifica uma pessoa (nome, e-mail, matrícula, localização).
       \end{conceito}
       \begin{conceito}[Princípios-chave]
         \textbf{Finalidade} (para quê), \textbf{necessidade} (o mínimo), \textbf{transparência} (explicar), \textbf{segurança} (proteger) e uma \textbf{base legal} (ex.: consentimento ou execução de contrato).
@@ -322,11 +322,11 @@ signingConfigs {
     \begin{column}{0.48\textwidth}
       \begin{dica}[Checklist para o app]
         \begin{itemize}
-          \item Colete só o necessário (\emph{privacy by design}).
-          \item Política de privacidade clara, no app e na loja.
-          \item Consentimento para usos opcionais (analytics).
-          \item Acesso, correção e exclusão dos dados e da conta.
-          \item HTTPS, criptografia e regras no backend.
+          \item Colete só o necessário.
+          \item Política de privacidade clara.
+          \item Consentimento para usos opcionais.
+          \item Acesso, correção e exclusão de dados.
+          \item HTTPS e regras no backend.
         \end{itemize}
       \end{dica}
       \begin{atencao}
